@@ -11,10 +11,10 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "peerDependencies": {
-    "@sap/cds": ">=9"
+    "@sap/cds": ">=10"
   },
   "peerDependenciesMeta": {
     "@cap-js/mcp": {
