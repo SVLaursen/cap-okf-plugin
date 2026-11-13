@@ -4,6 +4,7 @@ using { cuid, managed } from '@sap/cds/common';
 
 /** A book that the shop can sell. */
 @title: '{i18n>Books}'
+@description: '{i18n>BooksDescription}'
 entity Books : cuid, managed {
   @title: '{i18n>Title}'
   title         : String(150) @mandatory;
