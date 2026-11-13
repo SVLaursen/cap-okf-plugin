@@ -1,6 +1,6 @@
 # 0009. Write cap-okf in TypeScript
 
-- Status: Proposed
+- Status: Accepted (2026-11-13, Simon Vestergaard Laursen)
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code, at the maintainer's request
@@ -54,7 +54,7 @@ How cap-mcp-v2 does it (read at commit `590033c`):
 3. **Stay with JavaScript, adding JSDoc types and `tsc --checkJs`.** No build step, but weaker
    checking, and not what the maintainer asked for.
 
-## Decision (proposed)
+## Decision
 
 Option 1, mirroring cap-mcp-v2:
 
