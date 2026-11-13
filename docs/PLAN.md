@@ -43,7 +43,7 @@ test/
 
 ## Phase 0 — Spike and setup → Gate G1
 
-- [x] **0.1 Tooling.** Install dev tooling (ask before `npm add`): `@sap/cds`, `@sap/cds-dk`, `@cap-js/sqlite`, `@cap-js/cds-test`, `jest`, `eslint`, `@eslint/js`, `globals`, `@commitlint/cli`, `@commitlint/config-conventional`. Runtime: `yaml`. Wire `npm run check`.
+- [x] **0.1 Tooling.** Install dev tooling (ask before `npm add`): `@sap/cds`, `@sap/cds-dk`, `@cap-js/sqlite`, `@cap-js/cds-test`, `jest`, `eslint`, `@eslint/js`, `globals`, `@commitlint/cli`, `@commitlint/config-conventional`. Runtime: `yaml`. Wire `npm run check`. _(CI pending: no remote yet.)_
   - Test first: `test/unit/smoke.test.js` requiring `cds-plugin.js` without throwing.
   - Done when: `npm run check` is green locally and in CI.
 - [ ] **0.2 Fixtures.** Write a small, original `test/fixtures/bookshop` (Books, Authors, Genres, CatalogService, AdminService with `@restrict`, one action, one event, i18n with en and de). No copied sample code.
