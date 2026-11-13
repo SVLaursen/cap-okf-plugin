@@ -8,10 +8,11 @@ _None._
 
 ## Blocked
 
-- 2026-11-13 · CI `reuse` job · `LICENSES/Apache-2.0.txt` is missing (REUSE needs it for the declared licence); it would fail once a remote and CI exist. Add it with the root `LICENSE` (HANDOVER step 6) · —
+_None._
 
 ## Done
 
+- 2026-11-13 · G1 · Maintainer decisions: ADR-0005 accepted (no index-page link), ADR-0007 accepted (plan updated), ADR-0006 open points settled and Contract A agreed (handoff in `docs/upstream/gavdi-cap-mcp/`); `LICENSE` and `LICENSES/Apache-2.0.txt` added (unblocks the REUSE job); CI waived until a remote exists · branch `docs/gate-G1`
 - 2026-11-13 · 0.6 · ADR-0007 (Proposed): curated `okf/`; build writes `gen/okf` and the same files to `gen/srv/okf-bundle/`; production serves the built bundle, development generates in memory; path, encoding and collision rules under `model/`; plan changes for 2.9, 3.4, 4.x listed for the maintainer · branch `docs/0.6-adr-0007-bundle-location`
 - 2026-11-13 · 0.5 · ADR-0006 completed (Proposed): `@cap-js/mcp` 1.5.0 has no resource hook (no Contract C; upstream request drafted, not filed); Contract A checked against cap-mcp-v2 `590033c` (subscribe at plugin load, fallback check at `listening`); detection via `cds.env.plugins`; `@gavdi/cap-mcp` 1.x unsupported; OkfService READ handler must answer CQN · branch `docs/0.5-adr-0006-mcp-contracts`
 - 2026-11-13 · demo · `demo/` workspace app (like cap-mcp-v2) that loads cap-okf through `file:..`; feature table maps each part to plan tasks; `npm run demo` / `demo:build`; integration test boots it with `cds.test` · branch `chore/demo-app`
