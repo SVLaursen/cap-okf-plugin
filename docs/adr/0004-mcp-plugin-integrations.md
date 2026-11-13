@@ -11,7 +11,7 @@ Two CAP plugins can put an app on MCP:
 | Plugin | What it serves | Extension point today |
 | --- | --- | --- |
 | [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) v2 | Typed tools per entity and operation, `cap://` record resources, prompts, MCP Apps; stateless, one `McpServer` per request inside `cds.context` | `mcp:apps` event, limited to `ui://` resources that a tool links to |
-| [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp) | `describe`, `query` and `call_action` tools per `@mcp` service | None documented |
+| [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp) | `describe`, `query` and `call` tools per `@mcp` service | None documented |
 
 cap-okf should work with whichever one an app uses, without depending on either, and without
 exposing anything the developer did not ask for (ADR-0002).
