@@ -1,0 +1,9 @@
+# Every path needs maintainer review; governance and tooling especially.
+
+*                     @SVLaursen
+/docs/GOVERNANCE.md   @SVLaursen
+/docs/adr/            @SVLaursen
+/.claude/             @SVLaursen
+/.github/             @SVLaursen
+/lib/core/            @SVLaursen
+/lib/serve/           @SVLaursen

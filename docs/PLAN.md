@@ -1,0 +1,127 @@
+# cap-okf — Implementation Plan
+
+Work top to bottom. Each task lists **Depends on**, **Test first** (the failing tests you write before code) and **Done when**. A phase ends at a gate; after the gate check, stop and wait for human sign-off before starting the next phase.
+
+Legend: `[ ]` open · `[x]` done (tick it in the same PR that completes the task).
+
+## Target layout
+
+```
+cds-plugin.js                 # CAP plugin entry: registers compile target, build task, serving
+lib/
+  core/
+    concept.js                # Concept model, parse/serialize frontmatter (pure)
+    validate.js               # Conformance rules + v0.2 field checks (pure)
+    links.js                  # Link extraction and resolution (pure)
+    index-md.js               # index.md generation (pure)
+  export/
+    mappers/index.js          # Registry: CSN kind -> mapper
+    mappers/<kind>.js         # One file per kind
+    auth-section.js           # Authorization section rendering (ADR-0003)
+    exporter.js               # Walks CSN, uses registry, returns concepts
+  bundle/
+    source.js                 # BundleSource interface + FileBundleSource
+    sink.js                   # BundleSink + FileBundleSink
+    merge.js                  # Merge generated + curated
+  build/
+    compile.js                # cds.compile.to.okf
+    build-task.js             # cds build task "okf"
+    messages.js               # Formatting of lint/validation messages
+  serve/
+    filter.js                 # Strips authorization section for unauthenticated users
+    static.js                 # Express route
+    mcp/index.js              # McpIntegration selector: config, detection (ADR-0004)
+    mcp/gavdi-cap-mcp.js      # @gavdi/cap-mcp: okf:// resources via mcp:resources (ADR-0006 A)
+    mcp/cap-js-mcp.js         # @cap-js/mcp: tools channel; resources once a hook exists
+    mcp/okf-service.js        # OkfService READ handler over BundleSource (ADR-0006 B)
+srv/okf-service.cds           # OkfService model, added only when the tools channel is on
+  add/okf.js                  # cds add okf
+test/
+  unit/  conformance/  golden/  integration/  contract/
+  fixtures/bookshop/  fixtures/okf-spec/  fixtures/broken/
+```
+
+## Phase 0 — Spike and setup → Gate G1
+
+- [ ] **0.1 Tooling.** Install dev tooling (ask before `npm add`): `@sap/cds`, `@sap/cds-dk`, `@cap-js/sqlite`, `@cap-js/cds-test`, `jest`, `eslint`, `@eslint/js`, `globals`, `@commitlint/cli`, `@commitlint/config-conventional`. Runtime: `yaml`. Wire `npm run check`.
+  - Test first: `test/unit/smoke.test.js` requiring `cds-plugin.js` without throwing.
+  - Done when: `npm run check` is green locally and in CI.
+- [ ] **0.2 Fixtures.** Write a small, original `test/fixtures/bookshop` (Books, Authors, Genres, CatalogService, AdminService with `@restrict`, one action, one event, i18n with en and de). No copied sample code.
+  - Test first: integration test loads the fixture with `cds.load` and asserts the expected definitions exist.
+- [ ] **0.3 OKF spec fixtures.** Copy the OKF v0.2 `SPEC.md` and the official sample bundles from `GoogleCloudPlatform/knowledge-catalog` (`okf/`) into `test/fixtures/okf-spec/`, keeping its Apache-2.0 licence file and recording the commit SHA in `test/fixtures/okf-spec/SOURCE.md`. If network access is blocked, stop and ask the human to add them.
+- [ ] **0.4 Spike: CAP extension points.** Using cds-mcp docs search, confirm how a plugin registers (a) a `cds.compile.to` target, (b) a `cds build` task, (c) a `cds add` facet, (d) an Express route at bootstrap. Also (e) how a plugin adds a CDS model to the app only when a config flag is on (needed for `OkfService`). Write findings into ADR-0005 (Proposed).
+- [ ] **0.5 Spike: MCP integration contracts.** ADR-0006 is pre-drafted. Complete its open points: read the `@cap-js/mcp` source and confirm whether it has any resource hook (if so, add Contract C; if not, draft an upstream issue text but do not file it); check Contract A against the current `@gavdi/cap-mcp` v2 source (`src/index.ts`, `src/adapter/`); find how each plugin is detected from the app's resolved CAP plugin list. Do not change either MCP plugin's repository.
+- [ ] **0.6 Spike: bundle location.** ADR-0007 (Proposed): `gen/okf` for generated output, `okf/` for curated, generated concepts under `model/`.
+
+**Gate G1:** ADR-0005..0007 reviewed by a human (ADR-0006 also agreed with the `@gavdi/cap-mcp` maintainer); CI green; fixtures present.
+
+## Phase 1 — OKF core → Gate G2
+
+- [ ] **1.1 Parse.** `parseConcept(path, text)` → `{ path, id, frontmatter, body }`. Splits `---` frontmatter, parses YAML.
+  - Test first: valid file; no frontmatter; invalid YAML (error has line number); unknown keys kept; CRLF line endings; UTF-8 BOM.
+- [ ] **1.2 Serialize.** `serializeConcept(concept)` with stable key order (`type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then unknown keys in original order).
+  - Test first: round-trip `parse(serialize(c))` deep-equals `c` for every sample fixture; output ends with exactly one newline.
+- [ ] **1.3 Validate.** `validateBundle(concepts)` → list of `{ file, line, rule, severity, message, fix }`.
+  - Rules (errors): R1 non-reserved file has valid frontmatter; R2 non-empty `type`; R3 reserved files keep their structure.
+  - Checks (warnings): recommended fields missing; v0.2 field shapes (`generated.at` ISO 8601, `stale_after` absolute instant, `status` in draft/stable/deprecated, `sources[].id` unique); deprecated v0.1 `timestamp` used.
+  - Test first: one fixture per rule in `test/fixtures/broken/`, each producing exactly the expected finding.
+- [ ] **1.4 Links.** Extract Markdown links, resolve against bundle paths, report broken ones with a "did you mean" suggestion (closest path by edit distance).
+- [ ] **1.5 index.md.** Generate `index.md` per folder: title, then a list of `[title](path) — description`. Deterministic order (by path).
+- [ ] **1.6 Bundle I/O.** `BundleSource { list(), read(path) }`, `FileBundleSource`, `BundleSink { write(concept) }`, `FileBundleSink`.
+  - Test first: in-memory fake and file implementation pass the same test suite.
+- [ ] **1.7 Conformance suite.** Every official sample bundle parses, validates with zero errors and round-trips byte-identically (or with only key-order differences, documented).
+
+**Gate G2:** conformance suite green; full branch coverage on `lib/core`; `lib/core` imports nothing but `yaml`.
+
+## Phase 2 — CDS exporter → Gate G3
+
+- [ ] **2.1 Mapper registry + entity mapper.** Path from fully qualified name (`model/<ns as folders>/<Name>.md`), `type: Entity`, title, description, `resource: cds:<fqn>`, tags. Body: keys, elements with types, associations/compositions as links.
+- [ ] **2.2 Service and projection mappers.** Service body lists exposed entities, actions and functions as links. Projections link to their source.
+- [ ] **2.3 Action, function, type, aspect, event mappers.** Parameters and return types; bound actions listed on their entity.
+- [ ] **2.4 Authorization section (ADR-0003).** Render `@restrict` and `@requires` into a section wrapped in `<!-- okf:auth:start -->` / `<!-- okf:auth:end -->` under `## Authorization`. Nothing about authorization appears outside it.
+  - Test first: AdminService fixture renders the section; a grep test asserts no `@restrict` content outside the markers.
+- [ ] **2.5 i18n.** Resolve `{i18n>key}` titles and descriptions in the default language; fall back to the key name.
+- [ ] **2.6 Include/exclude.** `include: "services"` (default) exports only definitions reachable from services; `"all"` exports everything; `@okf: false` excludes; `@okf.tags` adds tags.
+- [ ] **2.7 Exporter.** Orchestrates mappers, generates `index.md` files, injects `{ now, version }` into `generated`.
+  - Test first: two runs with the same inputs produce byte-identical output.
+- [ ] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it.
+- [ ] **2.9 `cds build` task.** Writes `gen/okf`; runs validation; fails only on errors.
+- [ ] **2.10 Golden tests.** Commit `test/golden/bookshop/`; diff on every run.
+
+**Gate G3:** golden bundle matches; determinism test green; `@okf: false` and the auth section tested.
+
+## Phase 3 — Curation and developer experience → Gate G4 → release 0.1
+
+- [ ] **3.1 Merge.** Merge curated `okf/` with generated `model/`; a curated file under `model/` is an error with a fix hint.
+- [ ] **3.2 Messages.** `[okf] <file>:<line> — <what>.` + indented fix. Errors fail the build; warnings never do.
+- [ ] **3.3 `cds add okf`.** Creates `okf/index.md`, one example concept, `.gitignore` entry for `gen/okf`, a commented `cds.okf` block. Idempotent.
+- [ ] **3.4 `cds watch`.** Regenerate on model change (debounced); no file writes outside `gen/okf`.
+- [ ] **3.5 README.** Quick start, config reference, annotation reference, examples. Written for a CAP developer who has never heard of OKF.
+- [ ] **3.6 Pilot harness.** `test/pilot/`: a question-set format and a script that scores a CAP agent's answers with and without the bundle. The human supplies the domain and questions.
+
+**Gate G4:** pilot shows improvement (human judges); every message has file, line, rule and fix; README reviewed. Human cuts release 0.1.
+
+## Phase 4 — Serving → Gate G5 → release 0.2
+
+- [ ] **4.1 Contract suite.** `test/contract/server.contract.js` run against every channel (static route, MCP resources, MCP tools): lists concepts, reads a concept, not-found on unknown path, strips the auth section when unauthenticated, keeps it when authenticated, serves nothing when disabled.
+- [ ] **4.2 Auth filter.** `filter.js` removes marked sections; pure, unit tested.
+- [ ] **4.3 Static route (Node).** `cds.okf.serve.static: false | true | "/path"`, `text/markdown; charset=utf-8`, uses CAP's auth middleware to decide authentication. Listed on the CAP index page.
+- [ ] **4.4 MCP selector.** `lib/serve/mcp/index.js` reads `cds.okf.serve.mcp` (`false` | `true` | `{ plugin, as }`, ADR-0004) and picks an `McpIntegration`.
+  - Test first, a table of cases: off → nothing, no warning; on + no MCP plugin → one warning; on + one plugin → that one; on + both + `auto` → error naming `plugin`; explicit plugin not installed → error; unknown `as` value → warning naming the allowed values. Detection alone never serves anything.
+- [ ] **4.5 Tools channel (both plugins).** `srv/okf-service.cds` + `lib/serve/mcp/okf-service.js` (ADR-0006 Contract B): read-only `Concepts` over `BundleSource`, auth filter on `body` per `req.user`, `$filter`/`$search` on `type`, `title`, `tags`. Model added only when `as` includes `tools` (mechanism from ADR-0005).
+  - Test first: `cds.test` on the bookshop fixture without any MCP plugin (OData read proves the service), then the contract suite through each plugin (4.8).
+- [ ] **4.6 `@gavdi/cap-mcp` resources.** `lib/serve/mcp/gavdi-cap-mcp.js` listens for `mcp:resources` (ADR-0006 Contract A) and registers `okf://index.md` and `okf://<path>` per concept. If the event never comes (older version): one warning, and the tools channel if requested.
+  - Test first: unit test with a fake `cds` emitter and registry (duck-typed, no import of the plugin); then the contract suite against a fixture app using `@gavdi/cap-mcp` once Contract A ships there.
+  - Blocked until the `@gavdi/cap-mcp` side of Contract A is released; until then, stop and record it under **Blocked** in `docs/progress.md`.
+- [ ] **4.7 `@cap-js/mcp`.** `lib/serve/mcp/cap-js-mcp.js`: tools channel only. `as: ["resources"]` gives one warning that this plugin has no resource hook (unless ADR-0006 gained a Contract C).
+- [ ] **4.8 Plugin fixture apps and CI.** `test/fixtures/app-gavdi-mcp` and `test/fixtures/app-cap-js-mcp` (the two plugins do not share one app); each runs the contract suite through a real MCP client; a CI job `integrations` runs both. Dev dependencies only.
+- [ ] **4.9 Java.** Static serving through a small Spring controller that applies the same filter rules; MCP per ADR-0006 (`cds-adapter-mcp`). Separate PRs.
+- [ ] **4.10 Config validation.** Unknown keys and wrong types under `cds.okf` produce a warning naming the key and the allowed values. Never write settings under `cds.mcp`.
+
+**Gate G5:** contract suite green for the static route, the tools channel under both MCP plugins, and `@gavdi/cap-mcp` resources (or 4.6 recorded as blocked upstream), on both runtimes; nothing served unless configured; auth sections never reach unauthenticated requesters.
+
+## Phase 5 — Fiori authoring → Gate G6 → release 0.3
+
+Do not start until ADR-0008 (source of truth: database vs Git) is **Accepted**. Tasks will be detailed in a follow-up plan revision: CDS model for concepts, `DbBundleSource`, Fiori elements List Report/Object Page with draft, review and verify flow stamping `verified.by`, export back to OKF.
+
+**Gate G6:** a business owner edits, reviews and publishes a concept without a developer; export round-trip is lossless.

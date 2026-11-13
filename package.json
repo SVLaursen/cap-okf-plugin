@@ -1,0 +1,51 @@
+{
+  "name": "cap-okf",
+  "version": "0.0.0",
+  "description": "CAP plugin that turns a CDS model and curated Markdown into an Open Knowledge Format (OKF) bundle, with opt-in serving",
+  "license": "Apache-2.0",
+  "main": "cds-plugin.js",
+  "files": [
+    "cds-plugin.js",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@sap/cds": ">=9"
+  },
+  "peerDependenciesMeta": {
+    "@cap-js/mcp": {
+      "optional": true
+    },
+    "@gavdi/cap-mcp": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "jest",
+    "test:update-golden": "UPDATE_GOLDEN=1 jest test/golden",
+    "check": "npm run lint && npm test"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/test/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "lib/**/*.js"
+    ]
+  },
+  "keywords": [
+    "cap",
+    "cds",
+    "sap",
+    "okf",
+    "open-knowledge-format",
+    "mcp",
+    "ai-agents"
+  ]
+}

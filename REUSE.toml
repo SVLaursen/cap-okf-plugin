@@ -1,0 +1,16 @@
+version = 1
+SPDX-PackageName = "cap-okf"
+SPDX-PackageDownloadLocation = "https://www.npmjs.com/package/cap-okf"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 cap-okf contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# OKF spec and samples copied in Phase 0.3 keep Google's copyright.
+[[annotations]]
+path = "test/fixtures/okf-spec/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Google LLC"
+SPDX-License-Identifier = "Apache-2.0"
