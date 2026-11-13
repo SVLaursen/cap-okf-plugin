@@ -46,7 +46,7 @@ test/
 - [x] **0.1 Tooling.** Install dev tooling (ask before `npm add`): `@sap/cds`, `@sap/cds-dk`, `@cap-js/sqlite`, `@cap-js/cds-test`, `jest`, `eslint`, `@eslint/js`, `globals`, `@commitlint/cli`, `@commitlint/config-conventional`. Runtime: `yaml`. Wire `npm run check`. _(CI pending: no remote yet.)_
   - Test first: `test/unit/smoke.test.js` requiring `cds-plugin.js` without throwing.
   - Done when: `npm run check` is green locally and in CI.
-- [ ] **0.2 Fixtures.** Write a small, original `test/fixtures/bookshop` (Books, Authors, Genres, CatalogService, AdminService with `@restrict`, one action, one event, i18n with en and de). No copied sample code.
+- [x] **0.2 Fixtures.** Write a small, original `test/fixtures/bookshop` (Books, Authors, Genres, CatalogService, AdminService with `@restrict`, one action, one event, i18n with en and de). No copied sample code.
   - Test first: integration test loads the fixture with `cds.load` and asserts the expected definitions exist.
 - [ ] **0.3 OKF spec fixtures.** Copy the OKF v0.2 `SPEC.md` and the official sample bundles from `GoogleCloudPlatform/knowledge-catalog` (`okf/`) into `test/fixtures/okf-spec/`, keeping its Apache-2.0 licence file and recording the commit SHA in `test/fixtures/okf-spec/SOURCE.md`. If network access is blocked, stop and ask the human to add them.
 - [ ] **0.4 Spike: CAP extension points.** Using cds-mcp docs search, confirm how a plugin registers (a) a `cds.compile.to` target, (b) a `cds build` task, (c) a `cds add` facet, (d) an Express route at bootstrap. Also (e) how a plugin adds a CDS model to the app only when a config flag is on (needed for `OkfService`). Write findings into ADR-0005 (Proposed).
