@@ -28,6 +28,10 @@ cds add okf          # scaffolds okf/ for curated knowledge
 
 Nothing is served unless you turn it on. With `mcp` on, cap-okf finds the MCP plugin your app uses; `resources` publishes each concept as an `okf://` resource (`@gavdi/cap-mcp`), `tools` adds a read-only `OkfService` that either plugin exposes as query tools. Authorization rules are only shown to authenticated requesters.
 
+## Demo app
+
+`demo/` is a small bookshop app that uses cap-okf as a real plugin. Run `npm run demo` (cds watch) or `npm run demo:build` from the repo root. See `demo/README.md` for what each part of it exercises.
+
 ## Contributing
 
 See `CONTRIBUTING.md` and `docs/GOVERNANCE.md`. Licensed under Apache-2.0.
