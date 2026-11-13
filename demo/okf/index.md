@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Guides
 
 * [Placing an order](guides/ordering.md) - How a shopper orders a book, and what the shop checks first.

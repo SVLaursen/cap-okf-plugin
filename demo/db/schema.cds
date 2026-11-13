@@ -34,7 +34,11 @@ entity Books : cuid, managed, Reviewed {
   status    : BookStatus default 'available';
   @title: '{i18n>Price}'
   price     : Price;
-  /** Purchase price; internal, so not exposed by CatalogService. */
+  /**
+   * Purchase price; internal. CatalogService leaves it out, but AdminService
+   * exposes it, so only @okf: false keeps it out of the bundle.
+   */
+  @okf: false
   costPrice : Price;
   @title: '{i18n>Stock}'
   stock     : Integer default 0;

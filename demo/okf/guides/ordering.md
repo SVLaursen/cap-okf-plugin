@@ -22,5 +22,10 @@ review_owner: shop-team
 # Rules
 
 - Books with status `outOfPrint` cannot be ordered.
-- Shop staff see orders in [AdminService](/model/AdminService.md); support staff only see
-  orders they created themselves.
+- Shop staff look orders up in [AdminService](/model/AdminService.md).
+
+<!-- okf:auth:start -->
+## Authorization
+
+Admins see every order. Support staff only see orders they created themselves.
+<!-- okf:auth:end -->

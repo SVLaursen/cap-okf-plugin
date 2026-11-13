@@ -39,6 +39,9 @@
     ],
     "collectCoverageFrom": [
       "lib/**/*.js"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/demo/gen/"
     ]
   },
   "keywords": [
