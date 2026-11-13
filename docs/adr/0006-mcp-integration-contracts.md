@@ -3,25 +3,68 @@
 - Status: Proposed
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
-- Proposed by: Claude (pre-drafted from a read of `@gavdi/cap-mcp` v2; Phase 0 task 0.5 completes it)
+- Proposed by: Claude (pre-drafted from a read of `@gavdi/cap-mcp` v2; completed in Phase 0 task 0.5)
 
 ## Context
 
 ADR-0004 decides *that* cap-okf integrates with `@gavdi/cap-mcp` and `@cap-js/mcp`. This ADR
 fixes *how* each side talks to the other.
 
-What `@gavdi/cap-mcp` v2 does today (`src/index.ts`, `src/adapter/`):
+### What `@gavdi/cap-mcp` v2 does today
+
+Read at commit `590033c` (2.0.0-alpha.0), in `src/index.ts`, `src/adapter/` and `src/config.ts`:
 
 - On `served` it reads `cds.env.mcp`, builds the exposure registry, then emits `mcp:apps` with a
   registry whose `register(uri, content)` only accepts `ui://` URIs.
-- Each request builds a fresh `McpServer` inside `cds.context`; resources are registered per
-  request and advertised only when the caller can use one (`resources: { listChanged: false }`,
-  `cacheScope: private`).
-- `cds.env.mcp` keys it does not know are reported as `UNKNOWN_CONFIG`, so cap-okf must keep its
-  settings under `cds.okf`, never `cds.mcp`.
+  - `cds.emit` is not awaited, so listeners must register synchronously.
+  - The emit happens *inside* cap-mcp's own `served` listener.
+- It mounts one `/mcp` route for all `@mcp` services, behind `cds.middlewares.before` (its ADR 0009).
+- Each request builds a fresh `McpServer` from `cds.context` (user, model, locale).
+  - Resources are registered per request, and the `resources` capability is advertised only when
+    the caller sees at least one (`listChanged: false`).
+  - `resources/list` carries `cacheScope: private`.
+  - A failed read answers with the SDK's `ResourceNotFoundError`.
+- A service opts in with `@mcp: true`. That exposes its entities as query and get tools, plus its
+  functions (its ADR 0004). `@mcp` is not a CAP protocol here: neither v1 nor v2 registers
+  `cds.protocols.mcp`, so the service is still served over OData too.
+- Its ADR 0006 says resources are application-controlled (the host or the user attaches them).
+  Many clients never let the model read resources on its own, so tools stay the agent's main path.
+- `cds.env.mcp` keys it doesn't know are reported as warnings at startup. cap-okf must therefore
+  keep its settings under `cds.okf`, never `cds.mcp`.
+- **v1 (1.x)** has the same package name but a different annotation style: per-entity
+  `@mcp: { name, description, resource: [...] }`, `@mcp.wrap`. It has neither `mcp:apps` nor a
+  service-level `@mcp` opt-in. Neither contract below works with v1.
 
-What `@cap-js/mcp` documents: `@mcp` services become `describe`, `query` and `call_action` tools;
-no resources, no events or hooks.
+### What `@cap-js/mcp` does today
+
+Read in the published package 1.5.0 (`cds-plugin.js`, `lib/`):
+
+- It is a CAP **protocol adapter**. Its `package.json` registers `cds.protocols.mcp` (path
+  `/mcp`, impl `@cap-js/mcp/lib`). So `@mcp` on a service is a protocol annotation, just like
+  `@odata`. With `@mcp` alone, a service is served **only** over MCP, at `/mcp/<service path>`.
+- It runs one MCP server per service, with three tools: `describe`, `query`, and `call` (or one
+  tool per action with `per_action_tool`). It offers no resources, no prompts, and no event, hook
+  or exported registry another plugin could use. `lib/tools.js` exports tool factories for
+  `@cap-js/agents`; those add tools to agents and are not a hook for adding resources.
+- The `query` tool builds real CQN (`where`, `orderBy`, `limit`, `columns`, `distinct`) and runs it
+  against the service.
+- It checks `@requires` and `@restrict` on the service itself before any tool runs, and answers
+  401 (anonymous) or 403.
+
+**So there is no Contract C.** The text for an upstream feature request is drafted in
+`docs/upstream/cap-js-mcp-resources.md`. It has not been filed: filing upstream issues is the
+maintainer's call (GOVERNANCE).
+
+### Detecting the plugins (ADR-0004 §2)
+
+- CAP's resolved plugin list is `cds.env.plugins`: package name → `{ impl }`. It includes app
+  `dependencies`, non-production `devDependencies` and `CDS_PLUGINS` (ADR-0005). Look for the keys
+  `@gavdi/cap-mcp` and `@cap-js/mcp`.
+- Don't use `cds.env.protocols.mcp`: only `@cap-js/mcp` sets it.
+- For `@gavdi/cap-mcp`, read `version` from the `package.json` next to its `impl` with
+  `fs.readFileSync`. That reads a file without loading any plugin code, so it keeps ADR-0004's
+  "never `require` an MCP plugin". Major version 1 → error: "cap-okf needs `@gavdi/cap-mcp` 2 or
+  later".
 
 ## Options considered
 
@@ -34,11 +77,12 @@ no resources, no events or hooks.
 
 ## Decision (proposed)
 
-Option 3 for both plugins as the baseline, plus option 1 for `@gavdi/cap-mcp`.
+Option 3 for both plugins as the baseline, plus option 1 for `@gavdi/cap-mcp` 2.x.
 
 ### Contract A — `mcp:resources` (to be added to `@gavdi/cap-mcp`)
 
-Emitted once on `served`, right after `mcp:apps`. Listeners register synchronously.
+Emitted once per `served`, right after `mcp:apps`, from the same listener. Listeners register
+synchronously.
 
 ```ts
 interface ResourceRegistry {
@@ -56,14 +100,26 @@ interface ResourceRegistry {
 }
 ```
 
-`@gavdi/cap-mcp` adds registered resources to each per-request server, advertises the
-`resources` capability when the caller sees at least one, keeps `listChanged: false`, and maps a
-thrown error to its resource-not-found answer. It never imports cap-okf.
+`@gavdi/cap-mcp`:
 
-cap-okf registers `okf://index.md` and one `okf://<path>` per concept; `read` returns the concept
-through the ADR-0003 filter for `ctx.user`. When no `mcp:resources` event arrives by the end of
-`served` (an older `@gavdi/cap-mcp`), cap-okf logs one warning and falls back to the tools channel
-if it was requested.
+- adds the registered resources the caller can see to each per-request server;
+- counts them when it decides whether to advertise the `resources` capability;
+- keeps `listChanged: false` and `cacheScope: private`;
+- maps an error thrown by `read` to `ResourceNotFoundError`;
+- rejects a duplicate URI, or a `cap://` or `ui://` URI, at `register` time;
+- never imports cap-okf.
+
+The draft ADR text for that repo is in `docs/upstream/gavdi-cap-mcp-resources-event.md`.
+
+cap-okf:
+
+- registers `okf://index.md` and one `okf://<path>` per concept;
+- has `read` return the concept through the ADR-0003 filter for `ctx.user`;
+- **subscribes at plugin load** (`cds.on('mcp:resources', …)` in `cds-plugin.js`), not inside its
+  own `served` listener, because cap-mcp emits from within its `served` listener and plugin load
+  order is not fixed;
+- checks at `listening` whether the event arrived. If not (cap-mcp 2.x without Contract A), it
+  logs one warning and falls back to the tools channel if `tools` was requested.
 
 ### Contract B — `OkfService` (both plugins)
 
@@ -82,19 +138,44 @@ service OkfService {
 }
 ```
 
-Served by a READ handler over `BundleSource`; `body` passes through the ADR-0003 filter for
-`req.user`. The model is only added to the app when the tools channel is on (mechanism: ADR-0005).
-`@requires` on the service is configurable, defaulting to `authenticated-user`.
+- The service is served by a READ handler over `BundleSource`, and `body` passes through the
+  ADR-0003 filter for `req.user`.
+- `@requires` on the service is configurable, defaulting to `authenticated-user`.
+- The model is only added to the app when the tools channel is on. ADR-0005 (e) gives the
+  mechanism and its limits.
+- **How it is served differs by plugin:**
+  - With `@cap-js/mcp`, `@mcp` is a protocol, so `OkfService` is only on `/mcp/okf-service`.
+  - With `@gavdi/cap-mcp`, it is on `/mcp` (as tools) **and** on OData at `/okf-service`.
+  - Both endpoints go through the same READ handler and auth filter, so the rule holds. But the
+    README must say that the OData endpoint exists.
+- **The READ handler must answer real queries.** Both plugins' query tools send CQN with `where`,
+  `orderBy`, `limit`/`offset` and `columns`. Task 4.5 must either evaluate a defined subset in
+  memory (comparisons and `contains` on `type`, `title`, `tags`; `orderBy`; paging; `columns`) and
+  reject the rest with a clear error, or find another way, such as a backing table. The
+  `describe` and `query` tool descriptions must not promise more than the handler supports.
 
-## Open points for task 0.5
+## Status of the open points
 
-- Confirm in the `@cap-js/mcp` source that it has no resource hook; if it has one, add Contract C.
-- Confirm how a plugin adds a CDS model conditionally (ADR-0005), so `OkfService` does not exist
-  unless the tools channel is on.
-- Agree Contract A with the `@gavdi/cap-mcp` maintainer and record it there as an ADR.
+- **Resolved:** `@cap-js/mcp` has no resource hook (see Context); no Contract C. The upstream
+  request is drafted, not filed.
+- **Resolved:** Contract A was checked against the v2 source. It fits the per-request server,
+  capability and cache rules there. Changes from the first draft: the subscription moves to plugin
+  load, the fallback check moves to `listening`, and `register` rejects duplicates and reserved
+  schemes.
+- **Resolved:** detection reads `cds.env.plugins`; the `@gavdi/cap-mcp` major version comes from
+  its `package.json`.
+- **Resolved by ADR-0005:** how `OkfService` is added only when the tools channel is on.
+- **Open, human:** agree Contract A with the `@gavdi/cap-mcp` maintainer and record it there as
+  an ADR (draft in `docs/upstream/`). Until it ships, task 4.6 stays blocked (`docs/PLAN.md`).
+- **Open, human:** decide whether to file the `@cap-js/mcp` feature request.
 
 ## Consequences
 
 - One contract test suite per contract, run in cap-okf against a fake emitter and against a real
-  fixture app per plugin.
+  fixture app per plugin (task 4.8).
 - `@gavdi/cap-mcp` gains a general extension point other plugins can use too.
+- `@gavdi/cap-mcp` 1.x is not supported; detection says so instead of failing silently.
+- With `@cap-js/mcp`, concepts are reachable only through the tools channel until it offers a
+  resource hook.
+- The `OkfService` query subset is a real piece of work in task 4.5, and its limits must be
+  visible to agents.
