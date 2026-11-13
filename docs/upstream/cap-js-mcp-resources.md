@@ -21,15 +21,18 @@ query them as tools. That works, but hosts can't list or pin the documents.
 
 **Proposal**
 
-A small, opt-in hook, for example a CAP event emitted once per service when the adapter is set up:
+A small, opt-in hook. Because this adapter runs one MCP server per service, the hook is per
+service too, for example a CAP event emitted once for each `@mcp` service when the adapter is set
+up:
 
 ```js
-cds.on('mcp:resources', (registry, srv) => {
+cds.on('mcp:service-resources', (registry, srv) => {
+  if (srv.name !== 'OkfService') return
   registry.register({
     uri: 'okf://index.md',
     name: 'okf-index',
     mimeType: 'text/markdown',
-    read: ({ user, locale }) => '…',     // called per resources/read, inside cds.context
+    read: ({ user, locale }) => '…',     // per resources/read, inside cds.context; undefined = not found
     visible: ({ user }) => true          // optional
   })
 })
@@ -37,9 +40,9 @@ cds.on('mcp:resources', (registry, srv) => {
 
 The adapter would then:
 
-- add the resources the caller can see to the per-request server;
+- add the resources the caller can see to that service's per-request server;
 - advertise `resources: { listChanged: false }` only when there is at least one;
-- answer a thrown error from `read` with resource-not-found;
+- answer `undefined` from `read` with resource-not-found, and a thrown error as an internal error;
 - refuse duplicate URIs.
 
 Nothing changes for apps that don't use the hook.
@@ -53,5 +56,7 @@ Nothing changes for apps that don't use the hook.
 
 **Prior art**
 
-`@gavdi/cap-mcp` v2 has a similar `mcp:apps` event for `ui://` resources, and a general
-`mcp:resources` event is being discussed there with the same shape.
+`@gavdi/cap-mcp` v2 has a similar `mcp:apps` event for `ui://` resources. A general
+`mcp:resources` event has been proposed there. It is emitted once for the whole app, since that
+plugin serves all services from one MCP server, so it uses a different name from the per-service
+hook above.

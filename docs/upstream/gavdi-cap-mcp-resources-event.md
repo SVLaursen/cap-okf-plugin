@@ -34,7 +34,8 @@ interface ResourceRegistry {
     title?: string;
     description?: string;
     mimeType: string;
-    read(ctx: { user: unknown; locale?: string }): string | Promise<string>;
+    // undefined = not found; a thrown error is a bug
+    read(ctx: { user: unknown; locale?: string }): string | undefined | Promise<string | undefined>;
     visible?(ctx: { user: unknown }): boolean;
   }): void;
 }
@@ -46,8 +47,9 @@ interface ResourceRegistry {
   (true when it is missing).
 - Those resources count towards advertising the `resources` capability. Lists keep
   `listChanged: false` and `cacheScope: private`.
-- `read` runs inside the request's `cds.context`. A thrown error becomes
-  `ResourceNotFoundError`, and the message is not passed on in production.
+- `read` runs inside the request's `cds.context`. `undefined` becomes `ResourceNotFoundError`. A
+  thrown error is logged and answered as an internal error, as for this plugin's own resources
+  and apps; its message is not passed on in production.
 - The plugin never imports the plugins that listen.
 
 ## Consequences

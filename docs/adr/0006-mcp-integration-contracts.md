@@ -23,7 +23,8 @@ Read at commit `590033c` (2.0.0-alpha.0), in `src/index.ts`, `src/adapter/` and 
   - Resources are registered per request, and the `resources` capability is advertised only when
     the caller sees at least one (`listChanged: false`).
   - `resources/list` carries `cacheScope: private`.
-  - A failed read answers with the SDK's `ResourceNotFoundError`.
+  - A read that fails with a known error (no such record) answers with the SDK's
+    `ResourceNotFoundError`; any other error is logged and answered as an internal error.
 - A service opts in with `@mcp: true`. That exposes its entities as query and get tools, plus its
   functions (its ADR 0004). `@mcp` is not a CAP protocol here: neither v1 nor v2 registers
   `cds.protocols.mcp`, so the service is still served over OData too.
@@ -46,10 +47,20 @@ Read in the published package 1.5.0 (`cds-plugin.js`, `lib/`):
   tool per action with `per_action_tool`). It offers no resources, no prompts, and no event, hook
   or exported registry another plugin could use. `lib/tools.js` exports tool factories for
   `@cap-js/agents`; those add tools to agents and are not a hook for adding resources.
-- The `query` tool builds real CQN (`where`, `orderBy`, `limit`, `columns`, `distinct`) and runs it
-  against the service.
+  - Accepted ADR-0004's context table calls the third tool `call_action`; the package names it
+    `call`. That is a factual slip in ADR-0004 for the maintainer to correct, not a change of
+    decision.
+- The `query` tool runs real queries against the service, in one of two modes (`cds.mcp.format`):
+  - **`cql` (the package default):** the agent writes a CQL string, which goes through
+    `cds.parse.cql`. It can use path expressions, nested expands, aggregates and functions.
+  - **`cqn`:** the agent sends structured `where`, `orderBy`, `limit`, `columns`, `distinct`,
+    `search`, `groupBy`, `having` and `one`.
+  - In both modes the tool always sets `SELECT.count = true`.
 - It checks `@requires` and `@restrict` on the service itself before any tool runs, and answers
   401 (anonymous) or 403.
+- **Autowire in development:** on `listening`, unless `cds.mcp.autowire` is `false`, it writes
+  every MCP-protocol service into the developer's MCP client configuration files in their home
+  folder (Claude Code, opencode and others; `lib/clients.js`).
 
 **So there is no Contract C.** The text for an upstream feature request is drafted in
 `docs/upstream/cap-js-mcp-resources.md`. It has not been filed: filing upstream issues is the
@@ -62,9 +73,15 @@ maintainer's call (GOVERNANCE).
   `@gavdi/cap-mcp` and `@cap-js/mcp`.
 - Don't use `cds.env.protocols.mcp`: only `@cap-js/mcp` sets it.
 - For `@gavdi/cap-mcp`, read `version` from the `package.json` next to its `impl` with
-  `fs.readFileSync`. That reads a file without loading any plugin code, so it keeps ADR-0004's
-  "never `require` an MCP plugin". Major version 1 → error: "cap-okf needs `@gavdi/cap-mcp` 2 or
-  later".
+  `fs.readFileSync`. Major version 1 → error: "cap-okf needs `@gavdi/cap-mcp` 2 or later".
+  - **The maintainer should confirm** that this keeps ADR-0004's "never `require` an MCP plugin".
+    It runs no plugin code, but it is an interpretation of an Accepted ADR.
+  - The check runs only when `cds.okf.serve.mcp` is on. An app with `@gavdi/cap-mcp` 1.x and MCP
+    serving off must start normally: detection has no side effects (ADR-0004 §1).
+  - The file reader is passed into `detect(cds)`, so detection can be unit-tested without real
+    packages.
+  - An `impl` from `CDS_PLUGINS` need not sit next to the package root. If no `package.json` with
+    the right `name` is found next to it, the version counts as unknown: one warning, no error.
 
 ## Options considered
 
@@ -92,8 +109,11 @@ interface ResourceRegistry {
     title?: string;
     description?: string;
     mimeType: string;            // "text/markdown" for OKF
-    /** Called per resources/read, inside the request's cds.context. */
-    read(ctx: { user: unknown; locale?: string }): string | Promise<string>;
+    /**
+     * Called per resources/read, inside the request's cds.context.
+     * `undefined` means "not found"; a thrown error is a bug.
+     */
+    read(ctx: { user: unknown; locale?: string }): string | undefined | Promise<string | undefined>;
     /** Optional: hide the resource from callers who may not see it at all. */
     visible?(ctx: { user: unknown }): boolean;
   }): void;
@@ -105,7 +125,8 @@ interface ResourceRegistry {
 - adds the registered resources the caller can see to each per-request server;
 - counts them when it decides whether to advertise the `resources` capability;
 - keeps `listChanged: false` and `cacheScope: private`;
-- maps an error thrown by `read` to `ResourceNotFoundError`;
+- answers `undefined` from `read` with `ResourceNotFoundError`, and a thrown error as an internal
+  error (logged), as it already does for its own resources and apps;
 - rejects a duplicate URI, or a `cap://` or `ui://` URI, at `register` time;
 - never imports cap-okf.
 
@@ -124,7 +145,7 @@ cap-okf:
 ### Contract B — `OkfService` (both plugins)
 
 ```cds
-@mcp @path: '/okf-service'
+@mcp @path: 'okf-service'   // relative, so each protocol adds its own prefix
 service OkfService {
   /** One OKF concept: a CDS definition or a curated note, as Markdown with frontmatter. */
   @readonly entity Concepts {
@@ -143,31 +164,57 @@ service OkfService {
 - `@requires` on the service is configurable, defaulting to `authenticated-user`.
 - The model is only added to the app when the tools channel is on. ADR-0005 (e) gives the
   mechanism and its limits.
-- **How it is served differs by plugin:**
+- **How it is served differs by plugin.** CAP adds the protocol prefix only to a relative
+  `@path` (`@sap/cds/lib/srv/protocols`), hence `'okf-service'`.
   - With `@cap-js/mcp`, `@mcp` is a protocol, so `OkfService` is only on `/mcp/okf-service`.
-  - With `@gavdi/cap-mcp`, it is on `/mcp` (as tools) **and** on OData at `/okf-service`.
-  - Both endpoints go through the same READ handler and auth filter, so the rule holds. But the
-    README must say that the OData endpoint exists.
-- **The READ handler must answer real queries.** Both plugins' query tools send CQN with `where`,
-  `orderBy`, `limit`/`offset` and `columns`. Task 4.5 must either evaluate a defined subset in
-  memory (comparisons and `contains` on `type`, `title`, `tags`; `orderBy`; paging; `columns`) and
-  reject the rest with a clear error, or find another way, such as a backing table. The
-  `describe` and `query` tool descriptions must not promise more than the handler supports.
+    In development, its autowire also writes that endpoint into the developer's MCP client
+    configs. The developer opted in, so ADR-0002 holds, but the README must say so.
+  - With `@gavdi/cap-mcp`, it is on `/mcp` (as tools), **and by default also on OData** at
+    `/odata/v4/okf-service`, because `@mcp` is no protocol there.
+- **Decision needed: the extra OData endpoint under `@gavdi/cap-mcp`.** ADR-0002's point is no
+  accidental exposure, and asking for MCP tools should not quietly open OData too. Options:
+  1. **Accept it and document it.** It goes through the same READ handler and auth filter.
+  2. **Mark `OkfService` `@protocol: 'none'` when the plugin is `@gavdi/cap-mcp`.** v2 runs tools
+     through `cds.services[name].tx`, so it may not need any HTTP endpoint. The annotation would
+     come from a second small model added by the same mechanism as the service (ADR-0005 (e)).
+     Not yet proven: task 4.5 must show that v2 still exposes an internal service.
+  - **Recommended:** option 2 if task 4.5 proves it works, else option 1.
+- **The READ handler must answer real queries.** Both plugins' query tools send real queries
+  (see Context: `cql` and `cqn` modes for `@cap-js/mcp`). Task 4.5 must either evaluate a defined
+  subset in memory, or find another way, such as a backing table. The subset at least:
+  - handles `count`, which `@cap-js/mcp` always sets;
+  - handles comparisons and `contains` on `type`, `title`, `tags`; `orderBy`; paging; `columns`;
+  - rejects with a clear error what it does not support: `search` (or a defined meaning for it),
+    `one`, `groupBy`/`having`, expands, functions and aggregates.
+
+  The `describe` and `query` tool descriptions must not promise more than the handler supports.
+- **No probing the auth section through filters (ADR-0003).** `where` and `search` are never
+  evaluated against the unfiltered `body`. Otherwise a caller could test for authorization
+  content with `contains(body, '@restrict')` even though the returned `body` is stripped.
+  Simplest rule: `body` is not filterable or searchable at all (a `where` on it is rejected, and
+  `search` covers only `title`, `description`, `tags`).
 
 ## Status of the open points
 
 - **Resolved:** `@cap-js/mcp` has no resource hook (see Context); no Contract C. The upstream
   request is drafted, not filed.
 - **Resolved:** Contract A was checked against the v2 source. It fits the per-request server,
-  capability and cache rules there. Changes from the first draft: the subscription moves to plugin
-  load, the fallback check moves to `listening`, and `register` rejects duplicates and reserved
-  schemes.
+  capability and cache rules there. Changes from the first draft:
+  - the subscription moves to plugin load, and the fallback check moves to `listening`;
+  - `register` rejects duplicates and reserved schemes;
+  - `read` returns `undefined` for "not found", and a thrown error is an internal error.
+- **Changed:** `OkfService` uses a relative `@path` (`'okf-service'`), so `@cap-js/mcp` serves it
+  under `/mcp/`.
 - **Resolved:** detection reads `cds.env.plugins`; the `@gavdi/cap-mcp` major version comes from
   its `package.json`.
 - **Resolved by ADR-0005:** how `OkfService` is added only when the tools channel is on.
 - **Open, human:** agree Contract A with the `@gavdi/cap-mcp` maintainer and record it there as
   an ADR (draft in `docs/upstream/`). Until it ships, task 4.6 stays blocked (`docs/PLAN.md`).
 - **Open, human:** decide whether to file the `@cap-js/mcp` feature request.
+- **Open, human:** the extra OData endpoint under `@gavdi/cap-mcp` (Contract B, recommended option
+  2 pending proof in task 4.5).
+- **Open, human:** confirm that reading `@gavdi/cap-mcp`'s `package.json` keeps ADR-0004's
+  "never `require`" rule, and correct `call_action` to `call` in ADR-0004's context table.
 
 ## Consequences
 
