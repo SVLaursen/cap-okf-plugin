@@ -72,16 +72,13 @@ maintainer's call (GOVERNANCE).
   `dependencies`, non-production `devDependencies` and `CDS_PLUGINS` (ADR-0005). Look for the keys
   `@gavdi/cap-mcp` and `@cap-js/mcp`.
 - Don't use `cds.env.protocols.mcp`: only `@cap-js/mcp` sets it.
-- For `@gavdi/cap-mcp`, read `version` from the `package.json` next to its `impl` with
-  `fs.readFileSync`. Major version 1 → error: "cap-okf needs `@gavdi/cap-mcp` 2 or later".
-  - **The maintainer should confirm** that this keeps ADR-0004's "never `require` an MCP plugin".
-    It runs no plugin code, but it is an interpretation of an Accepted ADR.
-  - The check runs only when `cds.okf.serve.mcp` is on. An app with `@gavdi/cap-mcp` 1.x and MCP
-    serving off must start normally: detection has no side effects (ADR-0004 §1).
-  - The file reader is passed into `detect(cds)`, so detection can be unit-tested without real
-    packages.
-  - An `impl` from `CDS_PLUGINS` need not sit next to the package root. If no `package.json` with
-    the right `name` is found next to it, the version counts as unknown: one warning, no error.
+- **No version check (maintainer's decision, 2026-11-13).** cap-okf doesn't read
+  `@gavdi/cap-mcp`'s `package.json` or anything else from the plugin. Detection is by package
+  name only, which keeps ADR-0004's "never `require` an MCP plugin" in its strictest reading.
+  - So cap-okf can't tell 1.x from 2.x. It finds out at runtime: if no `mcp:resources` event has
+    arrived by `listening`, it logs one warning. The warning says that resources need
+    `@gavdi/cap-mcp` 2 with the `mcp:resources` event, and that 1.x exposes neither channel.
+  - Detection has no side effects and runs only when `cds.okf.serve.mcp` is on (ADR-0004 §1).
 
 ## Options considered
 
@@ -96,7 +93,7 @@ maintainer's call (GOVERNANCE).
 
 Option 3 for both plugins as the baseline, plus option 1 for `@gavdi/cap-mcp` 2.x.
 
-### Contract A — `mcp:resources` (to be added to `@gavdi/cap-mcp`)
+### Contract A — `mcp:resources` (agreed with `@gavdi/cap-mcp`, 2026-11-13)
 
 Emitted once per `served`, right after `mcp:apps`, from the same listener. Listeners register
 synchronously.
@@ -130,7 +127,8 @@ interface ResourceRegistry {
 - rejects a duplicate URI, or a `cap://` or `ui://` URI, at `register` time;
 - never imports cap-okf.
 
-The draft ADR text for that repo is in `docs/upstream/gavdi-cap-mcp-resources-event.md`.
+The ADR for that repo and a developer handoff (files, tests, docs, done criteria) are in
+`docs/upstream/gavdi-cap-mcp/`.
 
 cap-okf:
 
@@ -171,14 +169,16 @@ service OkfService {
     configs. The developer opted in, so ADR-0002 holds, but the README must say so.
   - With `@gavdi/cap-mcp`, it is on `/mcp` (as tools), **and by default also on OData** at
     `/odata/v4/okf-service`, because `@mcp` is no protocol there.
-- **Decision needed: the extra OData endpoint under `@gavdi/cap-mcp`.** ADR-0002's point is no
-  accidental exposure, and asking for MCP tools should not quietly open OData too. Options:
-  1. **Accept it and document it.** It goes through the same READ handler and auth filter.
-  2. **Mark `OkfService` `@protocol: 'none'` when the plugin is `@gavdi/cap-mcp`.** v2 runs tools
-     through `cds.services[name].tx`, so it may not need any HTTP endpoint. The annotation would
-     come from a second small model added by the same mechanism as the service (ADR-0005 (e)).
-     Not yet proven: task 4.5 must show that v2 still exposes an internal service.
-  - **Recommended:** option 2 if task 4.5 proves it works, else option 1.
+- **The extra OData endpoint under `@gavdi/cap-mcp` (maintainer's decision, 2026-11-13).**
+  ADR-0002's point is no accidental exposure, and asking for MCP tools should not quietly open
+  OData too.
+  - **Decided:** mark `OkfService` `@protocol: 'none'` when the plugin is `@gavdi/cap-mcp`. v2
+    runs tools through `cds.services[name].tx`, so it may not need any HTTP endpoint. The
+    annotation comes from a second small model added by the same mechanism as the service
+    (ADR-0005 (e)).
+  - **Condition:** task 4.5 must prove that v2 still exposes an internal service. If it doesn't,
+    the fallback is to keep the endpoint and document it. It goes through the same READ handler
+    and auth filter.
 - **The READ handler must answer real queries.** Both plugins' query tools send real queries
   (see Context: `cql` and `cqn` modes for `@cap-js/mcp`). Task 4.5 must either evaluate a defined
   subset in memory, or find another way, such as a backing table. The subset at least:
@@ -205,23 +205,25 @@ service OkfService {
   - `read` returns `undefined` for "not found", and a thrown error is an internal error.
 - **Changed:** `OkfService` uses a relative `@path` (`'okf-service'`), so `@cap-js/mcp` serves it
   under `/mcp/`.
-- **Resolved:** detection reads `cds.env.plugins`; the `@gavdi/cap-mcp` major version comes from
-  its `package.json`.
+- **Resolved:** detection reads `cds.env.plugins`, by name only; no version check.
 - **Resolved by ADR-0005:** how `OkfService` is added only when the tools channel is on.
-- **Open, human:** agree Contract A with the `@gavdi/cap-mcp` maintainer and record it there as
-  an ADR (draft in `docs/upstream/`). Until it ships, task 4.6 stays blocked (`docs/PLAN.md`).
-- **Open, human:** decide whether to file the `@cap-js/mcp` feature request.
-- **Open, human:** the extra OData endpoint under `@gavdi/cap-mcp` (Contract B, recommended option
-  2 pending proof in task 4.5).
-- **Open, human:** confirm that reading `@gavdi/cap-mcp`'s `package.json` keeps ADR-0004's
-  "never `require`" rule, and correct `call_action` to `call` in ADR-0004's context table.
+- **Agreed (2026-11-13):** Contract A, by the `@gavdi/cap-mcp` maintainer. The developer handoff
+  is in `docs/upstream/gavdi-cap-mcp/`. Task 4.6 stays blocked until a `@gavdi/cap-mcp` release
+  emits `mcp:resources` (`docs/PLAN.md`).
+- **Decided (2026-11-13):** don't file the `@cap-js/mcp` feature request for now; the draft stays
+  in `docs/upstream/cap-js-mcp-resources.md`.
+- **Decided (2026-11-13):** hide the OData endpoint under `@gavdi/cap-mcp` if task 4.5 proves it
+  works (Contract B).
+- **For the maintainer:** ADR-0004's context table says `call_action`; the tool is named `call`.
+  ADR-0004 is Accepted, so the project hook blocks agents from editing it.
 
 ## Consequences
 
 - One contract test suite per contract, run in cap-okf against a fake emitter and against a real
   fixture app per plugin (task 4.8).
 - `@gavdi/cap-mcp` gains a general extension point other plugins can use too.
-- `@gavdi/cap-mcp` 1.x is not supported; detection says so instead of failing silently.
+- `@gavdi/cap-mcp` 1.x is not supported. cap-okf can't tell it apart from 2.x, so the runtime
+  warning names the version and event it needs.
 - With `@cap-js/mcp`, concepts are reachable only through the tools channel until it offers a
   resource hook.
 - The `OkfService` query subset is a real piece of work in task 4.5, and its limits must be

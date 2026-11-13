@@ -1,6 +1,6 @@
 # 0005. CAP extension points used by cap-okf
 
-- Status: Proposed
+- Status: Accepted (2026-11-13, Simon Vestergaard Laursen; without the index-page link)
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code (plan task 0.4)
@@ -94,11 +94,11 @@ A `cds.requires` entry that has only a `model` adds that model to `cds.resolve('
 
    **Limitation:** with a task list that leaves out `okf`, the model is missing from the build. This is the same condition as in (b), and the same `cds add` step fixes both. As a safety net, the plugin warns at `served` when the tools channel is on but `OkfService` is not in the model.
 
-## Decision (proposed)
+## Decision
 
 - (a)–(d) as shown above.
 - (b) `cds add okf` adds `{ "for": "okf" }` to an app's existing `build.tasks`.
-- (d) Show the static route on the index page through `app._app_links`. The code must tolerate the property being missing, and losing the link must not fail serving.
+- (d) **The static route is not listed on CAP's index page** (maintainer's decision, 2026-11-13). The only way to list it is the internal `app._app_links`, and the README shows the route instead. Plan task 4.3 is changed to match.
 - (e) Option 4, with the warning at `served`.
 - Defaults (`okf.serve.static: false`, `okf.serve.mcp: false`) are shipped in the `cds` section of our `package.json`.
 
@@ -107,7 +107,7 @@ A `cds.requires` entry that has only a `model` adds that model to `cds.resolve('
 - Each extension point is a few lines in `cds-plugin.js` that hand over to modules in `lib/`, matching the target layout in `docs/PLAN.md`.
 - **Fragile points**, each to be guarded by an integration test in the task that uses it:
   - (e) relies on the order in which `cds build` calls things. That order is observed, not documented. Task 4.5 needs `cds build` tests with the tools channel on, for no task list, `[nodejs, okf]` and `[nodejs]` (where it expects the warning), checking `gen/srv/srv/csn.json`.
-  - (d) The index-page link uses an internal property. Worth asking CAP for a public API.
+  - (d) Not a fragile point any more: no index-page link, so no internal property is used. If CAP ever offers a public API for index links, a new ADR can add it.
 - **Not yet checked; for the tasks named:**
   - **Real authentication (`jwt`, `ias`, `xsuaa`), task 4.3.** "Anonymous gets an anonymous user, not a 401" was proven for mocked auth only.
   - **The `OkfService` READ handler in a production build, task 4.5.** The spike only declared the service and read `$metadata`. How the handler over `BundleSource` is attached when serving from `gen/srv` (an implementation file next to the `.cds`, `@impl`, or a `cds.on('serving')` handler) is still to be shown.

@@ -1,6 +1,6 @@
 # 0007. Where the bundle lives
 
-- Status: Proposed
+- Status: Accepted (2026-11-13, Simon Vestergaard Laursen)
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code (plan task 0.6)
@@ -89,7 +89,7 @@ Checked against `@sap/cds` 10.2.2 and `@sap/cds-dk` 10.2.1, in the ADR-0005 spik
 3. **`app/okf/`.** `app/` is for UIs, and CAP serves it statically in development. Curated files
    would then be readable without the ADR-0003 filter.
 
-## Decision (proposed)
+## Decision
 
 ### Where things go
 
@@ -172,7 +172,7 @@ Checked against `@sap/cds` 10.2.2 and `@sap/cds-dk` 10.2.1, in the ADR-0005 spik
 
 ## Consequences
 
-- **Plan changes needed** (task text is edited by a human):
+- **Plan changes** (made in `docs/PLAN.md` on acceptance, 2026-11-13):
   - **2.9:** "Writes `gen/okf`" becomes "writes `gen/okf` and `<nodejs dest>/okf-bundle/`
     (staging builds only); in-place builds never touch `okf/`".
   - **3.4:** `cds watch` serves the in-memory bundle, which follows model changes because the

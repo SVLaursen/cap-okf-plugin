@@ -22,7 +22,8 @@ lib/
   bundle/
     source.js                 # BundleSource interface + FileBundleSource
     sink.js                   # BundleSink + FileBundleSink
-    merge.js                  # Merge generated + curated
+    model-source.js           # In-memory BundleSource generated from the model (ADR-0007)
+    merge.js                  # Merge generated + curated into one BundleSource
   build/
     compile.js                # cds.compile.to.okf
     build-task.js             # cds build task "okf"
@@ -85,7 +86,8 @@ test/
 - [ ] **2.7 Exporter.** Orchestrates mappers, generates `index.md` files, injects `{ now, version }` into `generated`.
   - Test first: two runs with the same inputs produce byte-identical output.
 - [ ] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it.
-- [ ] **2.9 `cds build` task.** Writes `gen/okf`; runs validation; fails only on errors.
+- [ ] **2.9 `cds build` task.** Writes `gen/okf` and, for staging builds with a `nodejs` task, the same files to `<nodejs dest>/okf-bundle/` (ADR-0007); runs validation; fails only on errors. In-place builds (`build.target: "."`) never touch `okf/`.
+  - Test first: `cds build` of a fixture app writes `gen/okf` and `gen/srv/okf-bundle/`; an in-place build leaves `okf/` untouched.
 - [ ] **2.10 Golden tests.** Commit `test/golden/bookshop/`; diff on every run.
 
 **Gate G3:** golden bundle matches; determinism test green; `@okf: false` and the auth section tested.
@@ -95,7 +97,7 @@ test/
 - [ ] **3.1 Merge.** Merge curated `okf/` with generated `model/`; a curated file under `model/` is an error with a fix hint.
 - [ ] **3.2 Messages.** `[okf] <file>:<line> — <what>.` + indented fix. Errors fail the build; warnings never do.
 - [ ] **3.3 `cds add okf`.** Creates `okf/index.md`, one example concept, `.gitignore` entry for `gen/okf`, a commented `cds.okf` block. Idempotent.
-- [ ] **3.4 `cds watch`.** Regenerate on model change (debounced); no file writes outside `gen/okf`.
+- [ ] **3.4 `cds watch`.** Serving under `cds watch` uses the in-memory bundle, which follows model changes because the server restarts (ADR-0007). Optional: regenerate `gen/okf` for inspection on change (debounced); no file writes outside `gen/okf`.
 - [ ] **3.5 README.** Quick start, config reference, annotation reference, examples. Written for a CAP developer who has never heard of OKF.
 - [ ] **3.6 Pilot harness.** `test/pilot/`: a question-set format and a script that scores a CAP agent's answers with and without the bundle. The human supplies the domain and questions.
 
@@ -103,14 +105,14 @@ test/
 
 ## Phase 4 — Serving → Gate G5 → release 0.2
 
-- [ ] **4.1 Contract suite.** `test/contract/server.contract.js` run against every channel (static route, MCP resources, MCP tools): lists concepts, reads a concept, not-found on unknown path, strips the auth section when unauthenticated, keeps it when authenticated, serves nothing when disabled.
+- [ ] **4.1 Contract suite.** `test/contract/server.contract.js` run against every channel (static route, MCP resources, MCP tools): lists concepts, reads a concept, not-found on unknown path, strips the auth section when unauthenticated, keeps it when authenticated, serves nothing when disabled. Every channel reads one merged `BundleSource`, picked at startup: the built `okf-bundle/` in a deployed app, otherwise generated in memory (ADR-0007).
 - [ ] **4.2 Auth filter.** `filter.js` removes marked sections; pure, unit tested.
-- [ ] **4.3 Static route (Node).** `cds.okf.serve.static: false | true | "/path"`, `text/markdown; charset=utf-8`, uses CAP's auth middleware to decide authentication. Listed on the CAP index page.
+- [ ] **4.3 Static route (Node).** `cds.okf.serve.static: false | true | "/path"`, `text/markdown; charset=utf-8`, uses CAP's auth middleware to decide authentication. Not listed on the CAP index page (ADR-0005).
 - [ ] **4.4 MCP selector.** `lib/serve/mcp/index.js` reads `cds.okf.serve.mcp` (`false` | `true` | `{ plugin, as }`, ADR-0004) and picks an `McpIntegration`.
   - Test first, a table of cases: off → nothing, no warning; on + no MCP plugin → one warning; on + one plugin → that one; on + both + `auto` → error naming `plugin`; explicit plugin not installed → error; unknown `as` value → warning naming the allowed values. Detection alone never serves anything.
-- [ ] **4.5 Tools channel (both plugins).** `srv/okf-service.cds` + `lib/serve/mcp/okf-service.js` (ADR-0006 Contract B): read-only `Concepts` over `BundleSource`, auth filter on `body` per `req.user`, `$filter`/`$search` on `type`, `title`, `tags`. Model added only when `as` includes `tools` (mechanism from ADR-0005).
+- [ ] **4.5 Tools channel (both plugins).** `srv/okf-service.cds` + `lib/serve/mcp/okf-service.js` (ADR-0006 Contract B): read-only `Concepts` over the merged `BundleSource` (ADR-0007), auth filter on `body` per `req.user`, `$filter`/`$search` on `type`, `title`, `tags`. Model added only when `as` includes `tools` (mechanism from ADR-0005).
   - Test first: `cds.test` on the bookshop fixture without any MCP plugin (OData read proves the service), then the contract suite through each plugin (4.8).
-- [ ] **4.6 `@gavdi/cap-mcp` resources.** `lib/serve/mcp/gavdi-cap-mcp.js` listens for `mcp:resources` (ADR-0006 Contract A) and registers `okf://index.md` and `okf://<path>` per concept. If the event never comes (older version): one warning, and the tools channel if requested.
+- [ ] **4.6 `@gavdi/cap-mcp` resources.** `lib/serve/mcp/gavdi-cap-mcp.js` listens for `mcp:resources` (ADR-0006 Contract A) and registers `okf://index.md` and `okf://<path>` per concept from the merged `BundleSource` (ADR-0007). If the event never comes (older version): one warning, and the tools channel if requested.
   - Test first: unit test with a fake `cds` emitter and registry (duck-typed, no import of the plugin); then the contract suite against a fixture app using `@gavdi/cap-mcp` once Contract A ships there.
   - Blocked until the `@gavdi/cap-mcp` side of Contract A is released; until then, stop and record it under **Blocked** in `docs/progress.md`.
 - [ ] **4.7 `@cap-js/mcp`.** `lib/serve/mcp/cap-js-mcp.js`: tools channel only. `as: ["resources"]` gives one warning that this plugin has no resource hook (unless ADR-0006 gained a Contract C).
