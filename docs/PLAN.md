@@ -51,7 +51,7 @@ test/
 - [x] **0.3 OKF spec fixtures.** Copy the OKF v0.2 `SPEC.md` and the official sample bundles from `GoogleCloudPlatform/knowledge-catalog` (`okf/`) into `test/fixtures/okf-spec/`, keeping its Apache-2.0 licence file and recording the commit SHA in `test/fixtures/okf-spec/SOURCE.md`. If network access is blocked, stop and ask the human to add them.
 - [x] **0.4 Spike: CAP extension points.** Using cds-mcp docs search, confirm how a plugin registers (a) a `cds.compile.to` target, (b) a `cds build` task, (c) a `cds add` facet, (d) an Express route at bootstrap. Also (e) how a plugin adds a CDS model to the app only when a config flag is on (needed for `OkfService`). Write findings into ADR-0005 (Proposed).
 - [x] **0.5 Spike: MCP integration contracts.** ADR-0006 is pre-drafted. Complete its open points: read the `@cap-js/mcp` source and confirm whether it has any resource hook (if so, add Contract C; if not, draft an upstream issue text but do not file it); check Contract A against the current `@gavdi/cap-mcp` v2 source (`src/index.ts`, `src/adapter/`); find how each plugin is detected from the app's resolved CAP plugin list. Do not change either MCP plugin's repository.
-- [ ] **0.6 Spike: bundle location.** ADR-0007 (Proposed): `gen/okf` for generated output, `okf/` for curated, generated concepts under `model/`.
+- [x] **0.6 Spike: bundle location.** ADR-0007 (Proposed): `gen/okf` for generated output, `okf/` for curated, generated concepts under `model/`.
 
 **Gate G1:** ADR-0005..0007 reviewed by a human (ADR-0006 also agreed with the `@gavdi/cap-mcp` maintainer); CI green; fixtures present.
 

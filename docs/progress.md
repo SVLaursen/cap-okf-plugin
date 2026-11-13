@@ -12,6 +12,7 @@ _None._
 
 ## Done
 
+- 2026-11-13 · 0.6 · ADR-0007 (Proposed): curated `okf/`, build output `gen/okf` for review only, curated files copied into `gen/srv/okf`; served bundle generated in memory at startup from `cds.model` + `okf/`; path rules under `model/` · branch `docs/0.6-adr-0007-bundle-location`
 - 2026-11-13 · 0.5 · ADR-0006 completed (Proposed): `@cap-js/mcp` 1.5.0 has no resource hook (no Contract C; upstream request drafted, not filed); Contract A checked against cap-mcp-v2 `590033c` (subscribe at plugin load, fallback check at `listening`); detection via `cds.env.plugins`; `@gavdi/cap-mcp` 1.x unsupported; OkfService READ handler must answer CQN · branch `docs/0.5-adr-0006-mcp-contracts`
 - 2026-11-13 · demo · `demo/` workspace app (like cap-mcp-v2) that loads cap-okf through `file:..`; feature table maps each part to plan tasks; `npm run demo` / `demo:build`; integration test boots it with `cds.test` · branch `chore/demo-app`
 - 2026-11-13 · 0.4 · ADR-0005 (Proposed): all five CAP extension points proven in a scratch app; caveats: conditional model is re-applied in build `hasTask()` and constructor, apps with their own `build.tasks` must list `okf`, index link uses internal `app._app_links`, own `cds-plugin.js` needs `CDS_PLUGINS` for CLI use in this repo · branch `docs/0.4-adr-0005-cap-extension-points`
