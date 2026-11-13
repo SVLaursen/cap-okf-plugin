@@ -1,6 +1,6 @@
 # 0006. MCP integration contracts
 
-- Status: Proposed
+- Status: Accepted (2026-11-13, Simon Vestergaard Laursen)
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude (pre-drafted from a read of `@gavdi/cap-mcp` v2; completed in Phase 0 task 0.5)
@@ -89,7 +89,7 @@ maintainer's call (GOVERNANCE).
 3. **Tools only, through an `@mcp` CDS service, for both plugins.** No upstream change at all;
    works today. Agents can query concepts, but hosts cannot pin them as resources.
 
-## Decision (proposed)
+## Decision
 
 Option 3 for both plugins as the baseline, plus option 1 for `@gavdi/cap-mcp` 2.x.
 
