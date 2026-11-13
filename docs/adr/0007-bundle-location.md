@@ -18,80 +18,115 @@ The plan's starting point (task 0.6) is:
 - `gen/okf` for generated output;
 - generated concepts under `model/` inside the bundle.
 
-This ADR fixes those three locations. It also covers what the plan left open: where a **deployed**
-app reads the bundle when it serves it (Phase 4), and how bundle paths are formed.
+This ADR fixes those locations. It also covers what the plan left open: where a **running** app
+reads the bundle when it serves it (Phase 4), and how bundle paths are formed.
+
+### Findings
 
 Checked against `@sap/cds` 10.2.2 and `@sap/cds-dk` 10.2.1, in the ADR-0005 spike app and in
 `demo/`:
 
 - **`gen/okf` is never deployed.** `cds build` gives the Node.js app its own folder (`gen/srv`),
   which is what runs in production. Nothing outside it is shipped, and the curated `okf/` folder
-  is not copied there either.
-- **A build plugin can find that folder.** `this.context.tasks` lists every resolved task with its
-  `dest` (proven: `okf → <root>/gen/okf`, `nodejs → <root>/gen/srv`). Copying the curated `okf/`
-  to `<nodejs dest>/okf` worked. `this.context` has no documentation of its own, so it gets the
-  same guard as ADR-0005's fragile points.
-- **The deployed app can rebuild the bundle.** `gen/srv/srv/csn.json` keeps doc comments when
-  `cdsc.docs` is on, and `gen/srv/_i18n/` holds every language (checked in `demo/`).
-- **In-place builds point at the project root.** Java projects set `build.target` to `.`. A task
-  with `src: "."` then gets the project root as its default `dest`, so `<target>/okf` would be the
-  curated `okf/` folder itself.
+  isn't copied either.
+- **A build plugin can find that folder through `this.context.tasks`.** It lists every resolved
+  task with its `dest` (proven: `okf → <root>/gen/okf`, `nodejs → <root>/gen/srv`).
+  - The list is complete only inside `build()`, because tasks are added one by one while plugins
+    are created.
+  - It has no documentation of its own.
+  - Copying into `<nodejs dest>` with `this.copy(…).to(<absolute path>)` works.
+- **Doc comments need `cdsc.docs`.** That setting is off by default, and then both `cds.load` and
+  the Node.js build drop `/** … */`.
+  - A deployed app's `cds.model` has descriptions only if the app turned `cdsc.docs` on (the demo
+    does: `gen/srv/srv/csn.json` keeps them).
+  - Turning it on for the app has a visible side effect: docs become `Core.Description` in its
+    `$metadata`.
+  - `gen/srv/_i18n/` always holds every language.
+- **Runtime and build models differ.** The Node.js build compiles for Node.js, and as `xtended`
+  when extensibility or feature toggles are on. A model the okf task loads itself can differ from
+  `cds.model` at runtime.
+- **In-place builds (`build.target: "."`, Java projects):**
+  - CAP's base `init()` appends `gen`, so a `src: "."` task writes to `<root>/gen`, not the root.
+  - Base `clean()` deletes `task.dest` (`rm -rf`) in in-place mode. So a task whose `dest` ever
+    resolved to `<root>/okf` would **delete the curated folder**.
+  - The Node.js task's own output moves to `<root>/srv/gen`.
 
 ## Options considered
 
 ### Where a running app gets the bundle
 
-1. **Read the build output.** The build writes the merged bundle into the deployed app folder as
-   well (e.g. `gen/srv/okf-bundle/`), and the server reads it from there.
-   - Pro: what is served is exactly what the build validated.
-   - Con: in development there is no deployed folder, so the server must read `gen/okf`. That is
-     missing or stale until someone runs `cds build` or task 3.4's watcher.
-   - Con: two runtime paths (development and production) and a second copy of the bundle.
-2. **Generate in memory at startup.** The server builds the bundle from the model it serves
-   (`cds.model`) plus the curated folder `okf/` next to it. The build copies the curated `okf/`
-   into the deployed app.
-   - Pro: one code path for `cds watch`, `cds serve` and production.
-   - Pro: never stale; `cds watch` restarts on model changes anyway.
-   - Pro: a later per-tenant bundle can use the tenant's extended model (`cds.context.model`),
-     which is the open "multitenant bundles" question in `HANDOVER.md`.
-   - Con: a little startup work. Generation is a pure transform, so it can also run lazily on the
-     first request.
-   - Con: `generated.at` in served concepts is the time the server generated them, not the build
-     time.
-3. **Both:** option 2 at runtime, plus the build output from option 1 for review only.
-   - The build still writes `gen/okf`, so CI and reviewers can inspect and validate it. The server
-     never reads `gen/okf`.
+1. **Generate in memory at startup, everywhere**, from `cds.model` plus the curated folder. The
+   build copies the curated folder into the deployed app.
+   - Pro: one code path.
+   - Pro: never stale.
+   - Pro: a later per-tenant bundle could use `cds.context.model`.
+   - Con: production serves something nobody reviewed, built from different inputs than
+     `gen/okf`.
+   - Con: descriptions disappear unless the app turns on `cdsc.docs`, with its `$metadata` side
+     effect.
+   - Con: `generated.at` changes on every restart, and two instances serve different bytes.
+2. **Serve the build output in production; generate in memory in development.**
+   - The build writes the merged bundle to `gen/okf` and puts the same files into the deployed
+     app.
+   - Production reads them as files. Development (`cds watch`, `cds serve`, `cds.test`) has no
+     build, so it generates in memory with the same exporter.
+   - Pro: what production serves is exactly what the build validated and what reviewers saw.
+   - Pro: `generated.at` is the build time.
+   - Pro: the exporter loads the model with doc comments itself, whatever the app's `cdsc.docs`.
+   - Con: two ways to get a bundle; a parity test keeps them equal.
+   - Con: depends on `this.context.tasks`.
+3. **Serve only build output**, in development too. Development would need a `cds build` or the
+   task 3.4 watcher before every change shows up; stale output is the normal state.
 
 ### Where curated files live
 
-1. **`okf/` at the project root** (the plan's starting point). Visible, short, next to `db/`, `srv/`
-   and `app/`.
-2. Under `srv/okf/` or `app/okf/`. These folders already mean something to CAP: `srv/` is copied by
-   some build tasks, and `app/` is for UIs. Mixing knowledge in there is confusing.
+1. **`okf/` at the project root** (the plan's starting point). Visible, next to `db/`, `srv/` and
+   `app/`, and clearly not CDS source.
+2. **`srv/okf/`.** The Node.js staging build already copies native `srv/` content into
+   `gen/srv`, so curated files would ship without any help from cap-okf.
+   - With option 2 above, the build ships the merged bundle anyway, so that advantage disappears.
+   - It mixes knowledge into the service sources.
+3. **`app/okf/`.** `app/` is for UIs, and CAP serves it statically in development. Curated files
+   would then be readable without the ADR-0003 filter.
 
 ## Decision (proposed)
 
-### Folders
+### Where things go
 
 | What | Where | Committed |
 | --- | --- | --- |
 | Curated concepts | `okf/` at the project root | yes |
-| Build output (merged bundle, for review and CI) | `<build target>/okf`, i.e. `gen/okf` | no (`gen/` is ignored) |
-| Curated concepts in the deployed app | `<nodejs task dest>/okf`, i.e. `gen/srv/okf` | no |
+| Built bundle, for review and CI | `gen/okf` | no (`gen/` is ignored) |
+| Built bundle, deployed | `<nodejs dest>/okf-bundle/` (`gen/srv/okf-bundle/`) | no |
 
-- The served bundle is generated in memory at startup (option 3). The server reads the curated
-  files from `<app root>/okf`. That is the project root in development and `gen/srv` in a deployed
-  app, so it is the same rule everywhere.
-- The build plugin writes `gen/okf` and copies the curated `okf/` to the `nodejs` task's `dest`. If
-  there is no `nodejs` task (Java, task 4.9), nothing is copied, and Java's serving decides its own
-  location then.
-- **The build output never lands in `okf/`.** The okf build task sets its `dest` to
-  `<cds.root>/<build.target>/okf`. When `build.target` resolves to the project root, it uses
-  `<cds.root>/gen/okf` instead.
+- **Production serves the built bundle (option 2).** At startup, if `<app root>/okf-bundle/`
+  exists, the server reads it through a `FileBundleSource`. A deployed app has it; a project root
+  doesn't.
+- **Development generates in memory.** Without `okf-bundle/`, the server generates the bundle from
+  the app's model plus `<app root>/okf`. It loads the model sources with doc comments itself (as
+  cap-mcp-v2 does for its doc-comment check), with the same options the build task uses.
+  - If this happens with `NODE_ENV=production`, the server logs one warning ("no built bundle;
+    generated at startup"), because the deployed app was built without the okf task (see ADR-0005
+    (b)).
+- **The bundle is only built at startup when a serving channel is on** (ADR-0002). It is built
+  before `served` completes, because the MCP resources channel (task 4.6) registers one resource
+  per concept at that point.
+- **The build task (2.9):**
+  - writes `gen/okf`;
+  - inside `build()`, copies the same files to `<nodejs dest>/okf-bundle/`, only for staging
+    builds (`build.target` is not `.`) and only when a `nodejs` task exists;
+  - in in-place builds, keeps CAP's base `init()` (`<root>/gen`) and adds `okf`, giving
+    `<root>/gen/okf`. It never computes a path that could resolve to `<root>/okf`.
+- **Generation and the build see the same model.** The exporter always gets the model flavour and
+  options the build uses (inferred, with doc comments). Development may differ only in
+  `generated.at`.
+- **Same failures everywhere.** The build fails on validation errors (task 3.2). In development, a
+  curated file with errors is left out and reported once as `[okf] <file>:<line> — …`. The other
+  concepts are still served; startup never crashes over curated content.
 - No new config keys now. A `cds.okf.folder` setting can be added later through its own ADR if
   apps need a different curated folder.
 
-### Paths inside the bundle
+### What the bundle contains
 
 - **Generated concepts live under `model/`.** A definition's fully qualified name maps to a path:
   namespace and service segments become folders, and the last segment becomes the file. For
@@ -99,39 +134,67 @@ Checked against `@sap/cds` 10.2.2 and `@sap/cds-dk` 10.2.1, in the ADR-0005 spik
   - `demo.bookshop.Books` → `model/demo/bookshop/Books.md`
   - `CatalogService.Books` → `model/CatalogService/Books.md`
   - `CatalogService` → `model/CatalogService.md`
+- **cap-okf's own definitions are never exported.** That covers `OkfService` when the tools
+  channel adds it (ADR-0005 (e)).
 - **Curated concepts keep their path relative to `okf/`.** For example,
   `okf/guides/ordering.md` → `guides/ordering.md`.
 - **`model/` belongs to the generator.** A curated file at `okf/model/…` is an error with a fix
   hint (task 3.1).
-- **Reserved names:** a definition whose last segment is `index` or `log` (any case) would collide
-  with OKF's reserved files (spec §3.1). It gets a trailing underscore (`index_.md`, `log_.md`).
-- **Unsafe characters:** characters a file name cannot hold portably (`/ \ : * ? " < > |`, control
-  characters) are percent-encoded. CDS identifiers rarely contain them, but quoted
-  identifiers (`![…]`) can.
-- **Case:** two generated paths that differ only in letter case would overwrite each other on
-  macOS and Windows. The validator reports this as an error.
+- **Curated files that are bundled:** only regular files under `okf/`.
+  - Symlinks are not followed, and dotfiles are skipped.
+  - `.md` files are concepts or reserved files.
+  - Other files (for example `references/*.py`, spec §6.3) are copied as they are and never
+    parsed.
+  - `FileBundleSource.read` rejects `..`, absolute paths, and any path not in `list()`.
+
+### Path rules
+
+- **Allowed characters:** a path segment keeps `A–Z a–z 0–9 . _ -`. Any other character, `%`
+  included, is percent-encoded (UTF-8). So `a:b` → `a%3Ab`, and `a%b` → `a%25b`.
+- **Reserved names:** the following get a trailing `_` (`index_.md`, `Con_.md`):
+  - names that are `index` or `log` in any case (OKF's reserved files, spec §3.1);
+  - Windows device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`);
+  - names ending in a dot.
+- **Collisions:** the validator reports any two generated paths that are equal or differ only in
+  letter case, for example `index` and `index_`, or `Books` and `books`. Paths are never silently
+  renamed beyond the rules above.
+- **Links and URIs:**
+  - Markdown links (spec §6.1) and `okf://<path>` URIs (ADR-0006) encode the path once more, as a
+    URI path. A file named `a%3Ab.md` is linked as `a%253Ab.md`, and a space is `%20`.
+  - Consumers decode once to get the file name.
 - **Index files:**
   - The generator writes an `index.md` in `model/` and in each folder below it (task 1.5).
-  - The bundle-root `index.md` is the curated `okf/index.md` if there is one. Otherwise the
-    generator writes one that lists `model/` and the top-level curated folders.
+  - The bundle-root `index.md` is the curated `okf/index.md` if there is one. A warning is given if
+    it doesn't link to `model/`.
+  - Otherwise the generator writes a root `index.md` with `okf_version: "0.2"` (spec §8, §12),
+    listing `model/` and the top-level curated folders.
 - **`log.md`** is never generated. Curated `log.md` files are kept as they are.
 
 ## Consequences
 
-- Task 2.9 (build task) writes `gen/okf`, copies the curated `okf/` into the `nodejs` `dest`, and
-  guards against in-place targets.
-- Task 3.4 (`cds watch`) shrinks to regenerating `gen/okf` for inspection. Serving already follows
-  model changes, because `cds watch` restarts the server.
-- Task 4.x servers read through a `BundleSource` that generates in memory from `cds.model` plus a
-  `FileBundleSource` over `<app root>/okf`. No server reads `gen/okf`.
-- `generated.at` for served concepts is set when the server generates them, through the injected
-  clock (`{ now }`). Build output stays byte-identical for the same `now`.
-- The README must say:
-  - `okf/` is committed;
-  - `gen/okf` is a review artifact, not a deployment input;
-  - deployed apps carry their curated files in `gen/srv/okf`.
-- Fragile point: finding the `nodejs` task through `this.context.tasks`, which has no
-  documentation. Task 2.9 needs an integration test that runs `cds build` and checks
-  `gen/srv/okf`.
-- Java (task 4.9) needs its own answer for where curated files go in the deployed jar, probably
-  `srv/src/main/resources/okf`. This ADR doesn't decide that.
+- **Plan changes needed** (task text is edited by a human):
+  - **2.9:** "Writes `gen/okf`" becomes "writes `gen/okf` and `<nodejs dest>/okf-bundle/`
+    (staging builds only); in-place builds never touch `okf/`".
+  - **3.4:** `cds watch` serves the in-memory bundle, which follows model changes because the
+    server restarts. Regenerating `gen/okf` on change becomes optional.
+  - **Target layout:** add the in-memory source and the merge to `lib/bundle/` (e.g.
+    `lib/bundle/model-source.js`, next to `merge.js`).
+  - **4.1, 4.5, 4.6:** "over `BundleSource`" means one merged source, picked at startup: built
+    files or in-memory.
+- **Tests:**
+  - **Parity:** for the bookshop fixture, the in-memory bundle equals `gen/okf` byte for byte,
+    apart from `generated.at`.
+  - **Build (2.9):** an integration test runs `cds build` and checks `gen/srv/okf-bundle/`.
+  - **In-place build (2.9):** a build with `build.target: "."` leaves `okf/` untouched.
+- **ADR-0003:** a deployed app now has generated auth sections on disk in `okf-bundle/`, as
+  `gen/okf` does. Servers filter them per request. The README must say that `gen/srv` contains
+  them.
+- **Doc comments:** apps don't need `cdsc.docs` for OKF. Their `$metadata` stays as it is.
+- **Fragile point:** `this.context.tasks` has no documentation; the build test above guards it.
+- **Multitenancy:** a per-tenant bundle (tenant extensions) would need in-memory generation in
+  production too. That stays an open question and would supersede part of this ADR.
+- **Java (task 4.9)** decides its own deployed location, probably `srv/src/main/resources/`. This
+  ADR doesn't.
+- **Later, for task 4.3:** bundle-absolute links (`/model/…`) in curated files point to the host
+  root when a browser views them under `/okf`. The static route must rewrite them or serve with a
+  base.
