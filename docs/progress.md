@@ -12,6 +12,7 @@ _None._
 
 ## Done
 
+- 2026-11-13 · adr · ADR-0009 (Proposed): write cap-okf in TypeScript, mirroring cap-mcp-v2 (src/ → tsc → lib/, ts-jest, typescript-eslint); task 1.1 (JS, branch `feat/1.1-parse-concept`) to be redone in TS after the migration · branch `docs/adr-0009-typescript`
 - 2026-11-13 · G1 · Maintainer decisions: ADR-0005 accepted (no index-page link), ADR-0007 accepted (plan updated), ADR-0006 open points settled and Contract A agreed (handoff in `docs/upstream/gavdi-cap-mcp/`); `LICENSE` and `LICENSES/Apache-2.0.txt` added (unblocks the REUSE job); CI waived until a remote exists · branch `docs/gate-G1`
 - 2026-11-13 · 0.6 · ADR-0007 (Proposed): curated `okf/`; build writes `gen/okf` and the same files to `gen/srv/okf-bundle/`; production serves the built bundle, development generates in memory; path, encoding and collision rules under `model/`; plan changes for 2.9, 3.4, 4.x listed for the maintainer · branch `docs/0.6-adr-0007-bundle-location`
 - 2026-11-13 · 0.5 · ADR-0006 completed (Proposed): `@cap-js/mcp` 1.5.0 has no resource hook (no Contract C; upstream request drafted, not filed); Contract A checked against cap-mcp-v2 `590033c` (subscribe at plugin load, fallback check at `listening`); detection via `cds.env.plugins`; `@gavdi/cap-mcp` 1.x unsupported; OkfService READ handler must answer CQN · branch `docs/0.5-adr-0006-mcp-contracts`
