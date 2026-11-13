@@ -8,7 +8,7 @@ _None._
 
 ## Blocked
 
-_None._
+- 2026-11-13 · CI `reuse` job · `LICENSES/Apache-2.0.txt` is missing (REUSE needs it for the declared licence); it would fail once a remote and CI exist. Add it with the root `LICENSE` (HANDOVER step 6) · —
 
 ## Done
 

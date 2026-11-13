@@ -26,11 +26,26 @@ describe('OKF spec fixtures', () => {
     expect(source).toMatch(/\b[0-9a-f]{40}\b/)
   })
 
+  // Only folders count: a stray .DS_Store on macOS must not look like a bundle.
+  function bundleNames() {
+    return fs.readdirSync(BUNDLES_DIR, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort()
+  }
+
+  test('all four official sample bundles are present', () => {
+    expect(bundleNames()).toEqual(['acme_retail', 'crypto_bitcoin', 'ga4', 'stackoverflow'])
+  })
+
   test('every sample bundle has an index.md at its root', () => {
-    const bundles = fs.readdirSync(BUNDLES_DIR)
-    expect(bundles.length).toBeGreaterThan(0)
-    for (const bundle of bundles) {
+    for (const bundle of bundleNames()) {
       expect(fs.existsSync(path.join(BUNDLES_DIR, bundle, 'index.md'))).toBe(true)
     }
+  })
+
+  test('the generated viz.html viewers are left out, as SOURCE.md says', () => {
+    const files = fs.readdirSync(BUNDLES_DIR, { recursive: true })
+    expect(files.filter(file => path.basename(file) === 'viz.html')).toEqual([])
   })
 })
