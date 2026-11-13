@@ -14,3 +14,10 @@ path = "test/fixtures/okf-spec/**"
 precedence = "override"
 SPDX-FileCopyrightText = "Google LLC"
 SPDX-License-Identifier = "Apache-2.0"
+
+# Our own note about where the copy came from (later annotations win).
+[[annotations]]
+path = "test/fixtures/okf-spec/SOURCE.md"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 cap-okf contributors"
+SPDX-License-Identifier = "Apache-2.0"
