@@ -1,0 +1,44 @@
+{
+  "name": "cap-okf-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bookshop demo app for cap-okf. Every OKF export, curation and serving feature has a target here.",
+  "dependencies": {
+    "@sap/cds": "^10.2.2",
+    "cap-okf": "file:.."
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^3.1.3"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch": "cds watch",
+    "build": "cds build"
+  },
+  "cds": {
+    "requires": {
+      "auth": {
+        "kind": "mocked",
+        "users": {
+          "alice": { "password": "alice", "roles": ["admin"] },
+          "bob": { "password": "bob", "roles": [] },
+          "carol": { "password": "carol", "roles": ["support"] }
+        }
+      }
+    },
+    "cdsc": {
+      "docs": true
+    },
+    "okf": {
+      "serve": {
+        "static": false,
+        "mcp": false
+      },
+      "[development]": {
+        "serve": {
+          "static": true
+        }
+      }
+    }
+  }
+}
