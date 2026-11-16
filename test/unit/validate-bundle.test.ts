@@ -149,6 +149,13 @@ const BROKEN_CASES: Record<string, Expected> = {
     severity: "warning",
     message: /"sources\[1\]\.id" repeats "shop-handbook"/,
   },
+  "w4-broken-link": {
+    file: "guides/ordering.md",
+    line: 10,
+    rule: "W4",
+    severity: "warning",
+    message: /link target "retuns\.md" does not exist in the bundle/,
+  },
   "w3-timestamp": {
     file: "ordering.md",
     line: 5,
@@ -256,6 +263,48 @@ describe("validateBundle general behaviour", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("validateBundle links", () => {
+  test("a broken link suggests the closest bundle path", () => {
+    const findings = validateBundle(readBundle(path.join(BROKEN_DIR, "w4-broken-link")));
+    expect(findings).toMatchObject([{ rule: "W4", fix: 'Did you mean "/guides/returns.md"?' }]);
+  });
+
+  test("without a close path, the fix says to create the concept or correct the link", () => {
+    const findings = validateBundle([file("index.md", "* [Orders](tables/orders.md)\n")]);
+    expect(findings).toMatchObject([
+      { file: "index.md", line: 1, rule: "W4", fix: expect.stringMatching(/^Create /) },
+    ]);
+  });
+
+  test("a link to a non-Markdown file in the bundle is fine", () => {
+    const findings = validateBundle([
+      file("index.md", "See the [attester](references/attesters/revenue.py).\n"),
+      file("references/attesters/revenue.py", "def attest(): pass\n"),
+    ]);
+    expect(findings).toEqual([]);
+  });
+
+  test("a link to a folder is fine when the folder has files", () => {
+    const findings = validateBundle([
+      file("index.md", "* [Tables](tables/) - All tables.\n* [Root](/)\n"),
+      file("tables/orders.md", "---\ntype: X\ntitle: t\ndescription: d\n---\n"),
+    ]);
+    expect(findings).toEqual([]);
+  });
+
+  test("a link above the bundle root is broken", () => {
+    const findings = validateBundle([file("index.md", "[up](../other-bundle/a.md)\n")]);
+    expect(findings).toMatchObject([
+      { rule: "W4", message: expect.stringMatching(/points outside the bundle/) },
+    ]);
+  });
+
+  test("links in a file with broken frontmatter are not checked: its R1 comes first", () => {
+    const findings = validateBundle([file("a.md", "---\ntype: [\n---\n[b](b.md)\n")]);
+    expect(findings.map((finding) => finding.rule)).toEqual(["R1"]);
   });
 });
 
