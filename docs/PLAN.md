@@ -65,7 +65,7 @@ test/
   - Test first: valid file; no frontmatter; invalid YAML (error has line number); unknown keys kept; CRLF line endings; UTF-8 BOM.
 - [x] **1.2 Serialize.** `serializeConcept(concept)` with stable key order (`type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then unknown keys in original order).
   - Test first: round-trip `parse(serialize(c))` deep-equals `c` for every sample fixture; output ends with exactly one newline.
-- [ ] **1.3 Validate.** `validateBundle(concepts)` → list of `{ file, line, rule, severity, message, fix }`.
+- [x] **1.3 Validate.** `validateBundle(files)` (raw `{ path, text }`, so findings have exact lines; maintainer decision 2026-11-16) → list of `{ file, line, rule, severity, message, fix }`.
   - Rules (errors): R1 non-reserved file has valid frontmatter; R2 non-empty `type`; R3 reserved files keep their structure.
   - Checks (warnings): recommended fields missing; v0.2 field shapes (`generated.at` ISO 8601, `stale_after` absolute instant, `status` in draft/stable/deprecated, `sources[].id` unique); deprecated v0.1 `timestamp` used.
   - Test first: one fixture per rule in `test/fixtures/broken/`, each producing exactly the expected finding.
