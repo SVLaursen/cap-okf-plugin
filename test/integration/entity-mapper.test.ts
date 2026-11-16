@@ -4,6 +4,7 @@ import { serializeConcept } from "../../src/core/concept";
 import type { Csn } from "../../src/export/csn";
 import { defaultMapperContext } from "../../src/export/mappers/context";
 import { entityMapper } from "../../src/export/mappers/entity";
+import { mapperFor, registryKeyOf } from "../../src/export/mappers/index";
 import { validateBundle } from "../../src/core/validate";
 
 // The entity mapper on the real bookshop fixture, loaded the way the build loads it:
@@ -67,11 +68,14 @@ describe("entity mapper on the bookshop fixture", () => {
 
   // Descriptions of projections (2.2) and of sap.common texts (2.6) come in later tasks; the
   // links are this task's job.
-  test("every association link of every mapped entity resolves", () => {
+  // Entity tables link to types such as User (task 2.3), so the whole model is mapped here.
+  test("every link of every mapped entity resolves, with the rest of the model mapped too", () => {
     const context = defaultMapperContext(model);
     const files = Object.entries(model.definitions)
-      .filter(([, definition]) => definition.kind === "entity")
-      .map(([name, definition]) => entityMapper.map(name, definition, context))
+      .flatMap(([name, definition]) => {
+        const mapper = mapperFor(registryKeyOf(definition));
+        return mapper === undefined ? [] : [mapper.map(name, definition, context)];
+      })
       .map((concept) => ({ path: concept.path, text: serializeConcept(concept) }));
     const brokenLinks = validateBundle(files).filter((finding) => finding.rule === "W4");
     expect(files.length).toBeGreaterThan(10);

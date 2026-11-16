@@ -7,22 +7,41 @@ export interface Csn {
   definitions: Record<string, CsnDefinition>;
 }
 
-/** One definition, e.g. an entity, service, type or action. */
-export interface CsnDefinition {
-  kind?: string;
-  /** For type definitions: the type they are based on. */
+/** Enum values by name; `val` is the stored value when it differs from the name. */
+export type CsnEnum = Record<string, { val?: unknown }>;
+
+/**
+ * Anything that has a type: an element, a parameter, a return value, or a type definition.
+ * The type is a name, a reference ("type of Orders:status"), "many" items, or own elements.
+ */
+export interface CsnTyped {
   type?: string | { ref: string[] };
-  /** The /** doc comment *\/, when the model was loaded with { docs: true }. */
+  /** For arrayed types ("many String"): the type of one item. */
+  items?: CsnTyped;
+  /** For a structure without a named type: its own elements. */
+  elements?: Record<string, CsnElement>;
+  length?: number;
+  precision?: number;
+  scale?: number;
+  enum?: CsnEnum;
   doc?: string;
+  [annotation: `@${string}`]: unknown;
+}
+
+/** One definition, e.g. an entity, service, type, aspect, event, action or function. */
+export interface CsnDefinition extends CsnTyped {
+  kind?: string;
   /** Aspects and entities it includes, e.g. ["cuid", "managed"]. */
   includes?: string[];
-  elements?: Record<string, CsnElement>;
   /** Set on projections ("as projection on …"); from.ref[0] names the source. */
   projection?: { from?: CsnSource };
   /** Set on views ("as select from …"); SELECT.from.ref[0] names the source, unless it's a join. */
   query?: { SELECT?: { from?: CsnSource } };
-  /** Annotations, e.g. "@title". */
-  [annotation: `@${string}`]: unknown;
+  /** For actions and functions: their parameters, and what they return. */
+  params?: Record<string, CsnElement>;
+  returns?: CsnTyped;
+  /** For entities: the actions and functions bound to them, by name. */
+  actions?: Record<string, CsnDefinition>;
 }
 
 /** Where a projection or view selects from: a reference to one definition, or a join. */
@@ -34,19 +53,12 @@ export interface CsnSource {
   args?: unknown[];
 }
 
-/** One element of an entity, type or aspect. */
-export interface CsnElement {
-  /** A type name, or a reference to another element's type ("type of Orders:status"). */
-  type?: string | { ref: string[] };
-  /** For arrayed elements ("many String"): the type of one item. */
-  items?: CsnElement;
+/** One element of an entity, type or aspect, or one parameter. */
+export interface CsnElement extends CsnTyped {
   key?: boolean;
   notNull?: boolean;
   localized?: boolean;
   virtual?: boolean;
-  length?: number;
-  precision?: number;
-  scale?: number;
   default?: { val?: unknown };
   /** For associations and compositions: the target's fully qualified name. */
   target?: string;
@@ -56,8 +68,4 @@ export interface CsnElement {
   keys?: unknown[];
   /** For unmanaged associations and compositions: the ON condition. */
   on?: unknown[];
-  /** For a structured element without a named type: its own elements. */
-  elements?: Record<string, CsnElement>;
-  doc?: string;
-  [annotation: `@${string}`]: unknown;
 }

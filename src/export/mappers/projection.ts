@@ -13,9 +13,19 @@ export const projectionMapper: Mapper = {
   kind: "projection",
   map(name, definition, context) {
     const type = definition.projection === undefined ? "View" : "Projection";
-    return entityConcept(name, definition, context, type, [leadLine(type, definition, context)]);
+    return entityConcept(name, definition, context, type, sourceLead(definition, context));
   },
 };
+
+/**
+ * The line naming what a definition is built on, for projections and views and also for events
+ * and types declared "as projection on …". Empty for anything else.
+ */
+export function sourceLead(definition: CsnDefinition, context: MapperContext): string[] {
+  if (definition.projection === undefined && definition.query === undefined) return [];
+  const how = definition.projection === undefined ? "View" : "Projection";
+  return [leadLine(how, definition, context)];
+}
 
 // "Projection on [Books](/model/sample/bookshop/Books.md)", "View on [Books](…)", or "View" for
 // a join or union. A source missing from the model is named, not linked: the link would break.

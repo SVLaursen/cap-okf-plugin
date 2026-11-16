@@ -2,9 +2,11 @@
 // Authorization annotations are left out on purpose: they only go into the marked section that
 // task 2.4 adds (ADR-0003). Every text from the model is escaped before it goes into Markdown.
 import type { Concept } from "../../core/concept";
-import { escapeHtml, inlineCode, oneLine, tableCell } from "../../core/markdown";
+import { escapeHtml, inlineCode, oneLine } from "../../core/markdown";
 import type { CsnDefinition, CsnElement } from "../csn";
 import type { Mapper, MapperContext } from "./context";
+import { elementsTable, isAssociation } from "./elements";
+import { boundActionsSection } from "./operations";
 import { baseFrontmatter, generatedConcept, inheritedDoc, linkTo, titleOf } from "./shared";
 
 export const entityMapper: Mapper = {
@@ -30,8 +32,9 @@ export function entityConcept(
     ...lead,
     ...docSection(inheritedDoc(definition, context)),
     ...includesSection(definition),
-    ...elementsSection(definition),
+    ...elementsSection(definition, context),
     ...associationsSection(definition, context),
+    ...boundActionsSection(definition, context),
   ];
   const frontmatter = baseFrontmatter(name, definition, context, type);
   return generatedConcept(name, frontmatter, sections);
@@ -49,17 +52,9 @@ function includesSection(definition: CsnDefinition): string[] {
 }
 
 // Associations and compositions are listed in their own section, with links.
-function elementsSection(definition: CsnDefinition): string[] {
-  const rows = Object.entries(definition.elements ?? {})
-    .filter(([, element]) => !isAssociation(element))
-    .map(([name, element]) => {
-      const cells = [inlineCode(name), inlineCode(typeOf(element)), notesOf(element)];
-      return `| ${cells.map(tableCell).join(" | ")} |`;
-    });
-  if (rows.length === 0) return [];
-  return [
-    ["## Elements", "", "| Element | Type | Notes |", "| --- | --- | --- |", ...rows].join("\n"),
-  ];
+function elementsSection(definition: CsnDefinition, context: MapperContext): string[] {
+  const table = elementsTable("Element", definition.elements ?? {}, context);
+  return table === undefined ? [] : [`## Elements\n\n${table}`];
 }
 
 function associationsSection(definition: CsnDefinition, context: MapperContext): string[] {
@@ -68,10 +63,6 @@ function associationsSection(definition: CsnDefinition, context: MapperContext):
     .map(([name, element]) => associationLine(name, element, context));
   if (lines.length === 0) return [];
   return [["## Associations", "", ...lines].join("\n")];
-}
-
-function isAssociation(element: CsnElement): boolean {
-  return element.target !== undefined;
 }
 
 // "- `author` → [Authors](/model/sample/bookshop/Authors.md) (to one)"
@@ -89,43 +80,4 @@ function associationLine(name: string, element: CsnElement, context: MapperConte
 function toManyOrOne(element: CsnElement): string {
   const max = element.cardinality?.max;
   return max === "*" || (typeof max === "number" && max > 1) ? "to many" : "to one";
-}
-
-/**
- * The element's type as written in CDS:
- * - "cds.String" with length 150 → "String(150)", "cds.Decimal" 9, 2 → "Decimal(9, 2)";
- * - a custom type keeps its name, without sizes: inferred CSN copies them onto it;
- * - "type of Orders:status" → "x.Orders:status";
- * - "many String" → "many String"; an element with its own elements → "structured".
- */
-function typeOf(element: CsnElement): string {
-  if (element.items !== undefined) return `many ${typeOf(element.items)}`;
-  const type = element.type;
-  if (type === undefined) return "structured";
-  if (typeof type !== "string") return type.ref.join(":");
-  if (!type.startsWith("cds.")) return type;
-  const name = type.slice("cds.".length);
-  const size = sizeOf(element);
-  return size === undefined ? name : `${name}(${size})`;
-}
-
-function sizeOf(element: CsnElement): string | undefined {
-  if (element.precision !== undefined) {
-    return [element.precision, element.scale].filter((part) => part !== undefined).join(", ");
-  }
-  return element.length === undefined ? undefined : String(element.length);
-}
-
-// "key", "mandatory", "default: 0", "localized", "virtual", then the doc comment.
-// A default that is an expression (e.g. $user, $now) is left out: only plain values are shown.
-function notesOf(element: CsnElement): string {
-  const notes: string[] = [];
-  if (element.key) notes.push("key");
-  if (element["@mandatory"] === true || element.notNull) notes.push("mandatory");
-  if (element.default?.val !== undefined)
-    notes.push(`default: ${JSON.stringify(element.default.val)}`);
-  if (element.localized) notes.push("localized");
-  if (element.virtual) notes.push("virtual");
-  if (element.doc !== undefined) notes.push(element.doc);
-  return notes.join("; ");
 }

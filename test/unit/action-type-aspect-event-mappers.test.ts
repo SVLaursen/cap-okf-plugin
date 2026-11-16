@@ -34,6 +34,7 @@ const MODEL: Csn = {
         status: { type: "x.Status", length: 10 },
         ship: { type: "x.Address" },
         kind: { type: "cds.String", enum: { retail: {}, wholesale: { val: "W" } } },
+        history: { items: { type: "x.Status" } },
       },
       actions: {
         cancel: {
@@ -189,6 +190,12 @@ describe("types in tables (maintainer decision for task 2.3)", () => {
     const body = map("x.S.Orders").body;
     expect(body).toContain("| `status` | [Status](/model/x/Status.md) |  |");
     expect(body).toContain("| `ship` | [Address](/model/x/Address.md) |  |");
+  });
+
+  test('many of a model type is "many" and a link', () => {
+    expect(map("x.S.Orders").body).toContain(
+      "| `history` | many [Status](/model/x/Status.md) |  |",
+    );
   });
 
   test("an element with its own enum lists its values in the notes", () => {

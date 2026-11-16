@@ -65,15 +65,10 @@ describe("services and projections of the bookshop fixture", () => {
   });
 
   // The event and action concepts come in task 2.3; until then their links are the only gap.
-  test("every link resolves except the one to the event, which task 2.3 maps", () => {
+  // Task 2.3 added the event and action concepts, so nothing is left unresolved.
+  test("every link resolves", () => {
     const files = mapAll().map((each) => ({ path: each.path, text: serializeConcept(each) }));
-    const brokenLinks = validateBundle(files).filter((finding) => finding.rule === "W4");
-    expect(brokenLinks.map((finding) => [finding.file, finding.message])).toEqual([
-      [
-        "model/CatalogService.md",
-        'link target "/model/CatalogService/BookReserved.md" does not exist in the bundle',
-      ],
-    ]);
+    expect(validateBundle(files).filter((finding) => finding.rule === "W4")).toEqual([]);
   });
 });
 
