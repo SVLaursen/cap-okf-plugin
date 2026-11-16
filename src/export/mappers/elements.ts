@@ -3,6 +3,7 @@ import { inlineCode, tableCell } from "../../core/markdown";
 import type { CsnDefinition, CsnEnum, CsnElement, CsnTyped } from "../csn";
 import type { MapperContext } from "./context";
 import { linkTo } from "./shared";
+import { shownEntries } from "./visibility";
 
 /**
  * A table of elements or parameters, e.g. "| `title` | `String(150)` | mandatory |". The first
@@ -16,7 +17,8 @@ export function elementsTable(
   context: MapperContext,
   withoutAssociations = false,
 ): string | undefined {
-  const rows = Object.entries(elements)
+  // Left out: rows marked @okf: false or referring to a definition that isn't exported (2.6).
+  const rows = shownEntries(elements, context)
     .filter(([, element]) => !(withoutAssociations && isAssociation(element)))
     .map(([name, element]) => {
       const cells = [inlineCode(name), typeCell(element, context), notesOf(element)];

@@ -141,6 +141,26 @@ describe("a concept never mentions what isn't exported", () => {
 });
 
 describe("authorization section and excluded definitions", () => {
+  test("a composition child whose restricted root isn't exported shows the root's rules unnamed", () => {
+    const model: Csn = {
+      definitions: {
+        Orders: { kind: "entity", "@okf": false, "@requires": "Clerk", elements: {} },
+        "Orders.items": {
+          kind: "entity",
+          elements: { up_: { key: true, type: "cds.Association", target: "Orders" } },
+        },
+      },
+    };
+    const context = defaultMapperContext(model, undefined, (name) => name !== "Orders");
+    const body = mapperFor("entity")!.map(
+      "Orders.items",
+      model.definitions["Orders.items"]!,
+      context,
+    ).body;
+    expect(body).toContain("### From the composition it is part of\n\nRequires: `Clerk`");
+    expect(body).not.toMatch(/\[Orders\]|`Orders`/);
+  });
+
   test("a member of an excluded service keeps the service's rules, without naming it", () => {
     const withoutService = new Set([...SERVICES].filter((name) => name !== "S"));
     const section = map("S.Books", withoutService).body;

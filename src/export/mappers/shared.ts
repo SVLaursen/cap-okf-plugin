@@ -52,7 +52,7 @@ export function inheritedDescription(
   definition: CsnDefinition,
   context: MapperContext,
 ): string | undefined {
-  for (const each of sourceChain(definition, context.model)) {
+  for (const each of sourceChain(definition, context.model, context.isExported)) {
     const description = descriptionOf(each, context);
     if (description !== undefined) return description;
   }
@@ -64,7 +64,9 @@ export function inheritedDoc(
   definition: CsnDefinition,
   context: MapperContext,
 ): string | undefined {
-  return sourceChain(definition, context.model).find((each) => each.doc !== undefined)?.doc;
+  return sourceChain(definition, context.model, context.isExported).find(
+    (each) => each.doc !== undefined,
+  )?.doc;
 }
 
 /** A Markdown link to a definition's concept, with its title as the text. */
@@ -88,6 +90,21 @@ export function baseFrontmatter(
     title: titleOf(name, definition, context),
     ...(description === undefined ? {} : { description }),
     resource: `cds:${name}`,
-    tags: ["cds", type.toLowerCase(), ...(namespace === undefined ? [] : [namespace])],
+    tags: [
+      ...new Set([
+        "cds",
+        type.toLowerCase(),
+        ...(namespace === undefined ? [] : [namespace]),
+        ...extraTags(definition),
+      ]),
+    ],
   };
+}
+
+// @okf.tags: one tag or a list, added after the generated ones (task 2.6); a tag already there
+// isn't repeated.
+function extraTags(definition: CsnDefinition): string[] {
+  const tags = definition["@okf.tags"];
+  const list = Array.isArray(tags) ? tags : tags === undefined ? [] : [tags];
+  return list.map((tag) => oneLine(String(tag)));
 }

@@ -17,6 +17,11 @@ export interface MapperContext {
    * the default language, or the key itself when there is no text (task 2.5).
    */
   text(value: string): string;
+  /**
+   * Whether a definition gets a concept of its own (task 2.6). A concept never mentions a
+   * definition that doesn't: references to it are left out, not written as names.
+   */
+  isExported(name: string): boolean;
 }
 
 /** A text for an i18n key in one language, or undefined when the bundle has none. */
@@ -28,14 +33,17 @@ const I18N_PLACEHOLDERS = /\{i18n>([^}]+)\}/g;
 
 /**
  * The context for `model`. Each placeholder is looked up in `texts`; without texts, or for a key
- * whose text is missing or empty, it shows its key (as CAP's cds.localize does).
+ * whose text is missing or empty, it shows its key (as CAP's cds.localize does). Without
+ * `isExported`, every definition counts as exported.
  */
 export function defaultMapperContext(
   model: Csn,
   texts: TextLookup = () => undefined,
+  isExported: (name: string) => boolean = () => true,
 ): MapperContext {
   return {
     model,
+    isExported,
     text: (value) =>
       value.replace(I18N_PLACEHOLDERS, (_placeholder, key: string) => texts(key) || key),
   };

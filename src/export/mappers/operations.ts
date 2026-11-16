@@ -5,6 +5,7 @@ import { escapeBlock, escapeHtml, oneLine } from "../../core/markdown";
 import type { CsnDefinition, CsnElement } from "../csn";
 import type { MapperContext } from "./context";
 import { elementsTable, typeCell } from "./elements";
+import { isShown, shownEntries } from "./visibility";
 
 /** How a bound operation's kind is named in its subsection: a lookup table, never a branch. */
 const OPERATION_TYPES: Readonly<Record<string, string>> = {
@@ -30,7 +31,8 @@ function callerParameters(operation: CsnDefinition): Record<string, CsnElement> 
 // "Returns: `Integer`", and for a structure (also "many { … }") a table of what it holds.
 function returnsParts(operation: CsnDefinition, context: MapperContext): string[] {
   const returns = operation.returns;
-  if (returns === undefined) return [];
+  // A return value of a definition that isn't exported is left out, like any reference (2.6).
+  if (returns === undefined || !isShown(returns, context)) return [];
   const structure = returns.elements ?? returns.items?.elements;
   const table =
     structure === undefined ? undefined : elementsTable("Returned element", structure, context);
@@ -42,7 +44,7 @@ function returnsParts(operation: CsnDefinition, context: MapperContext): string[
  * comment ("Action. Cancels the order."), then the same parts as an unbound one's concept.
  */
 export function boundActionsSection(definition: CsnDefinition, context: MapperContext): string[] {
-  const actions = Object.entries(definition.actions ?? {});
+  const actions = shownEntries(definition.actions, context);
   if (actions.length === 0) return [];
   const subsections = actions.map(([name, action]) => {
     // CSN always gives a bound operation the kind "action" or "function", so the lookup finds it.

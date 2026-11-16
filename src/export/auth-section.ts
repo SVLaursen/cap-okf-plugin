@@ -10,6 +10,7 @@ import { renderExpression } from "./cql";
 import type { CsnDefinition } from "./csn";
 import type { MapperContext } from "./mappers/context";
 import { linkTo } from "./mappers/shared";
+import { shownEntries } from "./mappers/visibility";
 
 export const AUTH_START = "<!-- okf:auth:start -->";
 export const AUTH_END = "<!-- okf:auth:end -->";
@@ -53,7 +54,7 @@ export function authorizationSection(
 ): string[] {
   const parts = [
     ...rulesOf(definition, ownStyle(name, definition)),
-    ...boundActionRules(definition),
+    ...boundActionRules(definition, context),
     ...compositionRoot(definition, context),
     ...serviceRules(name, context),
   ];
@@ -121,8 +122,9 @@ function namesOf(value: unknown): string[] {
 }
 
 // "### Action `cancel`" or "### Function `total`" for each bound operation with rules of its own.
-function boundActionRules(definition: CsnDefinition): string[] {
-  return Object.entries(definition.actions ?? {}).flatMap(([name, action]) => {
+function boundActionRules(definition: CsnDefinition, context: MapperContext): string[] {
+  // A bound action marked @okf: false isn't in the concept, so its rules aren't either.
+  return shownEntries(definition.actions, context).flatMap(([name, action]) => {
     const rules = rulesOf(action, { grantedOperation: name, withoutWhere: true });
     if (rules.length === 0) return [];
     // CSN always gives a bound operation the kind "action" or "function".
@@ -141,12 +143,19 @@ function compositionRoot(definition: CsnDefinition, context: MapperContext): str
   while (parent !== undefined) {
     const parentDefinition = context.model.definitions[parent];
     if (parentDefinition === undefined) return [];
-    if (hasOwnRules(parentDefinition)) {
-      return [`Checked through ${linkTo(parent, context)}, the composition it is part of.`];
-    }
+    if (hasOwnRules(parentDefinition)) return rootRules(parent, parentDefinition, context);
     parent = parentDefinition.elements?.["up_"]?.target;
   }
   return [];
+}
+
+// An exported root is linked; one that isn't is not named, but its rules still apply, so they
+// are shown here (task 2.6: a concept never mentions a definition that isn't exported).
+function rootRules(root: string, definition: CsnDefinition, context: MapperContext): string[] {
+  if (context.isExported(root)) {
+    return [`Checked through ${linkTo(root, context)}, the composition it is part of.`];
+  }
+  return [["### From the composition it is part of", ...rulesOf(definition)].join("\n\n")];
 }
 
 function hasOwnRules(definition: CsnDefinition): boolean {
@@ -159,7 +168,11 @@ function serviceRules(name: string, context: MapperContext): string[] {
   if (service === undefined) return [];
   const rules = rulesOf(context.model.definitions[service]!);
   if (rules.length === 0) return [];
-  return [[`### From service ${linkTo(service, context)}`, ...rules].join("\n\n")];
+  // A service that isn't exported is not named, but its rules still apply (task 2.6).
+  const heading = context.isExported(service)
+    ? `### From service ${linkTo(service, context)}`
+    : "### From its service";
+  return [[heading, ...rules].join("\n\n")];
 }
 
 // The nearest enclosing service: for "S.Books.texts" that is "S", if S is a service.

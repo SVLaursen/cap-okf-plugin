@@ -31,7 +31,8 @@ export function sourceLead(definition: CsnDefinition, context: MapperContext): s
 // a join or union. A source missing from the model is named, not linked: the link would break.
 function leadLine(how: string, definition: CsnDefinition, context: MapperContext): string {
   const source = sourceOf(definition, context.model);
-  if (source === undefined) return how;
+  // A source that isn't exported isn't named at all: a concept never mentions it (task 2.6).
+  if (source === undefined || !context.isExported(source)) return how;
   const isInModel = context.model.definitions[source] !== undefined;
   return `${how} on ${isInModel ? linkTo(source, context) : inlineCode(source)}`;
 }

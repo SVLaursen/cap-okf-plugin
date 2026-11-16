@@ -1,7 +1,7 @@
 // Services: one concept per service, listing what it exposes as links. Its @requires is left out
 // on purpose (ADR-0003); task 2.4 adds it inside the marked authorization section.
 import { escapeBlock, escapeHtml, inlineCode, oneLine } from "../../core/markdown";
-import type { CsnDefinition } from "../csn";
+import type { Csn, CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { generatedConcept } from "./concept-builder";
 import { inheritedDescription, linkTo, titleOf } from "./shared";
@@ -20,7 +20,10 @@ const SECTIONS: readonly { heading: string; kind: string }[] = [
 export const serviceMapper: Mapper = {
   kind: "service",
   map(name, definition, context) {
-    const members = membersOf(name, context);
+    // Only exported members are listed: the service never mentions one that isn't (task 2.6).
+    const members = serviceMembers(name, context.model).filter((member) =>
+      context.isExported(member.name),
+    );
     const sections = [
       `# ${escapeHtml(titleOf(name, definition, context))}`,
       ...(definition.doc === undefined ? [] : [escapeBlock(definition.doc)]),
@@ -37,7 +40,7 @@ export const serviceMapper: Mapper = {
   },
 };
 
-interface Member {
+export interface Member {
   name: string;
   definition: CsnDefinition;
 }
@@ -47,19 +50,19 @@ interface Member {
  * one, such as "S.Books.texts" inside "S.Books", belongs to that one and is reached through its
  * associations; a dotted name such as "S.Dotted.Name" with no "S.Dotted" is the service's own.
  */
-function membersOf(service: string, context: MapperContext): Member[] {
+export function serviceMembers(service: string, model: Csn): Member[] {
   const prefix = `${service}.`;
-  return Object.entries(context.model.definitions)
-    .filter(([name]) => name.startsWith(prefix) && !isInsideAnother(prefix, name, context))
+  return Object.entries(model.definitions)
+    .filter(([name]) => name.startsWith(prefix) && !isInsideAnother(prefix, name, model))
     .map(([name, definition]) => ({ name, definition }));
 }
 
 // "S.Books.texts" with prefix "S.": is "S.Books" a definition?
-function isInsideAnother(prefix: string, name: string, context: MapperContext): boolean {
+function isInsideAnother(prefix: string, name: string, model: Csn): boolean {
   const segments = name.slice(prefix.length).split(".");
   return segments
     .slice(0, -1)
-    .some((_, index) => context.model.definitions[prefix + segments.slice(0, index + 1).join(".")]);
+    .some((_, index) => model.definitions[prefix + segments.slice(0, index + 1).join(".")]);
 }
 
 // "Path: `/catalog`": where the service is served, when the model says so.

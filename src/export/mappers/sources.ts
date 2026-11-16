@@ -33,19 +33,21 @@ function targetOf(name: string | undefined, step: string, model: Csn): string | 
 
 /**
  * The definition, then its source, that source's source, and so on, as far as they lead.
- * Stops at a definition already in the chain, so a loop can't run forever.
+ * Stops at a definition already in the chain, so a loop can't run forever, and at a source for
+ * which `isAllowed` says no, e.g. one that isn't exported (task 2.6).
  */
-export function sourceChain(definition: CsnDefinition, model: Csn): CsnDefinition[] {
+export function sourceChain(
+  definition: CsnDefinition,
+  model: Csn,
+  isAllowed: (name: string) => boolean,
+): CsnDefinition[] {
   const chain = [definition];
-  let source = sourceDefinitionOf(definition, model);
-  while (source !== undefined && !chain.includes(source)) {
+  let name = sourceOf(definition, model);
+  while (name !== undefined && isAllowed(name)) {
+    const source = model.definitions[name];
+    if (source === undefined || chain.includes(source)) break;
     chain.push(source);
-    source = sourceDefinitionOf(source, model);
+    name = sourceOf(source, model);
   }
   return chain;
-}
-
-function sourceDefinitionOf(definition: CsnDefinition, model: Csn): CsnDefinition | undefined {
-  const source = sourceOf(definition, model);
-  return source === undefined ? undefined : model.definitions[source];
 }

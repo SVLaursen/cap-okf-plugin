@@ -3,6 +3,7 @@ import { escapeBlock, escapeHtml } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { elementsSection, enumValues, typeCell } from "./elements";
+import { isShown } from "./visibility";
 import { sourceLead } from "./projection";
 import { generatedConcept } from "./concept-builder";
 import { inheritedDoc, titleOf } from "./shared";
@@ -25,7 +26,10 @@ export const typeMapper: Mapper = {
 // "Based on: `String(10)`", for a type built on another one (not for a structure).
 function basedOn(definition: CsnDefinition, context: MapperContext): string[] {
   const hasBase = definition.type !== undefined || definition.items !== undefined;
-  return hasBase ? [`Based on: ${typeCell(definition, context)}`] : [];
+  // Based on a definition that isn't exported: left out, like any reference to it (2.6).
+  return hasBase && isShown(definition, context)
+    ? [`Based on: ${typeCell(definition, context)}`]
+    : [];
 }
 
 function valuesSection(definition: CsnDefinition): string[] {

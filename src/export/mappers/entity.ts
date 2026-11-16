@@ -6,6 +6,7 @@ import { escapeBlock, escapeHtml, inlineCode, oneLine } from "../../core/markdow
 import type { CsnDefinition, CsnElement } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { elementsSection, isAssociation, isToMany } from "./elements";
+import { shownEntries } from "./visibility";
 import { boundActionsSection } from "./operations";
 import { generatedConcept } from "./concept-builder";
 import { inheritedDoc, linkTo, titleOf } from "./shared";
@@ -32,7 +33,7 @@ export function entityConcept(
     `# ${escapeHtml(titleOf(name, definition, context))}`,
     ...lead,
     ...docSection(inheritedDoc(definition, context)),
-    ...includesSection(definition),
+    ...includesSection(definition, context),
     // Associations are listed in their own section, with links, so the table leaves them out.
     ...elementsSection(definition, context, true),
     ...associationsSection(definition, context),
@@ -45,14 +46,15 @@ function docSection(doc: string | undefined): string[] {
   return doc === undefined ? [] : [escapeBlock(doc)];
 }
 
-function includesSection(definition: CsnDefinition): string[] {
-  const includes = definition.includes ?? [];
+// Only exported aspects are named: a concept never mentions one that isn't (task 2.6).
+function includesSection(definition: CsnDefinition, context: MapperContext): string[] {
+  const includes = (definition.includes ?? []).filter((name) => context.isExported(name));
   if (includes.length === 0) return [];
   return [`Includes: ${includes.map((name) => inlineCode(oneLine(name))).join(", ")}`];
 }
 
 function associationsSection(definition: CsnDefinition, context: MapperContext): string[] {
-  const lines = Object.entries(definition.elements ?? {})
+  const lines = shownEntries(definition.elements, context)
     .filter(([, element]) => isAssociation(element))
     .map(([name, element]) => associationLine(name, element, context));
   if (lines.length === 0) return [];
