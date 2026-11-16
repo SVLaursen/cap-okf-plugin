@@ -229,6 +229,16 @@ describe("FileBundleSource on disk (ADR-0007)", () => {
     expect(await source.read("a.md")).toBeUndefined();
   });
 
+  // Only "nothing there" means an empty bundle; any other problem must surface, not hide files.
+  test("a root that can't be resolved, such as a symbolic link loop, is an error", async () => {
+    const folder = newFolder();
+    fs.symlinkSync(path.join(folder, "b"), path.join(folder, "a"));
+    fs.symlinkSync(path.join(folder, "a"), path.join(folder, "b"));
+    const source = new FileBundleSource(path.join(folder, "a"));
+    await expect(source.list()).rejects.toThrow(/ELOOP/);
+    await expect(source.read("x.md")).rejects.toThrow(/ELOOP/);
+  });
+
   // On case-insensitive file systems (macOS, Windows) Index.MD would open index.md, but only
   // the listed spelling may be read.
   test("reads a path only in the spelling it is listed in", async () => {
