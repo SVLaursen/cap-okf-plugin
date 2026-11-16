@@ -97,7 +97,7 @@ describe("entity mapper on real CSN shapes", () => {
   let shapes: Csn;
 
   beforeAll(() => {
-    shapes = cds.compile(SHAPES, { docs: true }) as unknown as Csn;
+    shapes = cds.compile(SHAPES) as unknown as Csn;
   });
 
   function mapShape(name: string): string {

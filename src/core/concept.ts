@@ -171,7 +171,8 @@ function normalize(text: string): string {
   return withoutBom.replace(/\r\n/g, "\n");
 }
 
-function conceptId(path: string): string {
+/** The concept ID of a bundle path: the path without its .md suffix (OKF v0.2 §2). */
+export function conceptId(path: string): string {
   return path.replace(/\.md$/, "");
 }
 

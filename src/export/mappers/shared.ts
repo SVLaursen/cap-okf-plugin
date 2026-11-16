@@ -1,5 +1,6 @@
 // Frontmatter and text helpers that every mapper uses, so all concepts look alike.
 import type { Frontmatter } from "../../core/concept";
+import { oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
 import type { MapperContext } from "./context";
 
@@ -17,7 +18,7 @@ export function namespaceOf(name: string): string | undefined {
 /** The display title: @title, else the short name. */
 export function titleOf(name: string, definition: CsnDefinition, context: MapperContext): string {
   const title = definition["@title"];
-  return typeof title === "string" ? context.text(title) : shortName(name);
+  return typeof title === "string" ? oneLine(context.text(title)) : shortName(name);
 }
 
 /**
@@ -29,15 +30,16 @@ export function descriptionOf(
   context: MapperContext,
 ): string | undefined {
   const description = definition["@description"];
-  if (typeof description === "string") return context.text(description);
+  if (typeof description === "string") return oneLine(context.text(description));
   return definition.doc === undefined ? undefined : firstSentence(definition.doc);
 }
 
 // "A book. Every book has an author." → "A book." Text without a full stop stays whole.
+// Simple on purpose: an abbreviation such as "e.g." ends the sentence early.
 function firstSentence(text: string): string {
-  const oneLine = text.replace(/\s+/g, " ").trim();
-  const end = oneLine.search(/[.!?](\s|$)/);
-  return end === -1 ? oneLine : oneLine.slice(0, end + 1);
+  const line = oneLine(text);
+  const end = line.search(/[.!?](\s|$)/);
+  return end === -1 ? line : line.slice(0, end + 1);
 }
 
 /** The frontmatter every generated concept starts with (spec §4.1). */
@@ -56,9 +58,4 @@ export function baseFrontmatter(
     resource: `cds:${name}`,
     tags: ["cds", type.toLowerCase(), ...(namespace === undefined ? [] : [namespace])],
   };
-}
-
-/** Text for one cell of a Markdown table: on one line, with "|" escaped. */
-export function tableCell(text: string): string {
-  return text.replace(/\s+/g, " ").trim().replace(/\|/g, "\\|");
 }

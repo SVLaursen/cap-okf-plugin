@@ -3,6 +3,7 @@
 // The layout follows the official sample bundles: one "# <type>" section per concept type,
 // then "# Subdirectories". Entries are "* [title](path) - description".
 import type { Concept } from "./concept";
+import { escapeHtml, escapeLinkText, oneLine } from "./markdown";
 import { isNonEmptyString } from "./values";
 
 export interface IndexOptions {
@@ -164,16 +165,6 @@ function entryLine(title: string, relativePath: string, description: string | un
   return description === undefined ? link : `${link} - ${description}`;
 }
 
-// A \, [ or ] in the text would end or break the link; a backslash escapes each.
-function escapeLinkText(text: string): string {
-  return text.replace(/[\\[\]]/g, (character) => `\\${character}`);
-}
-
-// A "<" could start HTML, and "<!--" would hide the rest of the index when it is rendered.
-function escapeHtml(text: string): string {
-  return text.replace(/</g, "&lt;");
-}
-
 /**
  * ADR-0007: links encode each path segment once more, so "a%3Ab" is linked as "a%253Ab".
  * encodeURIComponent leaves ( and ) alone, but a ")" would end the link, so those are encoded
@@ -184,12 +175,6 @@ function encodePath(path: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment).replace(/\(/g, "%28").replace(/\)/g, "%29"))
     .join("/");
-}
-
-// Titles, types and descriptions each go on one line of the index: a line break inside them
-// would end the entry or start a heading.
-function oneLine(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
 }
 
 function fileTitle(relativePath: string): string {

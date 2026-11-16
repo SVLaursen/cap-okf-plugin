@@ -15,13 +15,20 @@ export interface CsnDefinition {
   /** Aspects and entities it includes, e.g. ["cuid", "managed"]. */
   includes?: string[];
   elements?: Record<string, CsnElement>;
+  /** Set on projections ("as projection on …"). */
+  projection?: unknown;
+  /** Set on views ("as select from …"). */
+  query?: unknown;
   /** Annotations, e.g. "@title". */
   [annotation: `@${string}`]: unknown;
 }
 
 /** One element of an entity, type or aspect. */
 export interface CsnElement {
-  type?: string;
+  /** A type name, or a reference to another element's type ("type of Orders:status"). */
+  type?: string | { ref: string[] };
+  /** For arrayed elements ("many String"): the type of one item. */
+  items?: CsnElement;
   key?: boolean;
   notNull?: boolean;
   localized?: boolean;

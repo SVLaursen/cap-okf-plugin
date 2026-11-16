@@ -1,4 +1,4 @@
-// Reading Markdown bodies line by line. Pure module.
+// Reading Markdown bodies line by line, and writing text into Markdown safely. Pure module.
 
 /**
  * The text part of a Markdown link, as a regular expression source: "[Orders]", "[Orders [beta]]"
@@ -43,4 +43,42 @@ export function linesOutsideCode(body: string, firstLine: number): BodyLine[] {
 
 function closesFence(openFence: string, fence: string): boolean {
   return fence[0] === openFence[0] && fence.length >= openFence.length;
+}
+
+// Writing: generated files put titles, names and doc comments into Markdown. These keep such
+// text from changing the document's structure.
+
+/** Text on one line: a line break inside a heading, link or table cell would end it. */
+export function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/** A backslash, [ or ] in link text would end or break the link; a backslash escapes each. */
+export function escapeLinkText(text: string): string {
+  return text.replace(/[\\[\]]/g, (character) => `\\${character}`);
+}
+
+/**
+ * A "<" could start HTML, and "<!--" would hide the rest of the file when it is rendered, or
+ * fake an authorization marker (ADR-0003). As "&lt;" it is shown, not interpreted.
+ */
+export function escapeHtml(text: string): string {
+  return text.replace(/</g, "&lt;");
+}
+
+/**
+ * Text as a `code` span. A fence of one backtick more than the longest run inside keeps a
+ * backtick in the text from ending the span (CommonMark); a space pads text that starts or ends
+ * with a backtick.
+ */
+export function inlineCode(text: string): string {
+  const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(longestRun + 1);
+  const padding = text.startsWith("`") || text.endsWith("`") ? " " : "";
+  return `${fence}${padding}${text}${padding}${fence}`;
+}
+
+/** Text for one cell of a Markdown table: on one line, no HTML, and "|" escaped. */
+export function tableCell(text: string): string {
+  return escapeHtml(oneLine(text)).replace(/\|/g, "\\|");
 }
