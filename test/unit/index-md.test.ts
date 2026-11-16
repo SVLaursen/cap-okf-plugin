@@ -157,6 +157,81 @@ describe("generateIndex special cases", () => {
   });
 });
 
+describe("generateIndex with awkward input", () => {
+  test.each([
+    ["a title on several lines", { type: "X", title: "A\n# boom" }, "* [A # boom](a.md)\n"],
+    ["a padded title", { type: "X", title: "  spaced\ttitle  " }, "* [spaced title](a.md)\n"],
+    [
+      "HTML in a description",
+      { type: "X", title: "A", description: "Hides <!-- the rest" },
+      "* [A](a.md) - Hides &lt;!-- the rest\n",
+    ],
+  ])("handles %s", (_label, frontmatter, line) => {
+    expect(generateIndex("", [concept("a.md", frontmatter)]).body).toContain(line);
+  });
+
+  test("a type on several lines or with padding is one heading", () => {
+    const concepts = [
+      concept("a.md", { type: "Entity\n* x", title: "A" }),
+      concept("b.md", { type: "  Entity * x  ", title: "B" }),
+    ];
+    expect(generateIndex("", concepts).body).toBe("# Entity * x\n\n* [A](a.md)\n* [B](b.md)\n");
+  });
+
+  test("parentheses in a path are percent-encoded, so the link ends where it should", () => {
+    const body = generateIndex("", [concept("a).md", { type: "X", title: "A" })]).body;
+    expect(body).toContain("* [A](a%29.md)\n");
+  });
+
+  test("a folder given with slashes around it is the same folder", () => {
+    expect(generateIndex("/model/", BOOKSHOP)).toEqual(generateIndex("model", BOOKSHOP));
+  });
+
+  test("files that are not Markdown are not listed or counted", () => {
+    const concepts = [concept("refs/q.py", null), concept("refs/a.md", { type: "X" })];
+    expect(generateIndex("", concepts).body).toContain("* [refs](refs/index.md) - 1 concept: X\n");
+    expect(generateIndex("refs", concepts).body).toBe("# X\n\n* [a](a.md)\n");
+  });
+
+  // Duplicate paths are invalid, but a merge could produce them; the order must still be fixed.
+  test("concepts with the same path are ordered by title, whatever order they come in", () => {
+    const concepts = [
+      concept("a.md", { type: "X", title: "two" }),
+      concept("a.md", { type: "X", title: "one" }),
+    ];
+    const expected = "# X\n\n* [one](a.md)\n* [two](a.md)\n";
+    expect(generateIndex("", concepts).body).toBe(expected);
+    expect(generateIndex("", [...concepts].reverse()).body).toBe(expected);
+  });
+
+  // A real type named like a heading of our own shares that heading, on purpose: this pins it.
+  test("a type named Other shares the section of the concepts without a type", () => {
+    const concepts = [
+      concept("a.md", { type: "Other", title: "A" }),
+      concept("b.md", { title: "B" }),
+    ];
+    expect(generateIndex("", concepts).body).toBe("# Other\n\n* [A](a.md)\n* [B](b.md)\n");
+  });
+
+  // Everything above must still give index files that our own validator accepts (R3 and W4).
+  test("index files of awkward titles, types and paths pass validateBundle", () => {
+    const description = "A concept with an awkward name.";
+    const awkward = [
+      concept("a ] b.md", { type: "Entity\n* x", title: "a ] b", description }),
+      concept("a [ b.md", { type: "X", title: "a [ b", description: "<!-- c" }),
+      concept("nest.md", { type: "X", title: "a [b [c]] d \\ e", description }),
+      concept("p(1).md", { type: "X", title: "Paren", description: "See [nest](nest.md)." }),
+      concept("c)(.md", { type: "X", title: "c)(", description }),
+      concept("sub/ä #?%.md", { type: "X", title: "A\n# boom", description }),
+    ];
+    const files = [...awkward, ...generateIndexes(awkward, "")].map((file) => ({
+      path: file.path,
+      text: serializeConcept(file),
+    }));
+    expect(validateBundle(files)).toEqual([]);
+  });
+});
+
 describe("generateIndexes", () => {
   test("writes an index for a folder and every folder below it, sorted by path", () => {
     expect(generateIndexes(BOOKSHOP, "model").map((index) => index.path)).toEqual([

@@ -56,6 +56,7 @@ describe("extractLinks CommonMark details", () => {
     ["a span closed by the same run only", "``a`b`` [c](c.md)", ["c.md"]],
     ["an escaped bracket", "\\[not](a.md) but [yes](b.md)", ["b.md"]],
     ["balanced parentheses in the target", "[w](notes_(draft).md)", ["notes_(draft).md"]],
+    ["escaped brackets in the link text", "[a \\] b](a.md) [c \\[ d](c.md)", ["a.md", "c.md"]],
     ["an unclosed angle bracket, kept as written", "[a](<foo)", ["<foo"]],
   ])("handles %s", (_label, body, targets) => {
     expect(extractLinks(body, 1).map((link) => link.target)).toEqual(targets);

@@ -427,6 +427,7 @@ describe("validateBundle index.md entries", () => {
     ["a nested detail under an entry", "* [Orders](orders.md) - All orders.\n  * detail"],
     ["an indented code line", "    * code"],
     ["brackets in the link text", "* [Orders [beta]](orders.md) - All orders."],
+    ["escaped brackets in the link text", "* [Orders \\] \\[ \\\\](orders.md) - All orders."],
     ["a reference-style link", "* [Orders][orders]\n\n[orders]: orders.md"],
     ["a bold link", "* **[Orders](orders.md)** - All orders."],
   ])("an index.md with %s has no findings", (_label, body) => {
