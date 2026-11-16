@@ -1,0 +1,163 @@
+import { serializeConcept, type Concept } from "../../src/core/concept";
+import type { Csn } from "../../src/export/csn";
+import { defaultMapperContext } from "../../src/export/mappers/context";
+import { mapperFor, registryKeyOf } from "../../src/export/mappers/index";
+import { selectExported } from "../../src/export/selection";
+
+// Task 2.6. Maintainer decisions: include "services" exports what the services link to,
+// transitively; a concept never mentions a definition that isn't exported (as cap-mcp v2 and
+// CAP do): references to it are left out, not written as names; @okf: false works on
+// definitions, elements, parameters and bound actions.
+
+const MODEL: Csn = {
+  definitions: {
+    S: { kind: "service", "@requires": "Clerk" },
+    "S.Books": {
+      kind: "entity",
+      projection: { from: { ref: ["db.Books"] } },
+      elements: { ID: { key: true, type: "cds.Integer" } },
+      actions: {
+        report: { kind: "function", returns: { type: "db.Report" } },
+        purge: { kind: "action", "@okf": false },
+      },
+    },
+    "S.Secrets": { kind: "entity", "@okf": false, elements: {} },
+    "S.Hidden": {
+      kind: "entity",
+      projection: { from: { ref: ["db.Locked"] } },
+      elements: { ID: { key: true, type: "cds.Integer" } },
+    },
+    "db.Books": {
+      kind: "entity",
+      doc: "A book.",
+      includes: ["cuid"],
+      "@okf.tags": ["shop", "catalog"],
+      elements: {
+        ID: { key: true, type: "cds.Integer" },
+        status: { type: "x.Status" },
+        author: { type: "cds.Association", target: "db.Authors" },
+        secret: { type: "cds.Association", target: "x.Hidden" },
+        flag: { type: "x.HiddenType" },
+        internal: { type: "cds.String", "@okf": false },
+        audit: { type: "cds.Association", target: "db.Audit", "@okf": false },
+      },
+    },
+    "db.Authors": { kind: "entity", elements: { ID: { key: true, type: "cds.Integer" } } },
+    "db.Report": { kind: "type", elements: { n: { type: "cds.Integer" } } },
+    "db.Audit": { kind: "entity", elements: {} },
+    "db.Locked": { kind: "entity", "@okf": false, doc: "Locked away.", elements: {} },
+    "db.Unused": { kind: "entity", elements: {} },
+    "x.Status": { kind: "type", type: "cds.String", "@okf.tags": "status" },
+    "x.Hidden": { kind: "entity", "@okf": false, elements: {} },
+    "x.HiddenType": { kind: "type", "@okf": false, type: "cds.String" },
+    cuid: { kind: "aspect", elements: { ID: { key: true, type: "cds.UUID" } } },
+    "x.ctx": { kind: "context" },
+  },
+};
+
+const SERVICES = selectExported(MODEL, "services");
+
+function map(name: string, exported = SERVICES): Concept {
+  const definition = MODEL.definitions[name]!;
+  const context = defaultMapperContext(MODEL, undefined, (each) => exported.has(each));
+  return mapperFor(registryKeyOf(definition))!.map(name, definition, context);
+}
+
+describe("selectExported", () => {
+  test('"services" exports the services and everything they link to, transitively', () => {
+    expect([...SERVICES].sort()).toEqual([
+      "S",
+      "S.Books",
+      "S.Hidden",
+      "db.Authors",
+      "db.Books",
+      "db.Report",
+      "x.Status",
+    ]);
+  });
+
+  test('"all" exports every definition with a mapper, except those marked @okf: false', () => {
+    expect([...selectExported(MODEL, "all")].sort()).toEqual([
+      "S",
+      "S.Books",
+      "S.Hidden",
+      "cuid",
+      "db.Audit",
+      "db.Authors",
+      "db.Books",
+      "db.Report",
+      "db.Unused",
+      "x.Status",
+    ]);
+  });
+
+  test("a reference from a left-out element or bound action doesn't make anything reachable", () => {
+    expect(SERVICES.has("db.Audit")).toBe(false);
+  });
+});
+
+describe("a concept never mentions what isn't exported", () => {
+  const books = map("db.Books");
+  const text = serializeConcept(books);
+
+  test("associations, typed elements and includes of excluded definitions are left out", () => {
+    for (const name of ["secret", "x.Hidden", "Hidden", "flag", "HiddenType", "cuid", "Includes"]) {
+      expect(text).not.toContain(name);
+    }
+  });
+
+  test("elements and associations marked @okf: false are left out", () => {
+    expect(text).not.toContain("internal");
+    expect(text).not.toContain("audit");
+  });
+
+  test("what is exported is still shown and linked", () => {
+    expect(books.body).toContain("| `status` | [Status](/model/x/Status.md) |  |");
+    expect(books.body).toContain("- `author` → [Authors](/model/db/Authors.md) (to one)");
+  });
+
+  test("a bound action marked @okf: false is left out; one returning an exported type stays", () => {
+    const body = map("S.Books").body;
+    expect(body).not.toContain("purge");
+    expect(body).toContain("### report\n\nFunction.\n\nReturns: [Report](/model/db/Report.md)");
+  });
+
+  test("a projection on an excluded source names no source and takes nothing from it", () => {
+    const hidden = map("S.Hidden");
+    expect(hidden.body).toContain("\n# Hidden\n\nProjection\n");
+    expect(serializeConcept(hidden)).not.toMatch(/Locked/);
+  });
+
+  test("the service lists only exported members", () => {
+    const body = map("S").body;
+    expect(body).toContain("- [Books](/model/S/Books.md)");
+    expect(body).not.toContain("Secrets");
+  });
+
+  test("with everything exported, a reference to a reachable definition is a link again", () => {
+    const all = selectExported(MODEL, "all");
+    expect(map("db.Books", all).body).toContain("Includes: `cuid`");
+  });
+});
+
+describe("authorization section and excluded definitions", () => {
+  test("a member of an excluded service keeps the service's rules, without naming it", () => {
+    const withoutService = new Set([...SERVICES].filter((name) => name !== "S"));
+    const section = map("S.Books", withoutService).body;
+    expect(section).toContain("### From its service\n\nRequires: `Clerk`");
+    expect(section).not.toContain("[S]");
+  });
+});
+
+describe("@okf.tags", () => {
+  test("adds tags after the generated ones, as a list or a single tag", () => {
+    expect(map("db.Books").frontmatter?.["tags"]).toEqual([
+      "cds",
+      "entity",
+      "db",
+      "shop",
+      "catalog",
+    ]);
+    expect(map("x.Status").frontmatter?.["tags"]).toEqual(["cds", "type", "x", "status"]);
+  });
+});
