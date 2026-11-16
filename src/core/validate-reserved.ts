@@ -7,10 +7,24 @@ import { findingAtKey, findingOnLine, type Finding } from "./finding";
 /** The only key allowed in index.md frontmatter, and only in the bundle-root index.md (§12). */
 const ROOT_INDEX_KEY = "okf_version";
 
-const LIST_ITEM = /^\s*[*+-]\s+(.*)$/;
-const STARTS_WITH_LINK = /^\[[^\]]*\]\([^)]*\)/;
-const LOG_DATE_HEADING = /^##\s+(.*?)\s*$/;
-const CODE_FENCE = /^\s*(```|~~~)/;
+// An index entry is a list item at the start of the line. Indented items are details nested
+// under an entry (or code, from 4 spaces on), so they are not entries themselves.
+const INDEX_ENTRY = /^[*+-][ \t]+(.*)$/;
+
+// "* * *", "---", "___": a thematic break, not a list item.
+const THEMATIC_BREAK = /^ {0,3}([*_-])(?:[ \t]*\1){2,}[ \t]*$/;
+
+// The entry starts with a link: [text](path) or a reference [text][label], optionally in
+// bold or italics. The link text may contain one level of [brackets], as in [Orders [beta]].
+const LINK_TEXT = String.raw`\[(?:[^[\]]|\[[^[\]]*\])*\]`;
+const LINK_TARGET = String.raw`(?:\([^)]*\)|\[[^\]]*\])`;
+const STARTS_WITH_LINK = new RegExp(String.raw`^(?:\*\*|__|\*|_)?` + LINK_TEXT + LINK_TARGET);
+
+// "## 2026-11-13", indented up to three spaces, optionally closed with hashes ("## … ##").
+const LOG_DATE_HEADING = /^ {0,3}##[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
+
+// A code fence: ``` or ~~~ (three or more), indented up to three spaces.
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 interface BodyLine {
   text: string;
@@ -34,8 +48,10 @@ export function checkLogFile(located: LocatedConcept): Finding[] {
       findings.push(invalidLogDate(located, line, date));
       continue;
     }
-    // YYYY-MM-DD strings sort like the dates they name, so a string comparison is enough.
-    if (previousDate !== undefined && date >= previousDate) {
+    if (date === previousDate) {
+      findings.push(repeatedLogDate(located, line, date));
+    } else if (previousDate !== undefined && date > previousDate) {
+      // YYYY-MM-DD strings sort like the dates they name, so a string comparison is enough.
       findings.push(logNotNewestFirst(located, line, date, previousDate));
     }
     previousDate = date;
@@ -67,10 +83,7 @@ function checkIndexFrontmatter(located: LocatedConcept): Finding[] {
 // §8: entries are "* [Title](path) - description" lines under section headings.
 function checkIndexEntries(located: LocatedConcept): Finding[] {
   return bodyLines(located)
-    .filter(({ text }) => {
-      const item = LIST_ITEM.exec(text)?.[1];
-      return item !== undefined && !STARTS_WITH_LINK.test(item);
-    })
+    .filter(({ text }) => isEntryWithoutLink(text))
     .map(({ line }) =>
       findingOnLine(located, line, "R3", {
         message: "list entry does not start with a link",
@@ -79,10 +92,23 @@ function checkIndexEntries(located: LocatedConcept): Finding[] {
     );
 }
 
+function isEntryWithoutLink(text: string): boolean {
+  if (THEMATIC_BREAK.test(text)) return false;
+  const entry = INDEX_ENTRY.exec(text)?.[1];
+  return entry !== undefined && !STARTS_WITH_LINK.test(entry);
+}
+
 function invalidLogDate(located: LocatedConcept, line: number, date: string): Finding {
   return findingOnLine(located, line, "R3", {
     message: `log heading "${date}" is not a valid YYYY-MM-DD date`,
     fix: "Write each ## heading in log.md as an ISO 8601 date, e.g. ## 2026-11-13",
+  });
+}
+
+function repeatedLogDate(located: LocatedConcept, line: number, date: string): Finding {
+  return findingOnLine(located, line, "R3", {
+    message: `log heading ${date} repeats an earlier heading; one heading per date`,
+    fix: "Merge the entries of this group into the earlier group with the same date",
   });
 }
 
@@ -93,21 +119,32 @@ function logNotNewestFirst(
   previousDate: string,
 ): Finding {
   return findingOnLine(located, line, "R3", {
-    message: `log heading ${date} comes after ${previousDate}; log.md lists dates newest first, once each`,
-    fix: "Move this date group above the older ones, or merge it with the group of the same date",
+    message: `log heading ${date} comes after the older ${previousDate}; log.md lists newest first`,
+    fix: "Move this date group above the older ones",
   });
 }
 
-// Lines inside ``` or ~~~ code blocks are examples, not structure, so they are skipped.
+/**
+ * Body lines outside code blocks, with their file line numbers. Code blocks hold examples,
+ * not structure. A block ends only at a fence of the same kind (` or ~) that is at least as
+ * long as the one that opened it, as in CommonMark.
+ */
 function bodyLines(located: LocatedConcept): BodyLine[] {
   const result: BodyLine[] = [];
-  let inCodeBlock = false;
+  let openFence: string | undefined;
   located.concept.body.split("\n").forEach((text, index) => {
-    if (CODE_FENCE.test(text)) {
-      inCodeBlock = !inCodeBlock;
-    } else if (!inCodeBlock) {
+    const fence = CODE_FENCE.exec(text)?.[1];
+    if (openFence === undefined && fence !== undefined) {
+      openFence = fence;
+    } else if (openFence !== undefined) {
+      if (fence !== undefined && closesFence(openFence, fence)) openFence = undefined;
+    } else {
       result.push({ text, line: located.bodyLine + index });
     }
   });
   return result;
+}
+
+function closesFence(openFence: string, fence: string): boolean {
+  return fence[0] === openFence[0] && fence.length >= openFence.length;
 }

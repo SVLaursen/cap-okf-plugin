@@ -1,6 +1,7 @@
 // OKF concept files: Markdown with optional YAML frontmatter (OKF v0.2 §4).
 // Pure module: text in, values out. No file system, no clock, no CAP.
 import YAML from "yaml";
+import { isPlainObject } from "./values";
 
 /** Frontmatter keys and values as written; unknown keys are kept (OKF v0.2 §4.1). */
 export type Frontmatter = Record<string, unknown>;
@@ -254,19 +255,15 @@ function childNode(node: unknown, key: string | number): ChildNode | undefined {
       (item): item is YAML.Pair<YAML.Scalar, unknown> =>
         YAML.isScalar(item.key) && item.key.value === key,
     );
+    if (pair === undefined) return undefined;
     // Nodes from parseDocument always have a range.
-    return pair && { node: pair.value, offset: pair.key.range![0] };
+    return { node: pair.value, offset: pair.key.range![0] };
   }
   if (YAML.isSeq(node) && typeof key === "number") {
     const item = node.items[key];
     return YAML.isNode(item) ? { node: item, offset: item.range![0] } : undefined;
   }
   return undefined;
-}
-
-// Lists, plain values and special types such as !!binary are not frontmatter.
-function isPlainObject(value: unknown): value is Frontmatter {
-  return typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype;
 }
 
 function yamlError(

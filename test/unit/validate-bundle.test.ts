@@ -322,7 +322,9 @@ describe("validateBundle reserved files", () => {
     const findings = validateBundle([file("index.md", `# Guides\n\n${body}`)]);
     expect(findings).toMatchObject([{ rule: "R3", line: 6 }]);
   });
+});
 
+describe("validateBundle index.md entries", () => {
   test.each([
     ["a thematic break", "* * *"],
     ["a nested detail under an entry", "* [Orders](orders.md) - All orders.\n  * detail"],
@@ -333,7 +335,9 @@ describe("validateBundle reserved files", () => {
   ])("an index.md with %s has no findings", (_label, body) => {
     expect(validateBundle([file("index.md", `# Guides\n\n${body}\n`)])).toEqual([]);
   });
+});
 
+describe("validateBundle log.md headings", () => {
   test.each([
     ["closing hashes", "## 2026-05-22 ##"],
     ["an indent of up to three spaces", "   ## 2026-05-22"],

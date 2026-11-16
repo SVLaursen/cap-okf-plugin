@@ -1,11 +1,16 @@
 // W2: the v0.2 provenance, trust and lifecycle fields have the shape OKF v0.2 §5 gives them.
 // Pure module. Every check is skipped when its field is absent: all of §5 is optional.
+// Out of scope for now (task 1.3 names only the fields below): the credibility signals inside
+// sources entries (author, usage_count, last_modified) and usage_window.
 import type { Frontmatter, KeyPath, LocatedConcept } from "./concept";
 import { isIsoDateTime } from "./datetime";
 import { findingAtKey, keyName, type Finding } from "./finding";
+import { isNonEmptyString, isPlainObject } from "./values";
 
 // Typed as unknown so includes() can test any frontmatter value without a cast.
 const STATUSES: readonly unknown[] = ["draft", "stable", "deprecated"];
+
+const AT_FIX = "Write the date and time as ISO 8601 with a UTC offset, e.g. 2026-11-13T09:00:00Z";
 
 type Mapping = Record<string, unknown>;
 
@@ -20,22 +25,19 @@ export function checkFieldShapes(located: LocatedConcept, frontmatter: Frontmatt
   ];
 }
 
-function shapeFinding(located: LocatedConcept, keyPath: KeyPath, message: string, fix: string) {
+function shapeFinding(
+  located: LocatedConcept,
+  keyPath: KeyPath,
+  message: string,
+  fix: string,
+): Finding {
   return findingAtKey(located, keyPath, "W2", { message, fix });
-}
-
-function isMapping(value: unknown): value is Mapping {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNonEmptyString(value: unknown): boolean {
-  return typeof value === "string" && value.trim() !== "";
 }
 
 // §5.2: generated: { by, at }, where by is required and at is optional.
 function checkGenerated(located: LocatedConcept, generated: unknown): Finding[] {
   if (generated === undefined) return [];
-  if (!isMapping(generated)) {
+  if (!isPlainObject(generated)) {
     return [notAnEvent(located, ["generated"])];
   }
   return checkEvent(located, ["generated"], generated, { atRequired: false });
@@ -50,8 +52,8 @@ function checkVerified(located: LocatedConcept, verified: unknown): Finding[] {
   return verified.flatMap((entry, index) => checkVerification(located, ["verified", index], entry));
 }
 
-function checkVerification(located: LocatedConcept, keyPath: KeyPath, entry: unknown) {
-  if (!isMapping(entry)) return [notAnEvent(located, keyPath)];
+function checkVerification(located: LocatedConcept, keyPath: KeyPath, entry: unknown): Finding[] {
+  if (!isPlainObject(entry)) return [notAnEvent(located, keyPath)];
   return checkEvent(located, keyPath, entry, { atRequired: true });
 }
 
@@ -87,20 +89,18 @@ function checkEvent(
   const at = event["at"];
   if (at === undefined && options.atRequired) {
     findings.push(shapeFinding(located, atPath, `"${keyName(atPath)}" is missing`, AT_FIX));
-  } else if (at !== undefined && !isIsoDateTime(at, { requireZone: false })) {
+  } else if (at !== undefined && !isIsoDateTime(at)) {
     findings.push(
       shapeFinding(
         located,
         atPath,
-        `"${keyName(atPath)}" is not an ISO 8601 date and time`,
+        `"${keyName(atPath)}" is not an ISO 8601 date and time with a UTC offset`,
         AT_FIX,
       ),
     );
   }
   return findings;
 }
-
-const AT_FIX = "Write the date and time as ISO 8601, e.g. 2026-11-13T09:00:00Z";
 
 // §5.4: draft | stable | deprecated.
 function checkStatus(located: LocatedConcept, status: unknown): Finding[] {
@@ -115,9 +115,9 @@ function checkStatus(located: LocatedConcept, status: unknown): Finding[] {
   ];
 }
 
-// §5.5: an absolute instant, so the time zone is required.
+// §5.5: an absolute instant. §5 requires the UTC offset for every timestamp anyway.
 function checkStaleAfter(located: LocatedConcept, staleAfter: unknown): Finding[] {
-  if (staleAfter === undefined || isIsoDateTime(staleAfter, { requireZone: true })) return [];
+  if (staleAfter === undefined || isIsoDateTime(staleAfter)) return [];
   return [
     shapeFinding(
       located,
@@ -156,7 +156,7 @@ function checkSource(
   seenIds: Set<string>,
 ): Finding[] {
   const entryPath = ["sources", index];
-  if (!isMapping(entry)) {
+  if (!isPlainObject(entry)) {
     return [
       shapeFinding(
         located,
@@ -190,6 +190,7 @@ function checkSourceId(
   seenIds: Set<string>,
 ): Finding[] {
   if (id === undefined) return [];
+  // Compared as text: a footnote label is text, so id: 1 and id: "1" cite the same source.
   const key = String(id);
   if (!seenIds.has(key)) {
     seenIds.add(key);
