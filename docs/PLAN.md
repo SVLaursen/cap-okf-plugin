@@ -63,7 +63,7 @@ test/
   - Done when: every test from Phase 0 runs as TypeScript and passes; `npm pack` builds and ships `lib/`; the demo builds.
 - [x] **1.1 Parse.** `parseConcept(path, text)` → `{ path, id, frontmatter, body }`. Splits `---` frontmatter, parses YAML.
   - Test first: valid file; no frontmatter; invalid YAML (error has line number); unknown keys kept; CRLF line endings; UTF-8 BOM.
-- [ ] **1.2 Serialize.** `serializeConcept(concept)` with stable key order (`type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then unknown keys in original order).
+- [x] **1.2 Serialize.** `serializeConcept(concept)` with stable key order (`type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then unknown keys in original order).
   - Test first: round-trip `parse(serialize(c))` deep-equals `c` for every sample fixture; output ends with exactly one newline.
 - [ ] **1.3 Validate.** `validateBundle(concepts)` → list of `{ file, line, rule, severity, message, fix }`.
   - Rules (errors): R1 non-reserved file has valid frontmatter; R2 non-empty `type`; R3 reserved files keep their structure.
