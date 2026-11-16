@@ -11,12 +11,26 @@ export function isBundlePath(path: string): boolean {
   return path.split("/").every((segment) => segment !== "" && !segment.startsWith("."));
 }
 
-/** Throws unless `path` is a bundle path. For writers, where a bad path is a programming error. */
-export function assertBundlePath(path: string): void {
+/**
+ * Throws unless `path` is a bundle path that every file system can store as written.
+ * For writers, where a bad path is a programming error. Windows reads "a.md:x" as a hidden
+ * stream of a.md and strips a trailing dot or space; generated paths never contain these,
+ * because ADR-0007 percent-encodes such characters, so this only guards curated paths.
+ */
+export function assertWritablePath(path: string): void {
   if (!isBundlePath(path)) {
-    throw new Error(
-      `[okf] ${JSON.stringify(path)} is not a bundle path.\n` +
-        "  Use a relative path with / separators and no empty, hidden, . or .. segments.",
+    throw pathError(
+      path,
+      "not a bundle path",
+      "Use a relative path with / separators and no empty, hidden, . or .. segments",
+    );
+  }
+  const segments = path.split("/");
+  if (path.includes(":") || segments.some((segment) => /[. ]$/.test(segment))) {
+    throw pathError(
+      path,
+      "can't be stored on every file system",
+      'Leave out ":" and end no file or folder name with a dot or space',
     );
   }
 }
@@ -27,4 +41,46 @@ export function assertBundlePath(path: string): void {
  */
 export function sortPaths(paths: Iterable<string>): string[] {
   return [...paths].sort();
+}
+
+/**
+ * Remembers the paths written to one bundle and refuses a path (or folder) that differs from
+ * an earlier one only in letter case or Unicode form. macOS and Windows treat such names as
+ * one file, so on those systems the second write would silently replace the first.
+ */
+export class PathSpellings {
+  /** Folded spelling → the spelling first written. */
+  private readonly spellings = new Map<string, string>();
+
+  /** Throws on a clash with an earlier spelling, otherwise remembers `path` and its folders. */
+  remember(path: string): void {
+    const prefixes = pathPrefixes(path);
+    for (const prefix of prefixes) {
+      const earlier = this.spellings.get(fold(prefix));
+      if (earlier !== undefined && earlier !== prefix) {
+        throw pathError(
+          path,
+          `differs from ${earlier} only in letter case or Unicode form`,
+          "Give each file and folder a name that differs in more than that",
+        );
+      }
+    }
+    for (const prefix of prefixes) this.spellings.set(fold(prefix), prefix);
+  }
+}
+
+// "a/b/c.md" → ["a", "a/b", "a/b/c.md"]: the file and each folder it is in.
+function pathPrefixes(path: string): string[] {
+  const segments = path.split("/");
+  return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
+}
+
+// Two spellings that fold to the same text name one file on macOS and Windows.
+function fold(path: string): string {
+  return path.normalize("NFC").toLowerCase();
+}
+
+/** An error in the CLAUDE.md message format, for a bundle path. */
+export function pathError(path: string, problem: string, fix: string): Error {
+  return new Error(`[okf] ${JSON.stringify(path)} — ${problem}.\n  ${fix}.`);
 }

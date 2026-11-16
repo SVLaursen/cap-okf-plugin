@@ -162,11 +162,13 @@ describe.each(SINK_KINDS)("BundleSink contract: $name", ({ create }) => {
     "writing the unsafe path %j is rejected",
     async (unsafePath) => {
       const { sink, readBack } = create();
-      await expect(sink.write(unsafePath, "x")).rejects.toThrow(/is not a bundle path/);
+      await expect(sink.write(unsafePath, "x")).rejects.toThrow(/ — not a bundle path\./);
       expect(await readBack().list()).toEqual([]);
     },
   );
+});
 
+describe.each(SINK_KINDS)("BundleSink contract, portable paths: $name", ({ create }) => {
   // A bundle must work on every file system, and on macOS and Windows these name one file.
   test.each([
     ["letter case", "guides/a.md", "guides/A.md"],
@@ -295,7 +297,9 @@ describe("FileBundleSource on disk (ADR-0007)", () => {
     await expect(source.list()).rejects.toThrow(/ELOOP/);
     await expect(source.read("x.md")).rejects.toThrow(/ELOOP/);
   });
+});
 
+describe("FileBundleSource on disk, root and spelling", () => {
   test("a root that is a file, not a folder, is an error for list and read alike", async () => {
     const folder = newFolder();
     writeFiles(folder, { "file.md": "x" });
@@ -324,15 +328,26 @@ describe("FileBundleSource on disk (ADR-0007)", () => {
 });
 
 describe("FileBundleSink on disk", () => {
-  test("refuses to write through a symbolic link that leads out of its folder", async () => {
+  test("refuses to write into a folder that is a symbolic link", async () => {
     const root = newFolder();
     const outside = newFolder();
     fs.symlinkSync(outside, path.join(root, "linked-folder"), "dir");
-    fs.symlinkSync(path.join(outside, "target.md"), path.join(root, "link.md"));
     const sink = new FileBundleSink(root);
-    await expect(sink.write("linked-folder/a.md", "x")).rejects.toThrow(/symbolic link/);
-    await expect(sink.write("link.md", "x")).rejects.toThrow(/symbolic link/);
+    await expect(sink.write("linked-folder/a.md", "x")).rejects.toThrow(
+      /linked-folder — is a symbolic link, so linked-folder\/a\.md can't be written\./,
+    );
     expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  test("replaces a symbolic link at the file's place instead of writing through it", async () => {
+    const root = newFolder();
+    const outside = newFolder();
+    writeFiles(outside, { "target.md": "outside" });
+    fs.symlinkSync(path.join(outside, "target.md"), path.join(root, "link.md"));
+    await new FileBundleSink(root).write("link.md", "inside");
+    expect(fs.readFileSync(path.join(outside, "target.md"), "utf8")).toBe("outside");
+    expect(fs.lstatSync(path.join(root, "link.md")).isSymbolicLink()).toBe(false);
+    expect(await new FileBundleSource(root).read("link.md")).toBe("inside");
   });
 
   test("creates no folder outside its own when a write through a link is refused", async () => {
@@ -343,7 +358,9 @@ describe("FileBundleSink on disk", () => {
     await expect(sink.write("linked-folder/new/sub/a.md", "x")).rejects.toThrow(/symbolic link/);
     expect(fs.readdirSync(outside)).toEqual([]);
   });
+});
 
+describe("FileBundleSink on disk, links and files in the way", () => {
   test("replacing a file breaks a hard link instead of changing the other file", async () => {
     const root = newFolder();
     const outside = newFolder();
