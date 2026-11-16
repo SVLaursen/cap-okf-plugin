@@ -4,6 +4,7 @@ import { serializeConcept } from "../../src/core/concept";
 import type { Csn } from "../../src/export/csn";
 import { defaultMapperContext } from "../../src/export/mappers/context";
 import { entityMapper } from "../../src/export/mappers/entity";
+import { validateBundle } from "../../src/core/validate";
 
 // The entity mapper on the real bookshop fixture, loaded the way the build loads it:
 // the inferred model, with doc comments (ADR-0007).
@@ -22,12 +23,13 @@ function mapEntity(name: string) {
 }
 
 describe("entity mapper on the bookshop fixture", () => {
-  test("Books has its doc comment as description and its inherited elements", () => {
+  test("Books has its @description and its inherited elements", () => {
     const books = mapEntity("sample.bookshop.Books");
     expect(books.frontmatter).toEqual({
       type: "Entity",
       title: "Books",
-      description: "A book that the shop can sell.",
+      // '{i18n>BooksDescription}' shows as its key until task 2.5 resolves texts.
+      description: "BooksDescription",
       resource: "cds:sample.bookshop.Books",
       tags: ["cds", "entity", "sample.bookshop"],
     });
@@ -43,6 +45,12 @@ describe("entity mapper on the bookshop fixture", () => {
     expect(books.body).toContain("- `genre` → [Genres](/model/sample/bookshop/Genres.md) (to one)");
   });
 
+  test("an entity without @description takes the first sentence of its doc comment", () => {
+    expect(mapEntity("sample.bookshop.Authors").frontmatter?.["description"]).toBe(
+      "A person who wrote one or more books.",
+    );
+  });
+
   test("Genres links to itself as parent and as composed children", () => {
     const genres = mapEntity("sample.bookshop.Genres").body;
     expect(genres).toContain("- `parent` → [Genres](/model/sample/bookshop/Genres.md) (to one)");
@@ -55,5 +63,18 @@ describe("entity mapper on the bookshop fixture", () => {
   test("AdminService.Books shows no authorization detail", () => {
     const text = serializeConcept(mapEntity("AdminService.Books"));
     expect(text).not.toMatch(/restrict|requires|catalog-manager/i);
+  });
+
+  // Descriptions of projections (2.2) and of sap.common texts (2.6) come in later tasks; the
+  // links are this task's job.
+  test("every association link of every mapped entity resolves", () => {
+    const context = defaultMapperContext(model);
+    const files = Object.entries(model.definitions)
+      .filter(([, definition]) => definition.kind === "entity")
+      .map(([name, definition]) => entityMapper.map(name, definition, context))
+      .map((concept) => ({ path: concept.path, text: serializeConcept(concept) }));
+    const brokenLinks = validateBundle(files).filter((finding) => finding.rule === "W4");
+    expect(files.length).toBeGreaterThan(10);
+    expect(brokenLinks).toEqual([]);
   });
 });

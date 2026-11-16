@@ -165,6 +165,42 @@ describe("entity mapper body", () => {
       "\n# Plain\n\n## Elements\n\n| Element | Type | Notes |\n| --- | --- | --- |\n| `id` | `Integer` | key |\n",
     );
   });
+});
+
+describe("entity mapper body, less common shapes", () => {
+  test("renders the less common element and association shapes", () => {
+    const edges: Csn = {
+      definitions: {
+        Edges: {
+          kind: "entity",
+          doc: "Shapes the bookshop doesn't use",
+          elements: {
+            address: { elements: { street: { type: "cds.String" } } },
+            code: { type: "cds.String", notNull: true, localized: true },
+            score: { type: "cds.Decimal", precision: 5 },
+            shadow: { type: "cds.Integer", virtual: true },
+            pair: { type: "cds.Association", target: "Edges", cardinality: { max: 2 } },
+            single: { type: "cds.Association", target: "Edges", cardinality: { max: 1 } },
+            external: { type: "cds.Association", target: "other.Thing" },
+          },
+        },
+        Empty: { kind: "entity" },
+      },
+    };
+    const context = defaultMapperContext(edges);
+    const concept = entityMapper.map("Edges", edges.definitions["Edges"]!, context);
+    expect(concept.frontmatter?.["description"]).toBe("Shapes the bookshop doesn't use");
+    expect(concept.body).toContain("| `address` | `structured` |  |");
+    expect(concept.body).toContain("| `code` | `String` | mandatory; localized |");
+    expect(concept.body).toContain("| `score` | `Decimal(5)` |  |");
+    expect(concept.body).toContain("| `shadow` | `Integer` | virtual |");
+    expect(concept.body).toContain("- `pair` → [Edges](/model/Edges.md) (to many)");
+    expect(concept.body).toContain("- `single` → [Edges](/model/Edges.md) (to one)");
+    // A target outside the model still gets a link; the validator reports it if it's broken.
+    expect(concept.body).toContain("- `external` → [Thing](/model/other/Thing.md) (to one)");
+    const empty = entityMapper.map("Empty", edges.definitions["Empty"]!, context);
+    expect(empty.body).toBe("\n# Empty\n");
+  });
 
   test("the concept serializes to valid OKF text", () => {
     const text = serializeConcept(mapEntity("sample.bookshop.Books"));
