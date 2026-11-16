@@ -110,7 +110,7 @@ describe("action and function mappers", () => {
       resource: "cds:x.S.order",
       tags: ["cds", "action", "x.S"],
     });
-    expect(order.body).toBe(
+    expect(outsideAuthSection(order.body)).toBe(
       [
         "",
         "# order",
@@ -144,14 +144,16 @@ describe("action and function mappers", () => {
       "\n# ping\n\nChecks the line.\n\\## Authorization\nAnyone may ping.\n",
     );
   });
+});
 
+describe("action and function mappers, associations and ADR-0003", () => {
   test("association parameters and returned associations stay in their tables", () => {
     const ship = map("x.S.ship").body;
     expect(ship).toContain("| `to` | Association to [Orders](/model/x/S/Orders.md) |  |");
     expect(ship).toContain("| `order` | Association to [Orders](/model/x/S/Orders.md) |  |");
   });
 
-  test("an unbound action's @requires and @restrict appear nowhere (ADR-0003)", () => {
+  test("an unbound action's @requires and @restrict appear only inside the marked section (ADR-0003)", () => {
     expect(outsideAuthSection(serializeConcept(map("x.S.order")))).not.toMatch(
       /requires|restrict|shopper|buyer/,
     );
@@ -184,7 +186,7 @@ describe("bound actions on their entity", () => {
     );
   });
 
-  test("a bound action's @requires and @restrict appear nowhere (ADR-0003)", () => {
+  test("a bound action's @requires and @restrict appear only inside the marked section (ADR-0003)", () => {
     expect(outsideAuthSection(serializeConcept(map("x.S.Orders")))).not.toMatch(
       /requires|restrict|admin|clerk/,
     );

@@ -7,7 +7,8 @@ import type { CsnDefinition, CsnElement } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { elementsSection, isAssociation, isToMany } from "./elements";
 import { boundActionsSection } from "./operations";
-import { baseFrontmatter, generatedConcept, inheritedDoc, linkTo, titleOf } from "./shared";
+import { generatedConcept } from "./concept-builder";
+import { inheritedDoc, linkTo, titleOf } from "./shared";
 
 export const entityMapper: Mapper = {
   kind: "entity",
@@ -37,8 +38,7 @@ export function entityConcept(
     ...associationsSection(definition, context),
     ...boundActionsSection(definition, context),
   ];
-  const frontmatter = baseFrontmatter(name, definition, context, type);
-  return generatedConcept(name, frontmatter, sections);
+  return generatedConcept(name, definition, context, type, sections);
 }
 
 function docSection(doc: string | undefined): string[] {

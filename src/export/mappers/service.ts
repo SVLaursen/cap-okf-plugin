@@ -3,7 +3,8 @@
 import { escapeBlock, escapeHtml, inlineCode, oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
-import { baseFrontmatter, generatedConcept, inheritedDescription, linkTo, titleOf } from "./shared";
+import { generatedConcept } from "./concept-builder";
+import { inheritedDescription, linkTo, titleOf } from "./shared";
 
 /**
  * The sections a service lists its members in, by CSN kind, in this order. A lookup table, so
@@ -32,7 +33,7 @@ export const serviceMapper: Mapper = {
         ),
       ),
     ];
-    return generatedConcept(name, baseFrontmatter(name, definition, context, "Service"), sections);
+    return generatedConcept(name, definition, context, "Service", sections);
   },
 };
 

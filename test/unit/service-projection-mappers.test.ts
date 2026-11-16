@@ -88,7 +88,7 @@ describe("service mapper", () => {
   });
 
   test("lists its path, then its entities, actions, functions and events as links", () => {
-    expect(map("CatalogService").body).toBe(
+    expect(outsideAuthSection(map("CatalogService").body)).toBe(
       [
         "",
         "# CatalogService",
@@ -119,12 +119,14 @@ describe("service mapper", () => {
       ].join("\n"),
     );
   });
+});
 
+describe("service mapper, empty services and ADR-0003", () => {
   test("a service without members, doc comment or path has only its heading", () => {
     expect(map("EmptyService").body).toBe("\n# EmptyService\n");
   });
 
-  test("shows no authorization detail (ADR-0003)", () => {
+  test("shows authorization detail only inside the marked section (ADR-0003)", () => {
     expect(outsideAuthSection(serializeConcept(map("CatalogService")))).not.toMatch(
       /requires|authenticated-user/,
     );
@@ -152,7 +154,7 @@ describe("projection mapper", () => {
   });
 
   test("links to its source, then shows the source's doc comment and its own elements", () => {
-    expect(map("CatalogService.Books").body).toBe(
+    expect(outsideAuthSection(map("CatalogService.Books").body)).toBe(
       [
         "",
         "# Books",
@@ -193,10 +195,10 @@ describe("projection mapper, views and missing sources", () => {
   });
 
   test("a view on a join has no single source to link to", () => {
-    expect(map("CatalogService.Mixed").body).toBe("\n# Mixed\n\nView\n");
+    expect(outsideAuthSection(map("CatalogService.Mixed").body)).toBe("\n# Mixed\n\nView\n");
   });
 
-  test("shows no authorization detail, @readonly included (ADR-0003, task 2.4)", () => {
+  test("shows authorization detail, @readonly included, only inside the marked section (ADR-0003)", () => {
     expect(outsideAuthSection(serializeConcept(map("CatalogService.Books")))).not.toMatch(
       /restrict|readonly|shopper/i,
     );

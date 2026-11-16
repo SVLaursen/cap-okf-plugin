@@ -92,6 +92,20 @@ describe("the authorization section", () => {
     expect(map("S.Orders").body.endsWith("<!-- okf:auth:end -->\n")).toBe(true);
   });
 
+  test("a privilege without a grant leaves that cell empty: CAP defines no default", () => {
+    const model: Csn = {
+      definitions: { E: { kind: "entity", "@restrict": [{ to: "Viewer" }], elements: {} } },
+    };
+    const concept = mapperFor("entity")!.map(
+      "E",
+      model.definitions["E"]!,
+      defaultMapperContext(model),
+    );
+    expect(concept.body).toContain("|  | `Viewer` |  |");
+  });
+});
+
+describe("the authorization section, by kind of definition", () => {
   test("an insert-only entity says so", () => {
     expect(authSectionOf(map("S.Logs").body)).toContain("Insert-only for every user.");
   });

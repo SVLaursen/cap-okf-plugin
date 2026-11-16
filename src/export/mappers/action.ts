@@ -4,11 +4,12 @@ import { escapeBlock, escapeHtml } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { operationParts } from "./operations";
-import { baseFrontmatter, generatedConcept, titleOf } from "./shared";
+import { generatedConcept } from "./concept-builder";
+import { titleOf } from "./shared";
 
 function operationConcept(type: string) {
   return (name: string, definition: CsnDefinition, context: MapperContext) =>
-    generatedConcept(name, baseFrontmatter(name, definition, context, type), [
+    generatedConcept(name, definition, context, type, [
       `# ${escapeHtml(titleOf(name, definition, context))}`,
       ...(definition.doc === undefined ? [] : [escapeBlock(definition.doc)]),
       ...operationParts(definition, context),

@@ -4,13 +4,14 @@ import type { CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { elementsSection, enumValues, typeCell } from "./elements";
 import { sourceLead } from "./projection";
-import { baseFrontmatter, generatedConcept, inheritedDoc, titleOf } from "./shared";
+import { generatedConcept } from "./concept-builder";
+import { inheritedDoc, titleOf } from "./shared";
 
 export const typeMapper: Mapper = {
   kind: "type",
   map(name, definition, context) {
     const doc = inheritedDoc(definition, context);
-    return generatedConcept(name, baseFrontmatter(name, definition, context, "Type"), [
+    return generatedConcept(name, definition, context, "Type", [
       `# ${escapeHtml(titleOf(name, definition, context))}`,
       ...sourceLead(definition, context),
       ...(doc === undefined ? [] : [escapeBlock(doc)]),

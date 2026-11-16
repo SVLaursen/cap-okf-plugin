@@ -31,6 +31,7 @@ describe("renderExpression", () => {
       { xpr: [{ func: "exists", args: [{ ref: ["orders"] }] }] },
       "exists(orders)",
     ],
+    ["a function call without arguments", { xpr: [{ func: "now" }] }, "now()"],
     [
       "a list",
       { xpr: [{ ref: ["kind"] }, "in", { list: [{ val: "A" }, { val: "B" }] }] },

@@ -58,7 +58,7 @@ describe("services and projections of the bookshop fixture", () => {
 
   // ADR-0003: AdminService and its projections are restricted; outside the marked section,
   // none of it may show.
-  test("AdminService and its projections show no authorization detail", () => {
+  test("AdminService and its projections show authorization detail only inside the marked section", () => {
     for (const name of ["AdminService", "AdminService.Books", "CatalogService.Books"]) {
       expect(outsideAuthSection(serializeConcept(concept(name)))).not.toMatch(
         /restrict|requires|readonly|authenticated-user|catalog-manager/i,

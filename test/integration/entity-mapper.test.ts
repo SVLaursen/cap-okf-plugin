@@ -62,7 +62,7 @@ describe("entity mapper on the bookshop fixture", () => {
   });
 
   // AdminService restricts its entities; nothing of that may leak outside the auth section.
-  test("AdminService.Books shows no authorization detail", () => {
+  test("AdminService.Books shows authorization detail only inside the marked section", () => {
     const text = outsideAuthSection(serializeConcept(mapEntity("AdminService.Books")));
     expect(text).not.toMatch(/restrict|requires|catalog-manager/i);
   });

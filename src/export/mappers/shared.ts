@@ -1,8 +1,8 @@
 // Frontmatter and text helpers that every mapper uses, so all concepts look alike.
-import { conceptId, type Concept, type Frontmatter } from "../../core/concept";
+import type { Frontmatter } from "../../core/concept";
 import { escapeHtml, escapeLinkText, oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
-import { conceptLinkFor, conceptPathFor } from "../paths";
+import { conceptLinkFor } from "../paths";
 import type { MapperContext } from "./context";
 import { sourceChain } from "./sources";
 
@@ -89,21 +89,5 @@ export function baseFrontmatter(
     ...(description === undefined ? {} : { description }),
     resource: `cds:${name}`,
     tags: ["cds", type.toLowerCase(), ...(namespace === undefined ? [] : [namespace])],
-  };
-}
-
-/** A generated concept for `name`, with its body made of Markdown sections. */
-export function generatedConcept(
-  name: string,
-  frontmatter: Frontmatter,
-  sections: string[],
-): Concept {
-  const path = conceptPathFor(name);
-  return {
-    path,
-    id: conceptId(path),
-    frontmatter,
-    // A blank line between the frontmatter and the first section, and one newline at the end.
-    body: `\n${sections.join("\n\n")}\n`,
   };
 }
