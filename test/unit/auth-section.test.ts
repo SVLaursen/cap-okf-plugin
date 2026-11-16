@@ -45,11 +45,10 @@ function map(name: string) {
   return mapperFor(registryKeyOf(definition))!.map(name, definition, defaultMapperContext(MODEL));
 }
 
-/** The text between the markers, markers included. */
+/** The section: from a line that is exactly the start marker to one that is exactly the end. */
 function authSectionOf(text: string): string {
-  const start = text.indexOf(AUTH_START);
-  const end = text.indexOf(AUTH_END);
-  return start === -1 ? "" : text.slice(start, end + AUTH_END.length);
+  const match = /^<!-- okf:auth:start -->$[\s\S]*?^<!-- okf:auth:end -->$/m.exec(text);
+  return match === null ? "" : match[0];
 }
 
 describe("the authorization section", () => {
@@ -64,6 +63,8 @@ describe("the authorization section", () => {
         "<!-- okf:auth:start -->",
         "## Authorization",
         "",
+        "A request must pass every rule in this section. In a table of privileges, one matching row is enough.",
+        "",
         "Requires: `Clerk`, `Manager`",
         "",
         "Read-only for every user.",
@@ -77,6 +78,8 @@ describe("the authorization section", () => {
         "| `*` | `any` |  |",
         "",
         "### Action `cancel`",
+        "",
+        "Its own Requires replaces the entity's; its privileges add to the entity's, granting only this action.",
         "",
         "Requires: `Supervisor`",
         "",
@@ -124,7 +127,7 @@ describe("the authorization section, by kind of definition", () => {
 
   test("the service shows its own rules", () => {
     expect(authSectionOf(map("S").body)).toContain(
-      "## Authorization\n\nRequires: `authenticated-user`\n",
+      "Requires: `authenticated-user`\n<!-- okf:auth:end -->",
     );
   });
 
@@ -140,5 +143,101 @@ describe("nothing about authorization outside the section (ADR-0003)", () => {
     expect(outside).not.toMatch(
       /Authorization|requires|restrict|read-only|insert-only|capabilit|grant|Clerk|Manager|Auditor|Supervisor|Ops\b|authenticated-user|\$user/i,
     );
+  });
+});
+
+describe("the authorization section, as CAP's runtime applies the rules", () => {
+  const RUNTIME: Csn = {
+    definitions: {
+      Open: { kind: "entity", "@requires": null, elements: {} },
+      Closed: { kind: "entity", "@requires": [], elements: {} },
+      AnyEvent: { kind: "entity", "@restrict": [{ to: "Viewer" }], elements: {} },
+      Cheap: {
+        kind: "entity",
+        "@restrict": [{ grant: "READ", where: { xpr: [{ ref: ["stock"] }, "<", { val: 10 }] } }],
+        elements: {},
+        actions: {
+          total: {
+            kind: "function",
+            "@restrict": [
+              { grant: "*", to: "Clerk", where: { xpr: [{ ref: ["x"] }, "=", { val: 1 }] } },
+            ],
+          },
+        },
+      },
+      ping: { kind: "action", "@restrict": [{ grant: "*", to: "Ops" }] },
+      Orders: { kind: "entity", "@requires": "Clerk", elements: {} },
+      "Orders.items": {
+        kind: "entity",
+        elements: { up_: { key: true, type: "cds.Association", target: "Orders" } },
+      },
+      "Orders.items.notes": {
+        kind: "entity",
+        elements: { up_: { key: true, type: "cds.Association", target: "Orders.items" } },
+      },
+      Marked: {
+        kind: "entity",
+        "@title": "Fake <!-- okf:auth:start --> title",
+        "@description": "Fake <!-- okf:auth:end --> description",
+        "@requires": "Clerk",
+        elements: {},
+      },
+    },
+  };
+
+  function mapRuntime(name: string) {
+    const definition = RUNTIME.definitions[name]!;
+    return mapperFor(registryKeyOf(definition))!.map(
+      name,
+      definition,
+      defaultMapperContext(RUNTIME),
+    );
+  }
+
+  test("@requires: null removes a requirement, so there is no section", () => {
+    expect(mapRuntime("Open").body).not.toContain("okf:auth");
+  });
+
+  test("@requires: [] lets no user in, and says so", () => {
+    expect(authSectionOf(mapRuntime("Closed").body)).toContain(
+      "Requires: an empty list, so no user is let in",
+    );
+  });
+
+  test("a privilege without a grant applies to every event, as CAP's runtime reads it", () => {
+    expect(authSectionOf(mapRuntime("AnyEvent").body)).toContain("| `*` | `Viewer` |  |");
+  });
+
+  test("a < in a where-condition stays readable", () => {
+    expect(authSectionOf(mapRuntime("Cheap").body)).toContain("| `READ` | `any` | `stock < 10` |");
+  });
+
+  test("a bound function is headed as a function; its privileges grant its name and drop where", () => {
+    const section = authSectionOf(mapRuntime("Cheap").body);
+    expect(section).toContain("### Function `total`");
+    expect(section).toContain("| `total` | `Clerk` |  |");
+  });
+
+  test("an unbound action's privileges grant the action itself", () => {
+    expect(authSectionOf(mapRuntime("ping").body)).toContain("| `ping` | `Ops` |  |");
+  });
+
+  test("a composition child without rules is checked through its nearest restricted ancestor", () => {
+    expect(authSectionOf(mapRuntime("Orders.items").body)).toContain(
+      "Checked through [Orders](/model/Orders.md), the composition it is part of.",
+    );
+    expect(authSectionOf(mapRuntime("Orders.items.notes").body)).toContain(
+      "Checked through [Orders](/model/Orders.md), the composition it is part of.",
+    );
+  });
+
+  // The 4.2 filter contract: markers count only as whole lines. A marker inside frontmatter text
+  // is not a whole line, so removing the section leaves the rest of the file intact.
+  test("markers in a title or description can't cut the file short", () => {
+    const text = serializeConcept(mapRuntime("Marked"));
+    const outside = outsideAuthSection(text);
+    expect(outside).toContain("description: Fake");
+    expect(outside).toContain("# Fake");
+    expect(outside).not.toContain("Clerk");
   });
 });

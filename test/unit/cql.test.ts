@@ -38,8 +38,25 @@ describe("renderExpression", () => {
       "kind in ('A', 'B')",
     ],
     ["an enum symbol", { xpr: [{ ref: ["kind"] }, "=", { "#": "retail" }] }, "kind = #retail"],
-    ["a path with a filter", { xpr: [{ ref: [{ id: "orders", where: [] }, "ID"] }] }, "orders.ID"],
-    ["text, as older CSN writes it", "country = $user.country", "country = $user.country"],
+    [
+      "a path with a filter, which narrows the condition and must never be dropped",
+      {
+        xpr: [
+          { ref: [{ id: "orders", where: [{ ref: ["status"] }, "=", { val: "open" }] }, "ID"] },
+        ],
+      },
+      "orders[status = 'open'].ID",
+    ],
+    [
+      "a path with parameters",
+      { xpr: [{ ref: [{ id: "Prices", args: { currency: { val: "EUR" } } }, "amount"] }] },
+      "Prices(currency: 'EUR').amount",
+    ],
+    [
+      "text, as CSN keeps a where written in quotes",
+      "country = $user.country",
+      "country = $user.country",
+    ],
     ["a top-level token list", [{ ref: ["a"] }, "=", { val: 1 }], "a = 1"],
   ])("renders %s", (_label, expression, text) => {
     expect(renderExpression(expression)).toBe(text);

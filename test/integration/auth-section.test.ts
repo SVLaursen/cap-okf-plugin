@@ -36,6 +36,8 @@ describe("AdminService's authorization section", () => {
         "<!-- okf:auth:start -->",
         "## Authorization",
         "",
+        "A request must pass every rule in this section. In a table of privileges, one matching row is enough.",
+        "",
         "| Grant | To | Where |",
         "| --- | --- | --- |",
         "| `READ` | `authenticated-user` |  |",
@@ -51,13 +53,13 @@ describe("AdminService's authorization section", () => {
 
   test("the service itself shows its requirement", () => {
     expect(text("model/AdminService.md")).toContain(
-      "<!-- okf:auth:start -->\n## Authorization\n\nRequires: `authenticated-user`\n<!-- okf:auth:end -->",
+      "Requires: `authenticated-user`\n<!-- okf:auth:end -->",
     );
   });
 
   test("a read-only projection of CatalogService says so inside the section", () => {
     expect(text("model/CatalogService/Books.md")).toContain(
-      "<!-- okf:auth:start -->\n## Authorization\n\nRead-only for every user.\n<!-- okf:auth:end -->",
+      "Read-only for every user.\n<!-- okf:auth:end -->",
     );
   });
 });
