@@ -24,6 +24,12 @@ export interface CsnTyped {
   precision?: number;
   scale?: number;
   enum?: CsnEnum;
+  /** For associations and compositions: the target's fully qualified name. */
+  target?: string;
+  /** For a composition of an aspect: the aspect's name, or its inline elements. */
+  targetAspect?: string | { elements?: Record<string, CsnElement> };
+  /** For associations and compositions; max "*" or above 1 means to many. */
+  cardinality?: { max?: number | string };
   doc?: string;
   [annotation: `@${string}`]: unknown;
 }
@@ -60,10 +66,6 @@ export interface CsnElement extends CsnTyped {
   localized?: boolean;
   virtual?: boolean;
   default?: { val?: unknown };
-  /** For associations and compositions: the target's fully qualified name. */
-  target?: string;
-  /** For associations and compositions; max "*" or above 1 means to many. */
-  cardinality?: { max?: number | string };
   /** For managed associations: the target elements used as foreign keys. */
   keys?: unknown[];
   /** For unmanaged associations and compositions: the ON condition. */

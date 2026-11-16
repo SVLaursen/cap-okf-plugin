@@ -2,10 +2,10 @@
 // Authorization annotations are left out on purpose: they only go into the marked section that
 // task 2.4 adds (ADR-0003). Every text from the model is escaped before it goes into Markdown.
 import type { Concept } from "../../core/concept";
-import { escapeHtml, inlineCode, oneLine } from "../../core/markdown";
+import { escapeBlock, escapeHtml, inlineCode, oneLine } from "../../core/markdown";
 import type { CsnDefinition, CsnElement } from "../csn";
 import type { Mapper, MapperContext } from "./context";
-import { elementsTable, isAssociation } from "./elements";
+import { elementsSection, isAssociation, isToMany } from "./elements";
 import { boundActionsSection } from "./operations";
 import { baseFrontmatter, generatedConcept, inheritedDoc, linkTo, titleOf } from "./shared";
 
@@ -32,7 +32,8 @@ export function entityConcept(
     ...lead,
     ...docSection(inheritedDoc(definition, context)),
     ...includesSection(definition),
-    ...elementsSection(definition, context),
+    // Associations are listed in their own section, with links, so the table leaves them out.
+    ...elementsSection(definition, context, true),
     ...associationsSection(definition, context),
     ...boundActionsSection(definition, context),
   ];
@@ -40,21 +41,14 @@ export function entityConcept(
   return generatedConcept(name, frontmatter, sections);
 }
 
-// The doc comment keeps its own lines and Markdown, but no HTML (see escapeHtml).
 function docSection(doc: string | undefined): string[] {
-  return doc === undefined ? [] : [escapeHtml(doc)];
+  return doc === undefined ? [] : [escapeBlock(doc)];
 }
 
 function includesSection(definition: CsnDefinition): string[] {
   const includes = definition.includes ?? [];
   if (includes.length === 0) return [];
   return [`Includes: ${includes.map((name) => inlineCode(oneLine(name))).join(", ")}`];
-}
-
-// Associations and compositions are listed in their own section, with links.
-function elementsSection(definition: CsnDefinition, context: MapperContext): string[] {
-  const table = elementsTable("Element", definition.elements ?? {}, context);
-  return table === undefined ? [] : [`## Elements\n\n${table}`];
 }
 
 function associationsSection(definition: CsnDefinition, context: MapperContext): string[] {
@@ -72,12 +66,7 @@ function associationLine(name: string, element: CsnElement, context: MapperConte
     // A key association is part of the primary key, e.g. up_ in a "Composition of many { … }".
     ...(element.key ? ["key"] : []),
     ...(element.type === "cds.Composition" ? ["composition"] : []),
-    toManyOrOne(element),
+    isToMany(element) ? "to many" : "to one",
   ];
   return `- ${inlineCode(oneLine(name))} → ${link} (${details.join(", ")})`;
-}
-
-function toManyOrOne(element: CsnElement): string {
-  const max = element.cardinality?.max;
-  return max === "*" || (typeof max === "number" && max > 1) ? "to many" : "to one";
 }

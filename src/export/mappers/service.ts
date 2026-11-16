@@ -1,6 +1,6 @@
 // Services: one concept per service, listing what it exposes as links. Its @requires is left out
 // on purpose (ADR-0003); task 2.4 adds it inside the marked authorization section.
-import { escapeHtml, inlineCode, oneLine } from "../../core/markdown";
+import { escapeBlock, escapeHtml, inlineCode, oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { baseFrontmatter, generatedConcept, inheritedDescription, linkTo, titleOf } from "./shared";
@@ -22,7 +22,7 @@ export const serviceMapper: Mapper = {
     const members = membersOf(name, context);
     const sections = [
       `# ${escapeHtml(titleOf(name, definition, context))}`,
-      ...(definition.doc === undefined ? [] : [escapeHtml(definition.doc)]),
+      ...(definition.doc === undefined ? [] : [escapeBlock(definition.doc)]),
       ...pathSection(definition),
       ...SECTIONS.flatMap(({ heading, kind }) =>
         listSection(

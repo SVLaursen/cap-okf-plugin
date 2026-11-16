@@ -78,6 +78,15 @@ export function inlineCode(text: string): string {
   return `${fence}${padding}${text}${padding}${fence}`;
 }
 
+/**
+ * A block of prose from the model, such as a doc comment: it keeps its lines and Markdown, but
+ * starts no HTML (see escapeHtml) and no heading, so it can't add sections to a generated file,
+ * e.g. a fake "## Authorization" outside the ADR-0003 markers.
+ */
+export function escapeBlock(text: string): string {
+  return escapeHtml(text).replace(/^( {0,3})#/gm, "$1\\#");
+}
+
 /** Text for one cell of a Markdown table: on one line, no HTML, and "|" escaped. */
 export function tableCell(text: string): string {
   return escapeHtml(oneLine(text)).replace(/\|/g, "\\|");

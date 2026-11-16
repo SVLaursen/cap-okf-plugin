@@ -86,6 +86,7 @@ test/
   - Test first: AdminService fixture renders the section; a grep test asserts no `@restrict` content outside the markers.
 - [ ] **2.5 i18n.** Resolve `{i18n>key}` titles and descriptions in the default language; fall back to the key name.
 - [ ] **2.6 Include/exclude.** `include: "services"` (default) exports only definitions reachable from services; `"all"` exports everything; `@okf: false` excludes; `@okf.tags` adds tags.
+  - Note from 2.3: concepts link to model types (element, parameter and return types), association targets and projection sources. Reachability must follow these references, and a reference to an excluded definition must be written as a plain name, not a link that breaks (W4).
 - [ ] **2.7 Exporter.** Orchestrates mappers, generates `index.md` files, injects `{ now, version }` into `generated`.
   - Test first: two runs with the same inputs produce byte-identical output.
 - [ ] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it.
