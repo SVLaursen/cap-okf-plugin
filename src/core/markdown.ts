@@ -1,5 +1,12 @@
 // Reading Markdown bodies line by line. Pure module.
 
+/**
+ * The text part of a Markdown link, as a regular expression source: "[Orders]", "[Orders [beta]]"
+ * with one level of brackets inside, or "[a \\] b]" with backslash-escaped characters. A \\[ in
+ * front is an escaped bracket, not the start of a link.
+ */
+export const LINK_TEXT = String.raw`(?<!\\)\[(?:\\.|[^[\]\\]|\[(?:\\.|[^[\]\\])*\])*\]`;
+
 /** One line of a Markdown body. */
 export interface BodyLine {
   text: string;

@@ -3,7 +3,7 @@
 import type { LocatedConcept } from "./concept";
 import { isIsoDate } from "./datetime";
 import { findingAtKey, findingOnLine, type Finding } from "./finding";
-import { linesOutsideCode, type BodyLine } from "./markdown";
+import { LINK_TEXT, linesOutsideCode, type BodyLine } from "./markdown";
 
 /** The only key allowed in index.md frontmatter, and only in the bundle-root index.md (§12). */
 const ROOT_INDEX_KEY = "okf_version";
@@ -16,8 +16,7 @@ const INDEX_ENTRY = /^[*+-][ \t]+(.*)$/;
 const THEMATIC_BREAK = /^ {0,3}([*_-])(?:[ \t]*\1){2,}[ \t]*$/;
 
 // The entry starts with a link: [text](path) or a reference [text][label], optionally in
-// bold or italics. The link text may contain one level of [brackets], as in [Orders [beta]].
-const LINK_TEXT = String.raw`\[(?:[^[\]]|\[[^[\]]*\])*\]`;
+// bold or italics.
 const LINK_TARGET = String.raw`(?:\([^)]*\)|\[[^\]]*\])`;
 const STARTS_WITH_LINK = new RegExp(String.raw`^(?:\*\*|__|\*|_)?` + LINK_TEXT + LINK_TARGET);
 

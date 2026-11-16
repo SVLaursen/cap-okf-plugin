@@ -3,7 +3,7 @@
 //
 // Known limits, acceptable for a warning: links in 4-space indented code and in HTML comments
 // are still read, <a href> links are not, and in [outer [inner](a.md)](b.md) only b.md is found.
-import { linesOutsideCode, type BodyLine } from "./markdown";
+import { LINK_TEXT, linesOutsideCode, type BodyLine } from "./markdown";
 
 /** One link in a body: what it points at, as written, and the file line it is on. */
 export interface Link {
@@ -20,9 +20,6 @@ export type ResolvedLink =
   /** A bundle path without leading /, e.g. "tables/orders.md"; "" is the bundle root. */
   | { kind: "bundle"; path: string };
 
-// Link text: "[Orders]", or "[Orders [beta]]" with one level of brackets inside. A \[ is an
-// escaped bracket, not the start of a link.
-const LINK_TEXT = String.raw`(?<!\\)\[(?:[^[\]]|\[[^[\]]*\])*\]`;
 // The target: "<my notes.md>" in angle brackets (may hold spaces), or "notes_(draft).md" up to
 // white space (may hold one level of parentheses).
 const LINK_TARGET = String.raw`(<[^>\n]*>|(?:[^\s()]|\([^\s()]*\))+)`;

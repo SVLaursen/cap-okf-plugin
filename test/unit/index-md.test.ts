@@ -182,7 +182,9 @@ describe("generateIndex with awkward input", () => {
     const body = generateIndex("", [concept("a).md", { type: "X", title: "A" })]).body;
     expect(body).toContain("* [A](a%29.md)\n");
   });
+});
 
+describe("generateIndex with awkward input, continued", () => {
   test("a folder given with slashes around it is the same folder", () => {
     expect(generateIndex("/model/", BOOKSHOP)).toEqual(generateIndex("model", BOOKSHOP));
   });

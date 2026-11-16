@@ -10,7 +10,10 @@ export interface IndexOptions {
   okfVersion?: string;
 }
 
-/** The section for concepts without a type. Comes after all typed sections. */
+/**
+ * The section for concepts without a type. Comes after all typed sections. A concept whose
+ * type is literally "Other" is listed in the same section.
+ */
 const UNTYPED_SECTION = "Other";
 
 const RESERVED_FILE_NAMES = ["index.md", "log.md"];
@@ -26,17 +29,19 @@ interface Entry {
 
 /**
  * The index.md for one folder ("" is the bundle root), listing the concepts directly in it and
- * the subfolders below it. `concepts` may hold the whole bundle; the rest is ignored.
+ * the subfolders below it. `concepts` may hold the whole bundle; the rest is ignored, and so
+ * are files that are not Markdown.
  */
 export function generateIndex(
   folder: string,
   concepts: readonly Concept[],
   options: IndexOptions = {},
 ): Concept {
-  const entries = entriesBelow(folder, concepts);
+  const cleanFolder = withoutOuterSlashes(folder);
+  const entries = entriesBelow(cleanFolder, concepts);
   const sections = [...typeSections(entries), ...subfolderSection(entries)];
-  const path = folder === "" ? "index.md" : `${folder}/index.md`;
-  const okfVersion = folder === "" ? options.okfVersion : undefined;
+  const path = cleanFolder === "" ? "index.md" : `${cleanFolder}/index.md`;
+  const okfVersion = cleanFolder === "" ? options.okfVersion : undefined;
   return {
     path,
     id: path.replace(/\.md$/, ""),
@@ -54,37 +59,61 @@ export function generateIndexes(
   folder: string,
   options: IndexOptions = {},
 ): Concept[] {
-  const folders = new Set([folder]);
-  for (const { relativePath } of entriesBelow(folder, concepts)) {
-    const segments = relativePath.split("/").slice(0, -1);
-    segments.forEach((_, index) => folders.add(joinPath(folder, segments.slice(0, index + 1))));
+  const cleanFolder = withoutOuterSlashes(folder);
+  const folders = new Set([cleanFolder]);
+  for (const { relativePath } of entriesBelow(cleanFolder, concepts)) {
+    // "admin/audit/Log.md" below "model" adds "model/admin" and "model/admin/audit".
+    let current = cleanFolder;
+    for (const segment of relativePath.split("/").slice(0, -1)) {
+      current = current === "" ? segment : `${current}/${segment}`;
+      folders.add(current);
+    }
   }
   return [...folders]
     .map((indexFolder) => generateIndex(indexFolder, concepts, options))
-    .sort((a, b) => (a.path < b.path ? -1 : 1));
+    .sort((a, b) => compareText(a.path, b.path));
+}
+
+function withoutOuterSlashes(folder: string): string {
+  return folder.replace(/^\/+|\/+$/g, "");
 }
 
 function entriesBelow(folder: string, concepts: readonly Concept[]): Entry[] {
   const prefix = folder === "" ? "" : `${folder}/`;
   return concepts
-    .filter((concept) => concept.path.startsWith(prefix) && !isReserved(concept.path))
+    .filter((concept) => concept.path.startsWith(prefix) && isListed(concept.path))
     .map((concept) => toEntry(concept, concept.path.slice(prefix.length)))
-    .sort((a, b) => (a.relativePath < b.relativePath ? -1 : 1));
+    .sort(compareEntries);
 }
 
-function isReserved(path: string): boolean {
-  return RESERVED_FILE_NAMES.includes(path.slice(path.lastIndexOf("/") + 1));
+// Only concepts are listed: not the reserved files, and not files such as references/q.py.
+function isListed(path: string): boolean {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name.endsWith(".md") && !RESERVED_FILE_NAMES.includes(name);
+}
+
+/**
+ * By path, then by title (two concepts can only share a path in invalid input, but the order
+ * must still not depend on the input order). Compared by UTF-16 code units on purpose, not by
+ * locale: the output must be byte-identical on every machine.
+ */
+function compareEntries(a: Entry, b: Entry): number {
+  return compareText(a.relativePath, b.relativePath) || compareText(a.title, b.title);
+}
+
+function compareText(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
 }
 
 function toEntry(concept: Concept, relativePath: string): Entry {
-  const frontmatter = concept.frontmatter ?? {};
-  const { type, title, description } = frontmatter;
+  const { type, title, description } = concept.frontmatter ?? {};
   return {
     relativePath,
-    type: isNonEmptyString(type) ? type : UNTYPED_SECTION,
+    type: isNonEmptyString(type) ? oneLine(type) : UNTYPED_SECTION,
     // §4.1: without a title, consumers may derive one from the file name.
-    title: isNonEmptyString(title) ? title : fileTitle(relativePath),
-    description: isNonEmptyString(description) ? oneLine(description) : undefined,
+    title: isNonEmptyString(title) ? oneLine(title) : fileTitle(relativePath),
+    description: isNonEmptyString(description) ? escapeHtml(oneLine(description)) : undefined,
   };
 }
 
@@ -116,11 +145,10 @@ function subfolderSection(entries: readonly Entry[]): string[] {
     bySubfolder.set(subfolder, [...(bySubfolder.get(subfolder) ?? []), entry]);
   }
   if (bySubfolder.size === 0) return [];
-  // Every key comes from the map itself, so get() always finds its entries.
-  const lines = [...bySubfolder.keys()]
-    .sort()
-    .map((subfolder) =>
-      entryLine(subfolder, `${subfolder}/index.md`, contentsSummary(bySubfolder.get(subfolder)!)),
+  const lines = [...bySubfolder.entries()]
+    .sort(([a], [b]) => compareText(a, b))
+    .map(([subfolder, below]) =>
+      entryLine(subfolder, `${subfolder}/index.md`, contentsSummary(below)),
     );
   return [["# Subdirectories", "", ...lines].join("\n")];
 }
@@ -141,19 +169,29 @@ function escapeLinkText(text: string): string {
   return text.replace(/[\\[\]]/g, (character) => `\\${character}`);
 }
 
-// ADR-0007: links encode each path segment once more, so "a%3Ab" is linked as "a%253Ab".
-function encodePath(path: string): string {
-  return path.split("/").map(encodeURIComponent).join("/");
+// A "<" could start HTML, and "<!--" would hide the rest of the index when it is rendered.
+function escapeHtml(text: string): string {
+  return text.replace(/</g, "&lt;");
 }
 
+/**
+ * ADR-0007: links encode each path segment once more, so "a%3Ab" is linked as "a%253Ab".
+ * encodeURIComponent leaves ( and ) alone, but a ")" would end the link, so those are encoded
+ * too.
+ */
+function encodePath(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment).replace(/\(/g, "%28").replace(/\)/g, "%29"))
+    .join("/");
+}
+
+// Titles, types and descriptions each go on one line of the index: a line break inside them
+// would end the entry or start a heading.
 function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
 function fileTitle(relativePath: string): string {
   return relativePath.slice(relativePath.lastIndexOf("/") + 1).replace(/\.md$/, "");
-}
-
-function joinPath(folder: string, segments: readonly string[]): string {
-  return [folder, ...segments].filter((segment) => segment !== "").join("/");
 }
