@@ -76,3 +76,85 @@ describe("services and projections of the bookshop fixture", () => {
     ]);
   });
 });
+
+// Shapes the bookshop doesn't have, compiled by CAP so the CSN is real.
+describe("services and projections on real CSN shapes", () => {
+  const SHAPES = `
+    namespace db;
+    /** A book. Sold by the piece. */
+    entity Books { key ID : Integer; stock : Integer; author : Association to Authors; }
+    /** A person who writes. */
+    entity Authors { key ID : Integer; name : String; }
+    service S {
+      entity Books as projection on db.Books;
+      entity ProjOnProj as projection on Books;
+      entity AuthorOf as projection on db.Books:author;
+      entity InStock as projection on db.Books[stock > 0];
+      entity ![Dotted.Name] as projection on db.Authors;
+      entity Joined as select from db.Books join db.Authors on Books.author.ID = Authors.ID { Books.ID };
+      entity Both as select from db.Books { ID } union select from db.Authors { ID };
+      event BookEvt : projection on db.Books { ID };
+      type BookType : projection on db.Books { ID };
+    }
+  `;
+  let shapes: Csn;
+
+  beforeAll(() => {
+    shapes = cds.compile(SHAPES) as unknown as Csn;
+  });
+
+  function mapShape(name: string): Concept {
+    const definition = shapes.definitions[name]!;
+    return mapperFor(registryKeyOf(definition))!.map(
+      name,
+      definition,
+      defaultMapperContext(shapes),
+    );
+  }
+
+  test("only entities can be projections: an event or type built as one keeps its kind", () => {
+    expect(registryKeyOf(shapes.definitions["db.S.BookEvt"]!)).toBe("event");
+    expect(registryKeyOf(shapes.definitions["db.S.BookType"]!)).toBe("type");
+  });
+
+  test("a path expression links to the entity it leads to, with that entity's description", () => {
+    const authorOf = mapShape("db.S.AuthorOf");
+    expect(authorOf.body).toContain("Projection on [Authors](/model/db/Authors.md)");
+    expect(authorOf.frontmatter?.["description"]).toBe("A person who writes.");
+  });
+
+  test("a source with an infix filter is still linked", () => {
+    const inStock = mapShape("db.S.InStock");
+    expect(inStock.body).toContain("Projection on [Books](/model/db/Books.md)");
+    expect(inStock.frontmatter?.["description"]).toBe("A book.");
+  });
+
+  test("a projection on a projection takes the doc comment from further down the chain", () => {
+    const projOnProj = mapShape("db.S.ProjOnProj");
+    expect(projOnProj.body).toContain(
+      "Projection on [Books](/model/db/S/Books.md)\n\nA book. Sold by the piece.",
+    );
+    expect(projOnProj.frontmatter?.["description"]).toBe("A book.");
+  });
+
+  test("a view on a join or a union has no single source", () => {
+    expect(mapShape("db.S.Joined").body).toContain("\n# Joined\n\nView\n");
+    expect(mapShape("db.S.Both").body).toContain("\n# Both\n\nView\n");
+  });
+
+  test("the service lists every entity it exposes, a dotted name included, and the event", () => {
+    const body = mapShape("db.S").body;
+    const entities = [...body.matchAll(/^- \[[^\]]*\]\(([^)]*)\)/gm)].map((match) => match[1]);
+    expect(entities).toEqual([
+      "/model/db/S/Books.md",
+      "/model/db/S/ProjOnProj.md",
+      "/model/db/S/AuthorOf.md",
+      "/model/db/S/InStock.md",
+      "/model/db/S/Dotted/Name.md",
+      "/model/db/S/Joined.md",
+      "/model/db/S/Both.md",
+      "/model/db/S/BookEvt.md",
+    ]);
+    expect(body).toContain("## Events\n\n- [BookEvt](/model/db/S/BookEvt.md)");
+  });
+});

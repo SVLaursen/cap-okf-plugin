@@ -46,7 +46,11 @@ const MODEL: Csn = {
     },
     "CatalogService.Mixed": {
       kind: "entity",
-      query: { SELECT: { from: { join: "inner", args: [] } } },
+      query: {
+        SELECT: {
+          from: { join: "inner", args: [{ ref: ["shop.Books"] }, { ref: ["shop.Authors"] }] },
+        },
+      },
       elements: {},
     },
     "CatalogService.order": { kind: "action", doc: "Places an order." },
@@ -184,7 +188,8 @@ describe("projection mapper, views and missing sources", () => {
     expect(serializeConcept(map("CatalogService.Books"))).not.toMatch(/restrict|readonly|shopper/i);
   });
 
-  test("a source outside the model is still linked, by its short name", () => {
+  // CAP never compiles such a model, but a link to a missing concept would only be a broken link.
+  test("a source outside the model is named, but not linked", () => {
     const outside: Csn = {
       definitions: {
         "S.Things": {
@@ -199,7 +204,7 @@ describe("projection mapper, views and missing sources", () => {
       outside.definitions["S.Things"]!,
       defaultMapperContext(outside),
     );
-    expect(concept.body).toBe("\n# Things\n\nProjection on [Thing](/model/other/Thing.md)\n");
+    expect(concept.body).toBe("\n# Things\n\nProjection on `other.Thing`\n");
     expect(concept.frontmatter?.["description"]).toBeUndefined();
   });
 });
