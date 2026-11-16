@@ -73,7 +73,7 @@ test/
 - [x] **1.5 index.md.** Generate `index.md` per folder like the official samples (maintainer decision 2026-11-16): one `# <type>` section per concept type with `* [title](path) - description` entries, then `# Subdirectories` with `* [folder](folder/index.md) - <n> concepts: <types>`. Deterministic order (types by name, entries by path).
 - [x] **1.6 Bundle I/O.** `BundleSource { list(), read(path) }`, `FileBundleSource`, `BundleSink { write(path, text) }` with a `writeConcept(sink, concept)` helper, `FileBundleSink`. Async and text-only (maintainer decisions 2026-11-16).
   - Test first: in-memory fake and file implementation pass the same test suite.
-- [ ] **1.7 Conformance suite.** Every official sample bundle parses, validates with zero errors and round-trips byte-identically (or with only key-order differences, documented).
+- [x] **1.7 Conformance suite.** Every official sample bundle parses, validates with zero errors and round-trips byte-identically (or with only key-order differences, documented). Maintainer decision 2026-11-16: round trips keep every value and are stable, but not byte-identical; the formatting differences are documented in `docs/conformance.md`.
 
 **Gate G2:** conformance suite green; full branch coverage on `src/core`; `src/core` imports nothing but `yaml`.
 
