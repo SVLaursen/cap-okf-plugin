@@ -102,9 +102,12 @@ export function baseFrontmatter(
 }
 
 // @okf.tags: one tag or a list, added after the generated ones (task 2.6); a tag already there
-// isn't repeated.
+// isn't repeated, and anything that isn't text, or is empty, is skipped.
 function extraTags(definition: CsnDefinition): string[] {
   const tags = definition["@okf.tags"];
-  const list = Array.isArray(tags) ? tags : tags === undefined ? [] : [tags];
-  return list.map((tag) => oneLine(String(tag)));
+  const list: unknown[] = Array.isArray(tags) ? tags : [tags];
+  return list
+    .filter((tag): tag is string => typeof tag === "string")
+    .map(oneLine)
+    .filter((tag) => tag !== "");
 }

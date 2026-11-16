@@ -175,6 +175,20 @@ describe("authorization section and excluded definitions", () => {
 });
 
 describe("@okf.tags", () => {
+  test("skips tags that aren't text or are empty", () => {
+    const model: Csn = {
+      definitions: {
+        E: { kind: "entity", "@okf.tags": ["ok", "", { a: 1 }, 7, "  "], elements: {} },
+      },
+    };
+    const concept = mapperFor("entity")!.map(
+      "E",
+      model.definitions["E"]!,
+      defaultMapperContext(model),
+    );
+    expect(concept.frontmatter?.["tags"]).toEqual(["cds", "entity", "ok"]);
+  });
+
   test("adds tags after the generated ones, as a list or a single tag", () => {
     expect(map("db.Books").frontmatter?.["tags"]).toEqual([
       "cds",
@@ -184,5 +198,50 @@ describe("@okf.tags", () => {
       "catalog",
     ]);
     expect(map("x.Status").frontmatter?.["tags"]).toEqual(["cds", "type", "x", "status"]);
+  });
+});
+
+// Shapes CAP never compiles, handled without crashing and without naming anything.
+describe("selection and rendering on incomplete models", () => {
+  const ODD: Csn = {
+    definitions: {
+      S: { kind: "service" },
+      "S.E": {
+        kind: "entity",
+        elements: {
+          gone: { type: { ref: ["x.Missing", "status"] } },
+          deep: { type: { ref: ["S.E", "nope", "deeper"] } },
+          outside: { type: "cds.Association", target: "other.Thing" },
+          list: { items: { type: "x.Listed" } },
+        },
+      },
+      "S.op": {
+        kind: "action",
+        returns: { "@okf": false, type: "x.Result" },
+      },
+      "x.Result": { kind: "type", type: "cds.String" },
+      "x.Listed": { kind: "type", type: "cds.String" },
+    },
+  };
+
+  test("references outside the model reach nothing; many of a model type reaches it", () => {
+    expect([...selectExported(ODD, "services")].sort()).toEqual(["S", "S.E", "S.op", "x.Listed"]);
+  });
+
+  test("a type of something that isn't there is shown as unknown", () => {
+    const exported = selectExported(ODD, "services");
+    const context = defaultMapperContext(ODD, undefined, (name) => exported.has(name));
+    const body = mapperFor("entity")!.map("S.E", ODD.definitions["S.E"]!, context).body;
+    expect(body).toContain("| `gone` | `unknown` |  |");
+    expect(body).toContain("| `deep` | `unknown` |  |");
+  });
+
+  test("a return value marked @okf: false is neither followed nor shown", () => {
+    const exported = selectExported(ODD, "services");
+    expect(exported.has("x.Result")).toBe(false);
+    const context = defaultMapperContext(ODD, undefined, (name) => exported.has(name));
+    expect(mapperFor("action")!.map("S.op", ODD.definitions["S.op"]!, context).body).toBe(
+      "\n# op\n",
+    );
   });
 });

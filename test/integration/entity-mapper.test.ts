@@ -116,8 +116,9 @@ describe("entity mapper on real CSN shapes", () => {
     expect(orders).toContain("| `lines` | `many structured` |  |");
   });
 
-  test("a type reference shows the element it refers to", () => {
-    expect(mapShape("x.Ref")).toContain("| `s` | `x.Orders:status` |  |");
+  // Shown as the type it resolves to, so an entity is never named through it (task 2.6).
+  test("a type reference shows the type of the element it refers to", () => {
+    expect(mapShape("x.Ref")).toContain("| `s` | `String(10)` |  |");
   });
 
   test("an association that is part of the key says so", () => {

@@ -3,7 +3,7 @@ import { inlineCode, tableCell } from "../../core/markdown";
 import type { CsnDefinition, CsnEnum, CsnElement, CsnTyped } from "../csn";
 import type { MapperContext } from "./context";
 import { linkTo } from "./shared";
-import { shownEntries } from "./visibility";
+import { elementOfRef, relationTarget, shownEntries } from "./visibility";
 
 /**
  * A table of elements or parameters, e.g. "| `title` | `String(150)` | mandatory |". The first
@@ -78,25 +78,42 @@ function describeType(typed: CsnTyped, context: MapperContext): TypeText {
   }
   const type = typed.type;
   if (type === undefined) return { text: "structured", isCode: true };
-  if (typeof type !== "string") return { text: type.ref.join(":"), isCode: true };
-  if (context.model.definitions[type] !== undefined) {
-    return { text: linkTo(type, context), isCode: false };
-  }
-  return { text: builtInTypeText(type, typed), isCode: true };
+  if (typeof type !== "string") return describeTypeOf(type.ref, context);
+  const definition = context.model.definitions[type];
+  if (definition === undefined) return { text: builtInTypeText(type, typed), isCode: true };
+  if (context.isExported(type)) return { text: linkTo(type, context), isCode: false };
+  return describeType(withSizesOf(typed, definition), context);
+}
+
+// "type of Orders:status": described as the element it points at, so the entity isn't named,
+// e.g. `String(10)` or a link to an exported type.
+function describeTypeOf(ref: string[], context: MapperContext): TypeText {
+  const referenced = elementOfRef(ref, context.model);
+  return referenced === undefined
+    ? { text: "unknown", isCode: true }
+    : describeType(referenced, context);
+}
+
+/**
+ * An excluded type is shown as what it is based on (maintainer decision for task 2.6), never
+ * named. Inferred CSN copies the sizes onto each element, so the element's own win.
+ */
+function withSizesOf(typed: CsnTyped, definition: CsnTyped): CsnTyped {
+  return {
+    ...definition,
+    length: typed.length ?? definition.length,
+    precision: typed.precision ?? definition.precision,
+    scale: typed.scale ?? definition.scale,
+  };
 }
 
 // "Association to [Countries](…)", "Composition of many [Line](…)", "… many `structured`".
 function relationText(typed: CsnTyped, context: MapperContext): string {
   const many = isToMany(typed) ? "many " : "";
   const how = typed.type === "cds.Composition" ? "Composition of" : "Association to";
-  return `${how} ${many}${relationTarget(typed, context)}`;
-}
-
-function relationTarget(typed: CsnTyped, context: MapperContext): string {
-  if (typed.target !== undefined) return linkTo(typed.target, context);
-  // Only a composition of an aspect has no target: a named aspect, or one written inline.
-  const aspect = typed.targetAspect;
-  return typeof aspect === "string" ? linkTo(aspect, context) : inlineCode("structured");
+  // A composition of an aspect written inline has neither a target nor an aspect name.
+  const target = relationTarget(typed);
+  return `${how} ${many}${target === undefined ? inlineCode("structured") : linkTo(target, context)}`;
 }
 
 // "cds.String" with length 150 → "String(150)"; a custom type outside the model keeps its name.

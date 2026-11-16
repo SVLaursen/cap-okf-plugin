@@ -102,54 +102,54 @@ describe("@okf: false and @okf.tags on CSN compiled by CAP", () => {
 
 // Every shape the review found, compiled by CAP: @okf: false copied from an aspect, a type and a
 // source; a type of an excluded entity; an excluded service; generated composition children.
-describe("excluded definitions on CSN compiled by CAP", () => {
-  const SHAPES = `
-    namespace z;
-    @okf: false aspect Tracked { trackedAt : Timestamp; }
-    @okf: false type Money : Decimal(9, 2);
-    @okf: false entity Secret { key ID : Integer; status : String(10); owner : String; }
-    aspect Line { qty : Integer; }
-    entity Orders {
-      key ID : Integer;
-      amount : Money;
-      stat   : type of Secret:status;
-      secret : Association to Secret;
-      title  : localized String;
-      lines  : Composition of many Line;
-      items  : Composition of many { key pos : Integer; };
-    }
-    entity Base : Tracked { key ID : Integer; }
-    @okf: false service Internal { entity A as projection on z.Orders; action purge(); }
-    service S {
-      @(restrict: [{ grant: 'READ', where: (secret.owner = $user) }])
-      entity Orders as projection on z.Orders actions { action charge(amount : Money) returns Money; };
-      entity Bases as projection on z.Base;
-      entity OnSecret as projection on z.Secret;
-    }
-  `;
-  const EXCLUDED = [
-    "z.Tracked",
-    "z.Money",
-    "z.Secret",
-    "z.Base",
-    "z.Internal",
-    "z.S.Bases",
-    "z.S.OnSecret",
-  ];
-  let model: Csn;
-
-  beforeAll(() => {
-    model = cds.compile(SHAPES) as unknown as Csn;
-  });
-
-  /** Every exported concept's whole text, frontmatter included. */
-  function texts(include: "services" | "all"): { path: string; text: string }[] {
-    return mapSelected(model, selectExported(model, include)).map((concept) => ({
-      path: concept.path,
-      text: serializeConcept(concept),
-    }));
+const SHAPES = `
+  namespace z;
+  @okf: false aspect Tracked { trackedAt : Timestamp; }
+  @okf: false type Money : Decimal(9, 2);
+  @okf: false entity Secret { key ID : Integer; status : String(10); owner : String; }
+  aspect Line { qty : Integer; }
+  entity Orders {
+    key ID : Integer;
+    amount : Money;
+    stat   : type of Secret:status;
+    secret : Association to Secret;
+    title  : localized String;
+    lines  : Composition of many Line;
+    items  : Composition of many { key pos : Integer; };
   }
+  entity Base : Tracked { key ID : Integer; }
+  @okf: false service Internal { entity A as projection on z.Orders; action purge(); }
+  service S {
+    @(restrict: [{ grant: 'READ', where: (secret.owner = $user) }])
+    entity Orders as projection on z.Orders actions { action charge(amount : Money) returns Money; };
+    entity Bases as projection on z.Base;
+    entity OnSecret as projection on z.Secret;
+  }
+`;
+const EXCLUDED = [
+  "z.Tracked",
+  "z.Money",
+  "z.Secret",
+  "z.Base",
+  "z.Internal",
+  "z.S.Bases",
+  "z.S.OnSecret",
+];
+let model: Csn;
 
+beforeAll(() => {
+  model = cds.compile(SHAPES) as unknown as Csn;
+});
+
+/** Every exported concept's whole text, frontmatter included. */
+function texts(include: "services" | "all"): { path: string; text: string }[] {
+  return mapSelected(model, selectExported(model, include)).map((concept) => ({
+    path: concept.path,
+    text: serializeConcept(concept),
+  }));
+}
+
+describe("excluded definitions on CSN compiled by CAP", () => {
   test.each(["services", "all"] as const)(
     "with include %s, no concept names an excluded definition anywhere",
     (include) => {
@@ -176,7 +176,9 @@ describe("excluded definitions on CSN compiled by CAP", () => {
       expect([...exported].filter((name) => name.startsWith("z.Internal"))).toEqual([]);
     }
   });
+});
 
+describe("excluded definitions on CSN compiled by CAP: what stays visible", () => {
   test("an element of an excluded type, or a type of an excluded entity, shows its built-in type", () => {
     const orders = texts("all").find((each) => each.path === "model/z/Orders.md")!.text;
     expect(orders).toContain("| `amount` | `Decimal(9, 2)` |  |");
