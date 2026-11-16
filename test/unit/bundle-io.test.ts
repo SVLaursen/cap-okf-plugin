@@ -81,7 +81,11 @@ const BUNDLE = {
   "guides/returns.md": "---\ntype: Policy\n---\n",
   "references/attesters/revenue.py": "def attest():\n    return True\n",
   "Zeta.md": "---\ntype: X\n---\n",
+  "guides/\u00c4rger.md": "---\ntype: FAQ\n---\n",
 };
+
+/** "Ärger" with Ä as A plus a combining diaeresis (NFD), as macOS HFS+ used to store names. */
+const ARGER_NFD = "guides/A\u0308rger.md";
 
 describe.each(SOURCE_KINDS)("BundleSource contract: $name", ({ create }) => {
   test("lists every file, sorted by code unit, with / separators", async () => {
@@ -89,9 +93,16 @@ describe.each(SOURCE_KINDS)("BundleSource contract: $name", ({ create }) => {
       "Zeta.md",
       "guides/ordering.md",
       "guides/returns.md",
+      "guides/\u00c4rger.md",
       "index.md",
       "references/attesters/revenue.py",
     ]);
+  });
+
+  test("reads a non-ASCII path only in the Unicode form it is listed in", async () => {
+    const source = create(BUNDLE);
+    expect(await source.read("guides/\u00c4rger.md")).toBe("---\ntype: FAQ\n---\n");
+    expect(await source.read(ARGER_NFD)).toBeUndefined();
   });
 
   test("reads each file's text exactly as written", async () => {
@@ -127,7 +138,7 @@ describe.each(SOURCE_KINDS)("BundleSource contract: $name", ({ create }) => {
   test("changing the listed array does not change the bundle", async () => {
     const source = create(BUNDLE);
     (await source.list()).pop();
-    expect(await source.list()).toHaveLength(5);
+    expect(await source.list()).toHaveLength(6);
   });
 });
 
@@ -153,6 +164,34 @@ describe.each(SINK_KINDS)("BundleSink contract: $name", ({ create }) => {
       const { sink, readBack } = create();
       await expect(sink.write(unsafePath, "x")).rejects.toThrow(/is not a bundle path/);
       expect(await readBack().list()).toEqual([]);
+    },
+  );
+
+  // A bundle must work on every file system, and on macOS and Windows these name one file.
+  test.each([
+    ["letter case", "guides/a.md", "guides/A.md"],
+    ["letter case of a folder", "Guides/a.md", "guides/b.md"],
+    ["Unicode form", "guides/\u00c4rger.md", ARGER_NFD],
+  ])(
+    "a path differing from an earlier one only in %s is rejected",
+    async (_label, first, second) => {
+      const { sink, readBack } = create();
+      await sink.write(first, "first\n");
+      await expect(sink.write(second, "second\n")).rejects.toThrow(
+        /differs from .* only in letter case or Unicode form/,
+      );
+      expect(await readBack().list()).toEqual([first]);
+      expect(await readBack().read(first)).toBe("first\n");
+    },
+  );
+
+  // Windows strips a trailing dot or space and reads "a.md:x" as a hidden stream of a.md.
+  test.each(["a.md:stream", "notes./a.md", "a.md "])(
+    "writing the path %j, which Windows can't store as written, is rejected",
+    async (path) => {
+      await expect(create().sink.write(path, "x")).rejects.toThrow(
+        /can't be stored on every file system/,
+      );
     },
   );
 
@@ -197,9 +236,27 @@ describe("isBundlePath", () => {
   });
 });
 
-describe("MemoryBundleSource", () => {
+describe("MemoryBundleSource and MemoryBundleSink", () => {
   test("rejects a path that is not a bundle path when it is created", () => {
-    expect(() => new MemoryBundleSource({ "../x.md": "x" })).toThrow(/is not a bundle path/);
+    expect(() => new MemoryBundleSource({ "../x.md": "x" })).toThrow(/not a bundle path/);
+  });
+
+  test("keeps its own copy of the files it was given", async () => {
+    const files: Record<string, string> = { "a.md": "a" };
+    const source = new MemoryBundleSource(files);
+    files["b.md"] = "b";
+    files["a.md"] = "changed";
+    expect(await source.list()).toEqual(["a.md"]);
+    expect(await source.read("a.md")).toBe("a");
+  });
+
+  // Unlike a FileBundleSource on the sink's folder, which always shows the folder as it is now.
+  test("toSource() is a snapshot: later writes don't show up in it", async () => {
+    const sink = new MemoryBundleSink();
+    await sink.write("a.md", "a");
+    const snapshot = sink.toSource();
+    await sink.write("b.md", "b");
+    expect(await snapshot.list()).toEqual(["a.md"]);
   });
 });
 
@@ -239,6 +296,14 @@ describe("FileBundleSource on disk (ADR-0007)", () => {
     await expect(source.read("x.md")).rejects.toThrow(/ELOOP/);
   });
 
+  test("a root that is a file, not a folder, is an error for list and read alike", async () => {
+    const folder = newFolder();
+    writeFiles(folder, { "file.md": "x" });
+    const source = new FileBundleSource(path.join(folder, "file.md"));
+    await expect(source.list()).rejects.toThrow(/is not a folder/);
+    await expect(source.read("x.md")).rejects.toThrow(/is not a folder/);
+  });
+
   // On case-insensitive file systems (macOS, Windows) Index.MD would open index.md, but only
   // the listed spelling may be read.
   test("reads a path only in the spelling it is listed in", async () => {
@@ -268,6 +333,34 @@ describe("FileBundleSink on disk", () => {
     await expect(sink.write("linked-folder/a.md", "x")).rejects.toThrow(/symbolic link/);
     await expect(sink.write("link.md", "x")).rejects.toThrow(/symbolic link/);
     expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  test("creates no folder outside its own when a write through a link is refused", async () => {
+    const root = newFolder();
+    const outside = newFolder();
+    fs.symlinkSync(outside, path.join(root, "linked-folder"), "dir");
+    const sink = new FileBundleSink(root);
+    await expect(sink.write("linked-folder/new/sub/a.md", "x")).rejects.toThrow(/symbolic link/);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  test("replacing a file breaks a hard link instead of changing the other file", async () => {
+    const root = newFolder();
+    const outside = newFolder();
+    writeFiles(outside, { "secret.txt": "secret" });
+    fs.linkSync(path.join(outside, "secret.txt"), path.join(root, "h.md"));
+    await new FileBundleSink(root).write("h.md", "overwritten");
+    expect(fs.readFileSync(path.join(outside, "secret.txt"), "utf8")).toBe("secret");
+    expect(fs.readFileSync(path.join(root, "h.md"), "utf8")).toBe("overwritten");
+  });
+
+  test("a file where a folder is needed is an error, and leaves no temporary file", async () => {
+    const root = newFolder();
+    writeFiles(root, { guides: "a file", "a/b.md/keep.md": "x" });
+    const sink = new FileBundleSink(root);
+    await expect(sink.write("guides/a.md", "x")).rejects.toThrow(/is a file, not a folder/);
+    await expect(sink.write("a/b.md", "x")).rejects.toThrow();
+    expect(fs.readdirSync(path.join(root, "a"))).toEqual(["b.md"]);
   });
 
   test("creates its root folder when it does not exist yet", async () => {
