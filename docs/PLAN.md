@@ -79,7 +79,7 @@ test/
 
 ## Phase 2 — CDS exporter → Gate G3
 
-- [ ] **2.1 Mapper registry + entity mapper.** Path from fully qualified name (`model/<ns as folders>/<Name>.md`), `type: Entity`, title, description, `resource: cds:<fqn>`, tags. Body: keys, elements with types, associations/compositions as links.
+- [x] **2.1 Mapper registry + entity mapper.** Path from fully qualified name (`model/<ns as folders>/<Name>.md`), `type: Entity`, title, description, `resource: cds:<fqn>`, tags. Body: keys, elements with types, associations/compositions as links. Maintainer decisions 2026-11-16: an elements table plus a list of association links; tags `[cds, <kind>, <namespace>]`; description from `@description`, else the doc comment's first sentence; links in the absolute `/model/…` form.
 - [ ] **2.2 Service and projection mappers.** Service body lists exposed entities, actions and functions as links. Projections link to their source.
 - [ ] **2.3 Action, function, type, aspect, event mappers.** Parameters and return types; bound actions listed on their entity.
 - [ ] **2.4 Authorization section (ADR-0003).** Render `@restrict` and `@requires` into a section wrapped in `<!-- okf:auth:start -->` / `<!-- okf:auth:end -->` under `## Authorization`. Nothing about authorization appears outside it.
