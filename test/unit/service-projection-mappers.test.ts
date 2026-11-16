@@ -129,14 +129,15 @@ describe("service mapper", () => {
 });
 
 describe("projection mapper", () => {
-  test("is an Entity that names its own path and resource", () => {
+  // Maintainer decision (task 2.2): a projection is not a stored entity, so it says what it is.
+  test("is a Projection that names its own path and resource", () => {
     expect(map("CatalogService.Books").frontmatter).toEqual({
-      type: "Entity",
+      type: "Projection",
       title: "Books",
       // No description of its own: the source's, as CSN doesn't copy doc comments.
       description: "A book in the shop.",
       resource: "cds:CatalogService.Books",
-      tags: ["cds", "entity", "CatalogService"],
+      tags: ["cds", "projection", "CatalogService"],
     });
     expect(map("CatalogService.Books").path).toBe("model/CatalogService/Books.md");
   });
@@ -174,6 +175,14 @@ describe("projection mapper", () => {
 });
 
 describe("projection mapper, views and missing sources", () => {
+  test("a view (select from) is a View", () => {
+    expect(map("CatalogService.TopBooks").frontmatter).toMatchObject({
+      type: "View",
+      tags: ["cds", "view", "CatalogService"],
+    });
+    expect(map("CatalogService.Mixed").frontmatter).toMatchObject({ type: "View" });
+  });
+
   test("a view on one entity says so", () => {
     expect(map("CatalogService.TopBooks").body).toContain(
       "\n# TopBooks\n\nView on [Books](/model/shop/Books.md)\n",

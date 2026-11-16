@@ -138,6 +138,14 @@ describe("services and projections on real CSN shapes", () => {
 });
 
 describe("services and projections on real CSN shapes, views and members", () => {
+  test("projections and views say what they are; an entity stays an Entity", () => {
+    expect(mapShape("db.S.Books").frontmatter?.["type"]).toBe("Projection");
+    expect(mapShape("db.S.AuthorOf").frontmatter?.["type"]).toBe("Projection");
+    expect(mapShape("db.S.Joined").frontmatter?.["type"]).toBe("View");
+    expect(mapShape("db.S.Both").frontmatter?.["type"]).toBe("View");
+    expect(mapShape("db.Books").frontmatter?.["type"]).toBe("Entity");
+  });
+
   test("a view on a join or a union has no single source", () => {
     expect(mapShape("db.S.Joined").body).toContain("\n# Joined\n\nView\n");
     expect(mapShape("db.S.Both").body).toContain("\n# Both\n\nView\n");
