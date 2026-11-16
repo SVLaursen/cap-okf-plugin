@@ -19,14 +19,25 @@ async function readBundle(bundle: string): Promise<BundleFile[]> {
   const source = new FileBundleSource(path.join(BUNDLES_DIR, bundle));
   const files: BundleFile[] = [];
   for (const filePath of await source.list()) {
-    files.push({ path: filePath, text: (await source.read(filePath))! });
+    const text = await source.read(filePath);
+    if (text === undefined) throw new Error(`${bundle}/${filePath}: listed, but can't be read`);
+    files.push({ path: filePath, text });
   }
   return files;
 }
 
 async function readConcepts(bundle: string): Promise<{ file: BundleFile; concept: Concept }[]> {
   const markdown = (await readBundle(bundle)).filter((file) => file.path.endsWith(".md"));
-  return markdown.map((file) => ({ file, concept: parseConcept(file.path, file.text) }));
+  return markdown.map((file) => ({ file, concept: parseNamingTheFile(file) }));
+}
+
+// A parse error carries the file in a property Jest doesn't print; put it in the message.
+function parseNamingTheFile(file: BundleFile): Concept {
+  try {
+    return parseConcept(file.path, file.text);
+  } catch (error) {
+    throw new Error(`${file.path}: ${(error as Error).message}`, { cause: error });
+  }
 }
 
 /** Everything after the frontmatter block, or the whole text when there is none. */
@@ -34,12 +45,22 @@ function bodyOf(text: string): string {
   return parseConcept("x.md", text).body;
 }
 
+test("every sample bundle in the fixtures is in the suite", () => {
+  const folders = fs
+    .readdirSync(BUNDLES_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  expect(folders).toEqual(BUNDLES);
+});
+
+// Each assertion below compares { path, … } objects, so a failure names the file that broke.
 describe.each(BUNDLES)("official sample %s", (bundle) => {
   test("has Markdown files, and every one of them parses", async () => {
     const files = (await readBundle(bundle)).filter((file) => file.path.endsWith(".md"));
     expect(files.length).toBeGreaterThan(10);
     for (const file of files) {
-      expect(() => parseConcept(file.path, file.text)).not.toThrow();
+      expect(() => parseNamingTheFile(file)).not.toThrow();
     }
   });
 
@@ -49,10 +70,8 @@ describe.each(BUNDLES)("official sample %s", (bundle) => {
 
   test("every concept parses back to the same concept after it is serialized", async () => {
     for (const { file, concept } of await readConcepts(bundle)) {
-      expect({
-        path: file.path,
-        concept: parseConcept(file.path, serializeConcept(concept)),
-      }).toEqual({
+      const parsedAgain = parseConcept(file.path, serializeConcept(concept));
+      expect({ path: file.path, concept: parsedAgain }).toStrictEqual({
         path: file.path,
         concept,
       });
@@ -91,6 +110,8 @@ describe("docs/conformance.md", () => {
       }
     }
     const doc = fs.readFileSync(CONFORMANCE_DOC, "utf8");
-    expect(doc).toContain(`${identical} of the ${total} Markdown files`);
+    const notGuaranteed = doc.slice(doc.indexOf("## What is not guaranteed"));
+    const firstSentence = notGuaranteed.slice(0, notGuaranteed.indexOf(". "));
+    expect(firstSentence).toContain(`${identical} of the ${total} Markdown files`);
   });
 });

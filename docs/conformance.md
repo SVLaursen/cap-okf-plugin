@@ -35,23 +35,30 @@ The sample bundles do not share one style themselves. The differences, with the 
 | --- | --- | --- | --- |
 | Key order | 53 | Keys in the author's order, e.g. `resource` before `title`, `verified` before `status` | `type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then all other keys in their original order (task 1.2) |
 | List items | 44 | `- item` at the same indent as the key | `  - item`, indented two spaces |
-| Timestamps | 44 | In quotes: `at: '2026-07-10T23:14:11+00:00'` | Without quotes: `at: 2026-07-10T23:14:11+00:00`; it is still read as text, not as a date |
+| Timestamps | 44 | In quotes: `at: '2026-07-10T23:14:11+00:00'` | Without quotes: `at: 2026-07-10T23:14:11+00:00`, as the `acme_retail` samples do. cap-okf reads it as text (YAML 1.2); a consumer using YAML 1.1 (e.g. PyYAML) reads it as a date |
 | Long values | 29 | Wrapped onto the next line after about 80 characters | On one line, however long |
 | Inline lists and mappings | 17 | `tags: [finance, margin]`, `generated: { by: …, at: … }` | One item or key per line |
 
-Most files show several of these at once. 44 files use the style of Python's YAML library
-(unindented lists, quoted timestamps, wrapped lines); the `acme_retail` concepts use inline lists
-and mappings instead.
+Most files show several of these at once: the same 44 files have unindented lists and quoted
+timestamps, and 29 of them also have wrapped values. The 17 files with inline lists or mappings
+are 9 from `acme_retail` and 8 from `stackoverflow`.
 
-Two further limits are known, but no sample hits them:
+No sample hits the following, but a round trip also changes, for example:
 
-- **Integer-like keys come first.** Frontmatter is a plain JavaScript object, which lists keys such
-  as `1:` or `2:` before all others, whatever order they were written in.
-- **Comments in frontmatter are dropped.** YAML comments are not part of the parsed values, so
-  they are not written back.
+- **Integer-like keys come first, even before `type`, and are written in quotes.** Frontmatter is
+  a plain JavaScript object, which lists keys such as `1:` before all others; it is written back
+  as `"1":`.
+- **Comments are dropped.** YAML comments are not part of the parsed values.
+- **YAML tags are dropped:** `!foo bar` is written back as `bar`.
+- **Anchors and aliases are written out in full:** the value an alias points to is repeated.
+- **Numbers and empty values are written in their standard form:** `0x1F` becomes `31`, `1.0`
+  becomes `1`, `~` becomes `null`.
+- **Line endings and the start of the file:** CRLF becomes LF, a UTF-8 byte order mark is removed,
+  and several newlines at the end become exactly one. The body is otherwise kept byte for byte.
 
 ## When this changes
 
-`docs/conformance.md` and the suite are pinned to each other: the suite checks that this document
-states the current byte-identical count ("25 of the 78 Markdown files"). A change to the
-serializer's style that changes the count fails the suite until this document is updated.
+The suite checks that this document states the current number of byte-identical files, in the
+first sentence under "What is not guaranteed". A change to the serializer's style that changes
+that number fails the suite until this document is updated. The numbers in the table are not
+checked; recount them when the serializer's style changes.
