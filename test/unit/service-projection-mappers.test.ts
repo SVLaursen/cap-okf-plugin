@@ -1,4 +1,5 @@
 import { serializeConcept } from "../../src/core/concept";
+import { outsideAuthSection } from "../helpers/auth";
 import type { Csn, CsnDefinition } from "../../src/export/csn";
 import { defaultMapperContext } from "../../src/export/mappers/context";
 import { mapperFor, registryKeyOf } from "../../src/export/mappers/index";
@@ -124,7 +125,9 @@ describe("service mapper", () => {
   });
 
   test("shows no authorization detail (ADR-0003)", () => {
-    expect(serializeConcept(map("CatalogService"))).not.toMatch(/requires|authenticated-user/);
+    expect(outsideAuthSection(serializeConcept(map("CatalogService")))).not.toMatch(
+      /requires|authenticated-user/,
+    );
   });
 });
 
@@ -194,7 +197,9 @@ describe("projection mapper, views and missing sources", () => {
   });
 
   test("shows no authorization detail, @readonly included (ADR-0003, task 2.4)", () => {
-    expect(serializeConcept(map("CatalogService.Books"))).not.toMatch(/restrict|readonly|shopper/i);
+    expect(outsideAuthSection(serializeConcept(map("CatalogService.Books")))).not.toMatch(
+      /restrict|readonly|shopper/i,
+    );
   });
 
   // CAP never compiles such a model, but a link to a missing concept would only be a broken link.

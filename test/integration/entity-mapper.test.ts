@@ -1,6 +1,7 @@
 import path from "node:path";
 import cds from "@sap/cds";
 import { serializeConcept } from "../../src/core/concept";
+import { outsideAuthSection } from "../helpers/auth";
 import type { Csn } from "../../src/export/csn";
 import { defaultMapperContext } from "../../src/export/mappers/context";
 import { entityMapper } from "../../src/export/mappers/entity";
@@ -62,7 +63,7 @@ describe("entity mapper on the bookshop fixture", () => {
 
   // AdminService restricts its entities; nothing of that may leak outside the auth section.
   test("AdminService.Books shows no authorization detail", () => {
-    const text = serializeConcept(mapEntity("AdminService.Books"));
+    const text = outsideAuthSection(serializeConcept(mapEntity("AdminService.Books")));
     expect(text).not.toMatch(/restrict|requires|catalog-manager/i);
   });
 

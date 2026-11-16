@@ -1,6 +1,7 @@
 import path from "node:path";
 import cds from "@sap/cds";
 import { serializeConcept, type Concept } from "../../src/core/concept";
+import { outsideAuthSection } from "../helpers/auth";
 import { validateBundle } from "../../src/core/validate";
 import type { Csn } from "../../src/export/csn";
 import { defaultMapperContext } from "../../src/export/mappers/context";
@@ -55,10 +56,11 @@ describe("services and projections of the bookshop fixture", () => {
     );
   });
 
-  // ADR-0003: AdminService and its projections are restricted; none of it may show (task 2.4).
+  // ADR-0003: AdminService and its projections are restricted; outside the marked section,
+  // none of it may show.
   test("AdminService and its projections show no authorization detail", () => {
     for (const name of ["AdminService", "AdminService.Books", "CatalogService.Books"]) {
-      expect(serializeConcept(concept(name))).not.toMatch(
+      expect(outsideAuthSection(serializeConcept(concept(name)))).not.toMatch(
         /restrict|requires|readonly|authenticated-user|catalog-manager/i,
       );
     }

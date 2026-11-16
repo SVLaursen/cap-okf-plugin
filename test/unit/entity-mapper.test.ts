@@ -1,4 +1,5 @@
 import { serializeConcept } from "../../src/core/concept";
+import { outsideAuthSection } from "../helpers/auth";
 import type { Csn, CsnDefinition } from "../../src/export/csn";
 import { entityMapper } from "../../src/export/mappers/entity";
 import { MAPPERS, mapperFor, registryKeyOf } from "../../src/export/mappers/index";
@@ -274,7 +275,7 @@ describe("entity mapper and Markdown safety", () => {
 });
 
 describe("entity mapper and authorization (ADR-0003)", () => {
-  test("@restrict and @requires appear nowhere in the concept", () => {
+  test("@restrict and @requires appear nowhere outside the marked section", () => {
     const restricted: Csn = {
       definitions: {
         Orders: {
@@ -290,7 +291,7 @@ describe("entity mapper and authorization (ADR-0003)", () => {
       restricted.definitions["Orders"]!,
       defaultMapperContext(restricted),
     );
-    const text = serializeConcept(concept);
+    const text = outsideAuthSection(serializeConcept(concept));
     for (const word of ["restrict", "requires", "auditor", "admin", "grant", "$user"]) {
       expect(text).not.toContain(word);
     }

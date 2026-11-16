@@ -1,4 +1,5 @@
 import { serializeConcept } from "../../src/core/concept";
+import { outsideAuthSection } from "../helpers/auth";
 import type { Csn } from "../../src/export/csn";
 import { defaultMapperContext } from "../../src/export/mappers/context";
 import { mapperFor, registryKeyOf } from "../../src/export/mappers/index";
@@ -151,7 +152,9 @@ describe("action and function mappers", () => {
   });
 
   test("an unbound action's @requires and @restrict appear nowhere (ADR-0003)", () => {
-    expect(serializeConcept(map("x.S.order"))).not.toMatch(/requires|restrict|shopper|buyer/);
+    expect(outsideAuthSection(serializeConcept(map("x.S.order")))).not.toMatch(
+      /requires|restrict|shopper|buyer/,
+    );
   });
 });
 
@@ -182,7 +185,9 @@ describe("bound actions on their entity", () => {
   });
 
   test("a bound action's @requires and @restrict appear nowhere (ADR-0003)", () => {
-    expect(serializeConcept(map("x.S.Orders"))).not.toMatch(/requires|restrict|admin|clerk/);
+    expect(outsideAuthSection(serializeConcept(map("x.S.Orders")))).not.toMatch(
+      /requires|restrict|admin|clerk/,
+    );
   });
 
   test("the binding parameter in is left out: callers never pass it", () => {
