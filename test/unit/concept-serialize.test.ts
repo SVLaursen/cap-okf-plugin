@@ -55,12 +55,66 @@ describe("serializeConcept round-trip", () => {
       "---\ntype: Playbook\ntitle: Placing an order\ntags:\n  - shop\n  - orders\n---\n\n# Body\n",
     );
   });
+});
+
+describe("serializeConcept values", () => {
+  // The yaml library writes such a string as a "|+" block, which keeps every trailing newline.
+  test("a last value ending in several newlines keeps all of them", () => {
+    const original = concept({ type: "X", notes: "x\n\n" });
+    expect(parseConcept("a.md", serializeConcept(original))).toEqual(original);
+  });
+
+  test.each([
+    ["true"],
+    ["null"],
+    ["1.0"],
+    ["~"],
+    ["# x"],
+    ["- x"],
+    ["*x"],
+    ["a: b"],
+    ["2026-11-13"],
+    [""],
+    ["before\n---\nafter"],
+  ])("the string %j is written so it parses back as the same string", (value) => {
+    const original = concept({ type: "X", value });
+    expect(parseConcept("a.md", serializeConcept(original))).toEqual(original);
+  });
+
+  test("an object used twice is written out twice, not as a YAML anchor and alias", () => {
+    const generated = { by: "human:a", at: "2026-11-13T09:00:00Z" };
+    const text = serializeConcept(concept({ type: "X", generated, copied: generated }));
+    expect(text).not.toMatch(/[&*]a\d/);
+    expect(text).toContain("copied:\n  by: human:a\n");
+  });
+
+  test("keys with an undefined value are left out", () => {
+    expect(serializeConcept(concept({ type: "X", title: undefined }))).toBe(
+      "---\ntype: X\n---\n\n# Body\n",
+    );
+    expect(serializeConcept(concept({ type: undefined }))).toBe("---\n---\n\n# Body\n");
+  });
 
   test("long values stay on one line, so the output does not depend on a line width", () => {
     const description = "word ".repeat(40).trim();
     expect(serializeConcept(concept({ type: "X", description }))).toContain(
       `description: ${description}\n`,
     );
+  });
+});
+
+describe("serializeConcept bodies starting with ---", () => {
+  // Written as-is, such a body would parse back as frontmatter.
+  test("a concept without frontmatter whose body starts with --- is rejected", () => {
+    const index = { ...concept(null, "---\nx: 1\n---\n"), path: "guides/index.md" };
+    expect(() => serializeConcept(index)).toThrow(
+      /^\[okf\] guides\/index\.md:1 — the body starts with a --- line/,
+    );
+  });
+
+  test("a body may start with --- when the concept has frontmatter", () => {
+    const original = concept({ type: "X" }, "---\n\nText under a horizontal rule\n");
+    expect(parseConcept("a.md", serializeConcept(original))).toEqual(original);
   });
 });
 
@@ -125,7 +179,9 @@ describe("serializeConcept trailing newline", () => {
     ["one newline", "# Body\n"],
     ["several newlines", "# Body\n\n\n"],
   ])("a body with %s gives output ending in exactly one newline", (_label, body) => {
-    expect(serializeConcept(concept({ type: "X" }, body))).toMatch(/[^\n]\n$/);
+    const text = serializeConcept(concept({ type: "X" }, body));
+    expect(text.endsWith("\n")).toBe(true);
+    expect(text.endsWith("\n\n")).toBe(false);
   });
 
   test("an empty body still ends the output with exactly one newline", () => {

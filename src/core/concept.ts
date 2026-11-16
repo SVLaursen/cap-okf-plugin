@@ -54,7 +54,9 @@ export function parseConcept(path: string, text: string): Concept {
   if (closingLine === undefined) {
     return { path, id, frontmatter: null, body: lines.join("\n") };
   }
-  const yamlText = lines.slice(1, closingLine).join("\n");
+  // The trailing "\n" ends the last YAML line. Without it, a "|+" block value at the end would
+  // lose one of the newlines it keeps.
+  const yamlText = lines.slice(1, closingLine).join("\n") + "\n";
   return {
     path,
     id,
@@ -64,10 +66,11 @@ export function parseConcept(path: string, text: string): Concept {
 }
 
 /**
- * Frontmatter keys that cap-okf writes first, in this order (OKF v0.2 §4.1).
+ * Frontmatter keys that cap-okf writes first, in this order. The first five are the fields
+ * OKF v0.2 §4.1 lists; the full order is cap-okf's choice (docs/PLAN.md, task 1.2).
  * A fixed order keeps generated bundles stable, so a regenerated file only diffs where it changed.
  */
-const KNOWN_KEY_ORDER = [
+const KNOWN_KEY_ORDER: readonly string[] = [
   "type",
   "title",
   "description",
@@ -81,14 +84,33 @@ const KNOWN_KEY_ORDER = [
 ];
 
 /**
- * Writes a concept back to OKF text. `parseConcept(path, serializeConcept(c))` equals `c`.
+ * Writes a concept back to OKF text.
  *
  * Known keys come first in KNOWN_KEY_ORDER, then the other keys in their original order.
- * The output always ends with exactly one newline.
+ * Keys whose value is undefined are left out. The output always ends with exactly one newline.
+ *
+ * `parseConcept(path, serializeConcept(c))` equals `c` when the body ends with exactly one
+ * newline and the frontmatter holds only JSON-like values (a Date, for example, comes back
+ * as a string). Every concept that parseConcept returns for a file ending in one newline
+ * meets this.
  */
 export function serializeConcept(concept: Concept): string {
-  const head = concept.frontmatter === null ? "" : frontmatterBlock(concept.frontmatter);
-  return endWithOneNewline(head + concept.body);
+  if (concept.frontmatter === null) {
+    rejectDelimiterAtStart(concept);
+    return endWithOneNewline(concept.body);
+  }
+  return endWithOneNewline(frontmatterBlock(concept.frontmatter) + concept.body);
+}
+
+// Without frontmatter, a first line of --- would be read back as the start of frontmatter.
+function rejectDelimiterAtStart(concept: Concept): void {
+  const firstLine = concept.body.split("\n")[0];
+  if (isDelimiter(firstLine)) {
+    throw new Error(
+      `[okf] ${concept.path}:1 — the body starts with a --- line, which would be read back as frontmatter.\n` +
+        "  Give the concept frontmatter, or start the body with another line.",
+    );
+  }
 }
 
 function frontmatterBlock(frontmatter: Frontmatter): string {
@@ -99,17 +121,24 @@ function frontmatterBlock(frontmatter: Frontmatter): string {
 }
 
 function orderKeys(frontmatter: Frontmatter): Frontmatter {
-  const known = KNOWN_KEY_ORDER.filter((key) => Object.hasOwn(frontmatter, key));
-  const unknown = Object.keys(frontmatter).filter((key) => !KNOWN_KEY_ORDER.includes(key));
+  // YAML can't write undefined, so such keys are dropped here rather than by the yaml library.
+  const defined = Object.keys(frontmatter).filter((key) => frontmatter[key] !== undefined);
+  const known = KNOWN_KEY_ORDER.filter((key) => defined.includes(key));
+  const unknown = defined.filter((key) => !KNOWN_KEY_ORDER.includes(key));
   // Object.fromEntries, not ordered[key] = …: an assignment to "__proto__" would change the
   // object's prototype instead of keeping the key, and unknown keys must be kept (OKF v0.2 §4.1).
   return Object.fromEntries([...known, ...unknown].map((key) => [key, frontmatter[key]]));
 }
 
 function stringifyYaml(value: Frontmatter): string {
-  // lineWidth 0: never fold long values over several lines, so the output does not depend
-  // on an arbitrary line width and long descriptions stay greppable.
-  return YAML.stringify(value, { lineWidth: 0 });
+  return YAML.stringify(value, {
+    // Never fold long values over several lines, so the output does not depend on an
+    // arbitrary line width and long descriptions stay greppable.
+    lineWidth: 0,
+    // An object used twice is written out twice: anchors and aliases (&a1, *a1) are valid YAML
+    // but hard to read in a generated bundle.
+    aliasDuplicateObjects: false,
+  });
 }
 
 function endWithOneNewline(text: string): string {
@@ -151,7 +180,11 @@ function parseFrontmatter(path: string, yamlText: string): Frontmatter {
   // logLevel 'error': yaml would otherwise print warnings (e.g. for an unknown !tag) to stderr,
   // and src/core must not have side effects. Such values are kept as plain strings.
   const document = YAML.parseDocument(yamlText, { lineCounter, logLevel: "error" });
-  const fileLine = (offset: number) => lineCounter.linePos(offset).line + 1; // +1: the opening ---
+  // An error at the very end of the text (such as an unclosed list) would point after the final
+  // newline, i.e. at the closing ---. Clamping keeps it on the last frontmatter line.
+  const lastCharacter = Math.max(yamlText.length - 1, 0);
+  const fileLine = (offset: number) =>
+    lineCounter.linePos(Math.min(offset, lastCharacter)).line + 1; // +1: the opening ---
 
   const firstError = document.errors[0];
   if (firstError) throw yamlError(path, firstError, fileLine);
