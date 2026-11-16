@@ -119,7 +119,7 @@ describe("entity mapper frontmatter", () => {
   test("writes type, title, description from the doc comment, resource and tags", () => {
     expect(mapEntity("sample.bookshop.Books").frontmatter).toEqual({
       type: "Entity",
-      // {i18n>Books} falls back to its key until task 2.5 resolves texts.
+      // No texts are given to this context, so {i18n>Books} falls back to its key.
       title: "Books",
       description: "A book that the shop can sell.",
       resource: "cds:sample.bookshop.Books",

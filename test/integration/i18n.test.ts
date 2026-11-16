@@ -9,11 +9,13 @@ import { mapperFor, registryKeyOf } from "../../src/export/mappers/index";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "bookshop");
 
+let capModel: Awaited<ReturnType<typeof cds.load>>;
 let model: Csn;
 
 beforeAll(async () => {
+  capModel = await cds.load(FIXTURE, { docs: true });
   // cds.load's result is CAP's own CSN type; ours names only the parts the mappers read.
-  model = (await cds.load(FIXTURE, { docs: true })) as unknown as Csn;
+  model = capModel as unknown as Csn;
 });
 
 function map(name: string, language?: string) {
@@ -57,7 +59,7 @@ describe("texts from the fixture's _i18n folder", () => {
 
   test("the default is the app's configured default language", () => {
     expect(defaultLanguageTexts(cds, model)("Books")).toBe(
-      cds.i18n.bundle4(model).at("Books", cds.env.i18n.default_language),
+      cds.i18n.bundle4(capModel).at("Books", cds.env.i18n.default_language),
     );
   });
 });

@@ -30,7 +30,8 @@ describe("entity mapper on the bookshop fixture", () => {
     expect(books.frontmatter).toEqual({
       type: "Entity",
       title: "Books",
-      // '{i18n>BooksDescription}' shows as its key until task 2.5 resolves texts.
+      // No texts are given to this context, so '{i18n>BooksDescription}' shows as its key;
+      // test/integration/i18n.test.ts checks the real text.
       description: "BooksDescription",
       resource: "cds:sample.bookshop.Books",
       tags: ["cds", "entity", "sample.bookshop"],
