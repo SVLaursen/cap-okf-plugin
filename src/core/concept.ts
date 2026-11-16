@@ -63,6 +63,59 @@ export function parseConcept(path: string, text: string): Concept {
   };
 }
 
+/**
+ * Frontmatter keys that cap-okf writes first, in this order (OKF v0.2 §4.1).
+ * A fixed order keeps generated bundles stable, so a regenerated file only diffs where it changed.
+ */
+const KNOWN_KEY_ORDER = [
+  "type",
+  "title",
+  "description",
+  "resource",
+  "tags",
+  "status",
+  "generated",
+  "verified",
+  "stale_after",
+  "sources",
+];
+
+/**
+ * Writes a concept back to OKF text. `parseConcept(path, serializeConcept(c))` equals `c`.
+ *
+ * Known keys come first in KNOWN_KEY_ORDER, then the other keys in their original order.
+ * The output always ends with exactly one newline.
+ */
+export function serializeConcept(concept: Concept): string {
+  const head = concept.frontmatter === null ? "" : frontmatterBlock(concept.frontmatter);
+  return endWithOneNewline(head + concept.body);
+}
+
+function frontmatterBlock(frontmatter: Frontmatter): string {
+  const ordered = orderKeys(frontmatter);
+  // YAML.stringify writes an empty object as "{}"; an empty block is just the two delimiters.
+  const yamlText = Object.keys(ordered).length === 0 ? "" : stringifyYaml(ordered);
+  return `${DELIMITER}\n${yamlText}${DELIMITER}\n`;
+}
+
+function orderKeys(frontmatter: Frontmatter): Frontmatter {
+  const known = KNOWN_KEY_ORDER.filter((key) => Object.hasOwn(frontmatter, key));
+  const unknown = Object.keys(frontmatter).filter((key) => !KNOWN_KEY_ORDER.includes(key));
+  // Object.fromEntries, not ordered[key] = …: an assignment to "__proto__" would change the
+  // object's prototype instead of keeping the key, and unknown keys must be kept (OKF v0.2 §4.1).
+  return Object.fromEntries([...known, ...unknown].map((key) => [key, frontmatter[key]]));
+}
+
+function stringifyYaml(value: Frontmatter): string {
+  // lineWidth 0: never fold long values over several lines, so the output does not depend
+  // on an arbitrary line width and long descriptions stay greppable.
+  return YAML.stringify(value, { lineWidth: 0 });
+}
+
+function endWithOneNewline(text: string): string {
+  return text.replace(/\n*$/, "\n");
+}
+
 // Line numbers and comparisons below assume LF only and no byte order mark.
 function normalize(text: string): string {
   const withoutBom = text.startsWith(BYTE_ORDER_MARK) ? text.slice(1) : text;

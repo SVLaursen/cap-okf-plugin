@@ -101,6 +101,12 @@ describe("serializeConcept key order", () => {
     expect(writtenKeys(text)).toEqual(["type", "title", "zeta", "review_owner", "alpha"]);
   });
 
+  // A plain assignment to obj["__proto__"] changes the prototype instead of adding a key.
+  test("an unknown __proto__ key is kept like any other key", () => {
+    const original = parseConcept("a.md", "---\ntype: X\n__proto__: kept\n---\n");
+    expect(writtenKeys(serializeConcept(original))).toEqual(["type", "__proto__"]);
+  });
+
   test("nested keys keep their original order", () => {
     const text = serializeConcept(concept({ type: "X", generated: { at: "now", by: "me" } }));
     expect(text).toContain("generated:\n  at: now\n  by: me\n");
