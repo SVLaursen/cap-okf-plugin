@@ -86,8 +86,8 @@ test/
   - Test first: AdminService fixture renders the section; a grep test asserts no `@restrict` content outside the markers.
   - Maintainer decisions 2026-11-16: `@readonly`, `@insertonly` and `@Capabilities` count as authorization and go inside the section; a member of a service repeats the service's rules there, as inherited.
 - [x] **2.5 i18n.** Resolve `{i18n>key}` titles and descriptions in the default language; fall back to the key name.
-- [ ] **2.6 Include/exclude.** `include: "services"` (default) exports only definitions reachable from services; `"all"` exports everything; `@okf: false` excludes; `@okf.tags` adds tags.
-  - Note from 2.3: concepts link to model types (element, parameter and return types), association targets and projection sources. Reachability must follow these references, and a reference to an excluded definition must be written as a plain name, not a link that breaks (W4).
+- [x] **2.6 Include/exclude.** `include: "services"` (default) exports only definitions reachable from services; `"all"` exports everything; `@okf: false` excludes; `@okf.tags` adds tags.
+  - Maintainer decisions 2026-11-16: "reachable" means the services, their members and everything their concepts refer to (sources, association targets, element, parameter and return types), transitively. A concept never mentions a definition that isn't exported, as cap-mcp v2 and CAP do: associations and other references to it are left out, not written as names. `@okf: false` works on definitions, elements, parameters and bound actions.
 - [ ] **2.7 Exporter.** Orchestrates mappers, generates `index.md` files, injects `{ now, version }` into `generated`.
   - Note from 2.5: build the text lookup with `defaultLanguageTexts(cds, model)` from the model as `cds.load` returns it (it needs `$sources`). A model compiled from a string has `$sources: ['<stdin>.cds']`, so its `_i18n` folder is looked up relative to the working directory.
   - Test first: two runs with the same inputs produce byte-identical output.
