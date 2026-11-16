@@ -57,9 +57,20 @@ describe("texts from the fixture's _i18n folder", () => {
     });
   });
 
-  test("the default is the app's configured default language", () => {
-    expect(defaultLanguageTexts(cds, model)("Books")).toBe(
-      cds.i18n.bundle4(capModel).at("Books", cds.env.i18n.default_language),
-    );
+  test("the default is the app's configured default language, read when the texts are built", () => {
+    const configured = cds.env.i18n.default_language;
+    cds.env.i18n.default_language = "de";
+    try {
+      expect(defaultLanguageTexts(cds, model)("Books")).toBe("Bücher");
+    } finally {
+      cds.env.i18n.default_language = configured;
+    }
+  });
+
+  // Without $sources, CAP's bundle4 reads the global cds.model and cds.root instead, so the texts
+  // would depend on whatever app is loaded: a precondition, checked.
+  test("a model without $sources is refused, so texts never come from another app", () => {
+    const copied = JSON.parse(JSON.stringify(model)) as Csn;
+    expect(() => defaultLanguageTexts(cds, copied)).toThrow(/has no \$sources/);
   });
 });
