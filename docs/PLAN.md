@@ -89,6 +89,7 @@ test/
 - [ ] **2.6 Include/exclude.** `include: "services"` (default) exports only definitions reachable from services; `"all"` exports everything; `@okf: false` excludes; `@okf.tags` adds tags.
   - Note from 2.3: concepts link to model types (element, parameter and return types), association targets and projection sources. Reachability must follow these references, and a reference to an excluded definition must be written as a plain name, not a link that breaks (W4).
 - [ ] **2.7 Exporter.** Orchestrates mappers, generates `index.md` files, injects `{ now, version }` into `generated`.
+  - Note from 2.5: build the text lookup with `defaultLanguageTexts(cds, model)` from the model as `cds.load` returns it (it needs `$sources`). A model compiled from a string has `$sources: ['<stdin>.cds']`, so its `_i18n` folder is looked up relative to the working directory.
   - Test first: two runs with the same inputs produce byte-identical output.
 - [ ] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it.
 - [ ] **2.9 `cds build` task.** Writes `gen/okf` and, for staging builds with a `nodejs` task, the same files to `<nodejs dest>/okf-bundle/` (ADR-0007); runs validation; fails only on errors. In-place builds (`build.target: "."`) never touch `okf/`.
