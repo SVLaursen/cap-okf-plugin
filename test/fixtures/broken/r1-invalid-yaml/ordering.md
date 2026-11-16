@@ -1,0 +1,8 @@
+---
+type: Playbook
+title: Placing an order
+description: How a customer places an order in the demo shop.
+tags: [shop, orders
+---
+
+# Steps
