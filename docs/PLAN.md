@@ -7,36 +7,37 @@ Legend: `[ ]` open · `[x]` done (tick it in the same PR that completes the task
 ## Target layout
 
 ```
-cds-plugin.js                 # CAP plugin entry: registers compile target, build task, serving
-lib/
+cds-plugin.js                 # CAP plugin entry (stays JavaScript): hands `cds` to lib/index.js (compiled from src/)
+src/                          # TypeScript (ADR-0009); tsc compiles it to CommonJS in lib/
+  index.ts                    # plugin(cds): registers compile target, build task, serving
   core/
-    concept.js                # Concept model, parse/serialize frontmatter (pure)
-    validate.js               # Conformance rules + v0.2 field checks (pure)
-    links.js                  # Link extraction and resolution (pure)
-    index-md.js               # index.md generation (pure)
+    concept.ts                # Concept model, parse/serialize frontmatter (pure)
+    validate.ts               # Conformance rules + v0.2 field checks (pure)
+    links.ts                  # Link extraction and resolution (pure)
+    index-md.ts               # index.md generation (pure)
   export/
-    mappers/index.js          # Registry: CSN kind -> mapper
-    mappers/<kind>.js         # One file per kind
-    auth-section.js           # Authorization section rendering (ADR-0003)
-    exporter.js               # Walks CSN, uses registry, returns concepts
+    mappers/index.ts          # Registry: CSN kind -> mapper
+    mappers/<kind>.ts         # One file per kind
+    auth-section.ts           # Authorization section rendering (ADR-0003)
+    exporter.ts               # Walks CSN, uses registry, returns concepts
   bundle/
-    source.js                 # BundleSource interface + FileBundleSource
-    sink.js                   # BundleSink + FileBundleSink
-    model-source.js           # In-memory BundleSource generated from the model (ADR-0007)
-    merge.js                  # Merge generated + curated into one BundleSource
+    source.ts                 # BundleSource interface + FileBundleSource
+    sink.ts                   # BundleSink + FileBundleSink
+    model-source.ts           # In-memory BundleSource generated from the model (ADR-0007)
+    merge.ts                  # Merge generated + curated into one BundleSource
   build/
-    compile.js                # cds.compile.to.okf
-    build-task.js             # cds build task "okf"
-    messages.js               # Formatting of lint/validation messages
+    compile.ts                # cds.compile.to.okf
+    build-task.ts             # cds build task "okf"
+    messages.ts               # Formatting of lint/validation messages
   serve/
-    filter.js                 # Strips authorization section for unauthenticated users
-    static.js                 # Express route
-    mcp/index.js              # McpIntegration selector: config, detection (ADR-0004)
-    mcp/gavdi-cap-mcp.js      # @gavdi/cap-mcp: okf:// resources via mcp:resources (ADR-0006 A)
-    mcp/cap-js-mcp.js         # @cap-js/mcp: tools channel; resources once a hook exists
-    mcp/okf-service.js        # OkfService READ handler over BundleSource (ADR-0006 B)
+    filter.ts                 # Strips authorization section for unauthenticated users
+    static.ts                 # Express route
+    mcp/index.ts              # McpIntegration selector: config, detection (ADR-0004)
+    mcp/gavdi-cap-mcp.ts      # @gavdi/cap-mcp: okf:// resources via mcp:resources (ADR-0006 A)
+    mcp/cap-js-mcp.ts         # @cap-js/mcp: tools channel; resources once a hook exists
+    mcp/okf-service.ts        # OkfService READ handler over BundleSource (ADR-0006 B)
+  add/okf.ts                  # cds add okf
 srv/okf-service.cds           # OkfService model, added only when the tools channel is on
-  add/okf.js                  # cds add okf
 test/
   unit/  conformance/  golden/  integration/  contract/
   fixtures/bookshop/  fixtures/okf-spec/  fixtures/broken/
@@ -58,6 +59,8 @@ test/
 
 ## Phase 1 — OKF core → Gate G2
 
+- [x] **1.0 TypeScript migration (ADR-0009).** Move to TypeScript before the first core module: `src/` compiled by `tsc` to CommonJS `lib/`, tests in TypeScript via ts-jest, typescript-eslint, `npm run check` = typecheck + lint + test.
+  - Done when: every test from Phase 0 runs as TypeScript and passes; `npm pack` builds and ships `lib/`; the demo builds.
 - [ ] **1.1 Parse.** `parseConcept(path, text)` → `{ path, id, frontmatter, body }`. Splits `---` frontmatter, parses YAML.
   - Test first: valid file; no frontmatter; invalid YAML (error has line number); unknown keys kept; CRLF line endings; UTF-8 BOM.
 - [ ] **1.2 Serialize.** `serializeConcept(concept)` with stable key order (`type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then unknown keys in original order).
@@ -72,7 +75,7 @@ test/
   - Test first: in-memory fake and file implementation pass the same test suite.
 - [ ] **1.7 Conformance suite.** Every official sample bundle parses, validates with zero errors and round-trips byte-identically (or with only key-order differences, documented).
 
-**Gate G2:** conformance suite green; full branch coverage on `lib/core`; `lib/core` imports nothing but `yaml`.
+**Gate G2:** conformance suite green; full branch coverage on `src/core`; `src/core` imports nothing but `yaml`.
 
 ## Phase 2 — CDS exporter → Gate G3
 
@@ -105,17 +108,17 @@ test/
 
 ## Phase 4 — Serving → Gate G5 → release 0.2
 
-- [ ] **4.1 Contract suite.** `test/contract/server.contract.js` run against every channel (static route, MCP resources, MCP tools): lists concepts, reads a concept, not-found on unknown path, strips the auth section when unauthenticated, keeps it when authenticated, serves nothing when disabled. Every channel reads one merged `BundleSource`, picked at startup: the built `okf-bundle/` in a deployed app, otherwise generated in memory (ADR-0007).
-- [ ] **4.2 Auth filter.** `filter.js` removes marked sections; pure, unit tested.
+- [ ] **4.1 Contract suite.** `test/contract/server.contract.ts` run against every channel (static route, MCP resources, MCP tools): lists concepts, reads a concept, not-found on unknown path, strips the auth section when unauthenticated, keeps it when authenticated, serves nothing when disabled. Every channel reads one merged `BundleSource`, picked at startup: the built `okf-bundle/` in a deployed app, otherwise generated in memory (ADR-0007).
+- [ ] **4.2 Auth filter.** `filter.ts` removes marked sections; pure, unit tested.
 - [ ] **4.3 Static route (Node).** `cds.okf.serve.static: false | true | "/path"`, `text/markdown; charset=utf-8`, uses CAP's auth middleware to decide authentication. Not listed on the CAP index page (ADR-0005).
-- [ ] **4.4 MCP selector.** `lib/serve/mcp/index.js` reads `cds.okf.serve.mcp` (`false` | `true` | `{ plugin, as }`, ADR-0004) and picks an `McpIntegration`.
+- [ ] **4.4 MCP selector.** `src/serve/mcp/index.ts` reads `cds.okf.serve.mcp` (`false` | `true` | `{ plugin, as }`, ADR-0004) and picks an `McpIntegration`.
   - Test first, a table of cases: off → nothing, no warning; on + no MCP plugin → one warning; on + one plugin → that one; on + both + `auto` → error naming `plugin`; explicit plugin not installed → error; unknown `as` value → warning naming the allowed values. Detection alone never serves anything.
-- [ ] **4.5 Tools channel (both plugins).** `srv/okf-service.cds` + `lib/serve/mcp/okf-service.js` (ADR-0006 Contract B): read-only `Concepts` over the merged `BundleSource` (ADR-0007), auth filter on `body` per `req.user`, `$filter`/`$search` on `type`, `title`, `tags`. Model added only when `as` includes `tools` (mechanism from ADR-0005).
+- [ ] **4.5 Tools channel (both plugins).** `srv/okf-service.cds` + `src/serve/mcp/okf-service.ts` (ADR-0006 Contract B): read-only `Concepts` over the merged `BundleSource` (ADR-0007), auth filter on `body` per `req.user`, `$filter`/`$search` on `type`, `title`, `tags`. Model added only when `as` includes `tools` (mechanism from ADR-0005).
   - Test first: `cds.test` on the bookshop fixture without any MCP plugin (OData read proves the service), then the contract suite through each plugin (4.8).
-- [ ] **4.6 `@gavdi/cap-mcp` resources.** `lib/serve/mcp/gavdi-cap-mcp.js` listens for `mcp:resources` (ADR-0006 Contract A) and registers `okf://index.md` and `okf://<path>` per concept from the merged `BundleSource` (ADR-0007). If the event never comes (older version): one warning, and the tools channel if requested.
+- [ ] **4.6 `@gavdi/cap-mcp` resources.** `src/serve/mcp/gavdi-cap-mcp.ts` listens for `mcp:resources` (ADR-0006 Contract A) and registers `okf://index.md` and `okf://<path>` per concept from the merged `BundleSource` (ADR-0007). If the event never comes (older version): one warning, and the tools channel if requested.
   - Test first: unit test with a fake `cds` emitter and registry (duck-typed, no import of the plugin); then the contract suite against a fixture app using `@gavdi/cap-mcp` once Contract A ships there.
   - Blocked until the `@gavdi/cap-mcp` side of Contract A is released; until then, stop and record it under **Blocked** in `docs/progress.md`.
-- [ ] **4.7 `@cap-js/mcp`.** `lib/serve/mcp/cap-js-mcp.js`: tools channel only. `as: ["resources"]` gives one warning that this plugin has no resource hook (unless ADR-0006 gained a Contract C).
+- [ ] **4.7 `@cap-js/mcp`.** `src/serve/mcp/cap-js-mcp.ts`: tools channel only. `as: ["resources"]` gives one warning that this plugin has no resource hook (unless ADR-0006 gained a Contract C).
 - [ ] **4.8 Plugin fixture apps and CI.** `test/fixtures/app-gavdi-mcp` and `test/fixtures/app-cap-js-mcp` (the two plugins do not share one app); each runs the contract suite through a real MCP client; a CI job `integrations` runs both. Dev dependencies only.
 - [ ] **4.9 Java.** Static serving through a small Spring controller that applies the same filter rules; MCP per ADR-0006 (`cds-adapter-mcp`). Separate PRs.
 - [ ] **4.10 Config validation.** Unknown keys and wrong types under `cds.okf` produce a warning naming the key and the allowed values. Never write settings under `cds.mcp`.

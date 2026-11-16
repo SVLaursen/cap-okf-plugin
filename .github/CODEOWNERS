@@ -5,5 +5,5 @@
 /docs/adr/            @SVLaursen
 /.claude/             @SVLaursen
 /.github/             @SVLaursen
-/lib/core/            @SVLaursen
-/lib/serve/           @SVLaursen
+/src/core/            @SVLaursen
+/src/serve/           @SVLaursen

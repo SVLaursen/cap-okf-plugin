@@ -25,11 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm install --no-save @sap/cds@${{ matrix.cds }}
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm test -- --coverage
       - name: Build fixture bundle for reviewers
-        if: hashFiles('lib/build/compile.js') != ''
-        run: npx cds compile test/fixtures/bookshop --to okf -o bundle-preview
+        if: hashFiles('src/build/compile.ts') != ''
+        run: npm run build && npx cds compile test/fixtures/bookshop --to okf -o bundle-preview
       - uses: actions/upload-artifact@v4
         if: matrix.node == 24 && matrix.cds == 10 && hashFiles('bundle-preview/**') != ''
         with:

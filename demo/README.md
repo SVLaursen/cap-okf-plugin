@@ -18,7 +18,9 @@ npm run demo          # cds watch; OData at http://localhost:4004
 npm run demo:build    # cds build into demo/gen/
 ```
 
-Or inside `demo/`: `npx cds watch`, `npx cds build`, `npx cds env okf`.
+Both scripts compile cap-okf first (`npm run build`), because `cds-plugin.js` loads the compiled
+`lib/` (ADR-0009). Inside `demo/` (`npx cds watch`, `npx cds build`, `npx cds env okf`), run
+`npm run build` at the repo root first.
 
 The database is in-memory SQLite with no data rows: OKF describes the model, not its data.
 
