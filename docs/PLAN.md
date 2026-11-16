@@ -69,7 +69,7 @@ test/
   - Rules (errors): R1 non-reserved file has valid frontmatter; R2 non-empty `type`; R3 reserved files keep their structure.
   - Checks (warnings): recommended fields missing; v0.2 field shapes (`generated.at` ISO 8601, `stale_after` absolute instant, `status` in draft/stable/deprecated, `sources[].id` unique); deprecated v0.1 `timestamp` used.
   - Test first: one fixture per rule in `test/fixtures/broken/`, each producing exactly the expected finding.
-- [ ] **1.4 Links.** Extract Markdown links, resolve against bundle paths, report broken ones with a "did you mean" suggestion (closest path by edit distance).
+- [x] **1.4 Links.** Extract Markdown links, resolve against bundle paths, report broken ones with a "did you mean" suggestion (closest path by edit distance).
 - [ ] **1.5 index.md.** Generate `index.md` per folder: title, then a list of `[title](path) — description`. Deterministic order (by path).
 - [ ] **1.6 Bundle I/O.** `BundleSource { list(), read(path) }`, `FileBundleSource`, `BundleSink { write(concept) }`, `FileBundleSink`.
   - Test first: in-memory fake and file implementation pass the same test suite.
