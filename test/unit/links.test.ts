@@ -1,4 +1,5 @@
-import { closestPath, editDistance, extractLinks, resolveLink } from "../../src/core/links";
+import { extractLinks, resolveLink } from "../../src/core/links";
+import { closestPath, editDistance } from "../../src/core/suggest";
 
 // links.ts finds the links in a Markdown body and resolves them against bundle paths
 // (OKF v0.2 §6.1). It knows nothing about findings; validateBundle turns broken links into W4.
@@ -47,7 +48,9 @@ describe("extractLinks", () => {
       "[^policy]: Revenue Policy (FY2026)\n[^docs]: [GA4 docs](https://example.com/ga4)\n";
     expect(linksIn(body)).toEqual([["https://example.com/ga4", 2]]);
   });
+});
 
+describe("extractLinks CommonMark details", () => {
   test.each([
     ["a double-backtick span holding a backtick link", "`` `[b](y.md)` `` and [c](c.md)", ["c.md"]],
     ["a span closed by the same run only", "``a`b`` [c](c.md)", ["c.md"]],
@@ -62,8 +65,12 @@ describe("extractLinks", () => {
     const body = "Intro.\n\nSee [the\norders table](orders.md) and\n[users](\nusers.md).\n";
     expect(linksIn(body)).toEqual([
       ["orders.md", 3],
-      ["users.md", 4],
+      ["users.md", 5],
     ]);
+  });
+
+  test("a code block ends a paragraph too, so a link can't span it", () => {
+    expect(linksIn("[a\n```\ncode\n```\nb](b.md)")).toEqual([]);
   });
 
   test("a blank line ends a paragraph, so a link can't span it", () => {
@@ -153,8 +160,14 @@ describe("closestPath", () => {
     expect(closestPath("guides/retuns.md", PATHS)).toBe("guides/returns.md");
   });
 
-  test("on a tie, suggests the path that comes first in the (sorted) candidates", () => {
-    expect(closestPath("x/b.md", ["x/a.md", "x/c.md"])).toBe("x/a.md");
+  test("on a tie, suggests the path that sorts first, whatever order the paths come in", () => {
+    expect(closestPath("x/b.md", ["x/c.md", "x/a.md"])).toBe("x/a.md");
+  });
+
+  test("counts non-ASCII characters too", () => {
+    expect(closestPath("guides/bestilling.md", ["guides/bestillíng.md"])).toBe(
+      "guides/bestillíng.md",
+    );
   });
 
   test("suggests nothing when every path is too different", () => {

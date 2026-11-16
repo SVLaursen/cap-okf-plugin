@@ -7,8 +7,12 @@ export interface BodyLine {
   line: number;
 }
 
-// A code fence: ``` or ~~~ (three or more), indented up to three spaces.
-const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+// An opening code fence: ``` or ~~~ (three or more), indented up to three spaces. A ``` line
+// whose info string holds a backtick ("```npm test``` runs it") is inline code, not a fence.
+const OPENING_FENCE = /^ {0,3}(`{3,}(?!.*`)|~{3,})/;
+
+// A closing fence has nothing after it but spaces: "```js" inside a block does not close it.
+const CLOSING_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 
 /**
  * The lines of a body that are outside code blocks, with their file line numbers.
@@ -19,13 +23,12 @@ export function linesOutsideCode(body: string, firstLine: number): BodyLine[] {
   const result: BodyLine[] = [];
   let openFence: string | undefined;
   body.split("\n").forEach((text, index) => {
-    const fence = CODE_FENCE.exec(text)?.[1];
-    if (openFence === undefined && fence !== undefined) {
-      openFence = fence;
-    } else if (openFence !== undefined) {
-      if (fence !== undefined && closesFence(openFence, fence)) openFence = undefined;
+    if (openFence === undefined) {
+      openFence = OPENING_FENCE.exec(text)?.[1];
+      if (openFence === undefined) result.push({ text, line: firstLine + index });
     } else {
-      result.push({ text, line: firstLine + index });
+      const fence = CLOSING_FENCE.exec(text)?.[1];
+      if (fence !== undefined && closesFence(openFence, fence)) openFence = undefined;
     }
   });
   return result;
