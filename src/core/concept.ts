@@ -41,6 +41,21 @@ export class ConceptParseError extends Error {
   }
 }
 
+/** A path into frontmatter, e.g. ["sources", 1, "id"] for the id of the second source. */
+export type KeyPath = readonly (string | number)[];
+
+/** A parsed concept plus where its parts are in the file, so findings can name a line. */
+export interface LocatedConcept {
+  concept: Concept;
+  /** File line (counting from 1) where the body starts. */
+  bodyLine: number;
+  /**
+   * File line of the deepest part of `keyPath` that exists: the key itself, or its nearest
+   * parent when the key is missing. Line 1 when not even the first key exists.
+   */
+  lineOf(keyPath: KeyPath): number;
+}
+
 /**
  * Splits an OKF file into its parts.
  *
@@ -48,21 +63,25 @@ export class ConceptParseError extends Error {
  * before all other keys. Such keys don't keep their written order.
  */
 export function parseConcept(path: string, text: string): Concept {
+  return parseConceptLocated(path, text).concept;
+}
+
+/** Like parseConcept, but also tells where each part of the concept is in the file. */
+export function parseConceptLocated(path: string, text: string): LocatedConcept {
   const lines = normalize(text).split("\n");
   const id = conceptId(path);
   const closingLine = findClosingDelimiter(path, lines);
   if (closingLine === undefined) {
-    return { path, id, frontmatter: null, body: lines.join("\n") };
+    const concept = { path, id, frontmatter: null, body: lines.join("\n") };
+    return { concept, bodyLine: 1, lineOf: () => 1 };
   }
   // The trailing "\n" ends the last YAML line. Without it, a "|+" block value at the end would
   // lose one of the newlines it keeps.
   const yamlText = lines.slice(1, closingLine).join("\n") + "\n";
-  return {
-    path,
-    id,
-    frontmatter: parseFrontmatter(path, yamlText),
-    body: lines.slice(closingLine + 1).join("\n"),
-  };
+  const { frontmatter, lineOf } = parseFrontmatter(path, yamlText);
+  const body = lines.slice(closingLine + 1).join("\n");
+  // closingLine counts from 0, so the closing --- is on file line closingLine + 1.
+  return { concept: { path, id, frontmatter, body }, bodyLine: closingLine + 2, lineOf };
 }
 
 /**
@@ -175,7 +194,12 @@ function findClosingDelimiter(path: string, lines: string[]): number | undefined
   return closing;
 }
 
-function parseFrontmatter(path: string, yamlText: string): Frontmatter {
+interface ParsedFrontmatter {
+  frontmatter: Frontmatter;
+  lineOf(keyPath: KeyPath): number;
+}
+
+function parseFrontmatter(path: string, yamlText: string): ParsedFrontmatter {
   const lineCounter = new YAML.LineCounter();
   // logLevel 'error': yaml would otherwise print warnings (e.g. for an unknown !tag) to stderr,
   // and src/core must not have side effects. Such values are kept as plain strings.
@@ -190,8 +214,9 @@ function parseFrontmatter(path: string, yamlText: string): Frontmatter {
   if (firstError) throw yamlError(path, firstError, fileLine);
 
   const value: unknown = document.toJS();
+  const lineOf = (keyPath: KeyPath) => keyLine(document.contents, keyPath, fileLine);
   // An empty block (--- directly followed by ---) is valid and has no keys.
-  if (value === null) return {};
+  if (value === null) return { frontmatter: {}, lineOf };
   if (!isPlainObject(value)) {
     throw new ConceptParseError({
       file: path,
@@ -201,7 +226,42 @@ function parseFrontmatter(path: string, yamlText: string): Frontmatter {
       fix: 'Write the frontmatter as "key: value" lines, starting with "type: <Type name>"',
     });
   }
-  return value;
+  return { frontmatter: value, lineOf };
+}
+
+// Follows keyPath through the YAML nodes and keeps the line of the last step that exists.
+function keyLine(root: unknown, keyPath: KeyPath, fileLine: (offset: number) => number): number {
+  let node = root;
+  let line = 1;
+  for (const key of keyPath) {
+    const child = childNode(node, key);
+    if (child === undefined) break;
+    line = fileLine(child.offset);
+    node = child.node;
+  }
+  return line;
+}
+
+interface ChildNode {
+  node: unknown;
+  /** Where the child starts in the YAML text: at its key in a mapping, at the item in a list. */
+  offset: number;
+}
+
+function childNode(node: unknown, key: string | number): ChildNode | undefined {
+  if (YAML.isMap(node)) {
+    const pair = node.items.find(
+      (item): item is YAML.Pair<YAML.Scalar, unknown> =>
+        YAML.isScalar(item.key) && item.key.value === key,
+    );
+    // Nodes from parseDocument always have a range.
+    return pair && { node: pair.value, offset: pair.key.range![0] };
+  }
+  if (YAML.isSeq(node) && typeof key === "number") {
+    const item = node.items[key];
+    return YAML.isNode(item) ? { node: item, offset: item.range![0] } : undefined;
+  }
+  return undefined;
 }
 
 // Lists, plain values and special types such as !!binary are not frontmatter.

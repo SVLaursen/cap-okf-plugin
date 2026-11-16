@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import * as conceptModule from "../../src/core/concept";
 import { validateBundle, type BundleFile, type Finding } from "../../src/core/validate";
 
 // validateBundle checks a bundle against OKF v0.2 §11 (errors R1–R3) and the shapes §5 asks
@@ -161,7 +162,9 @@ describe("validateBundle broken fixtures", () => {
 
   test.each(Object.entries(BROKEN_CASES))("%s gives exactly its finding", (folder, expected) => {
     const findings = validateBundle(readBundle(path.join(BROKEN_DIR, folder)));
-    expect(findings).toEqual([{ ...expected, message: expect.stringMatching(expected.message) }]);
+    expect(findings).toEqual([
+      { ...expected, message: expect.stringMatching(expected.message), fix: expect.any(String) },
+    ]);
   });
 
   test("every finding says how to fix it", () => {
@@ -212,25 +215,42 @@ describe("validateBundle valid bundles", () => {
   });
 });
 
-describe("validateBundle details", () => {
+describe("validateBundle general behaviour", () => {
   test("findings are sorted by file, then line", () => {
     const findings = validateBundle([
       file("b.md", "---\ntype: X\n---\n"),
       file("a.md", "---\ntitle: t\ndescription: d\nstatus: odd\n---\n"),
+      file("c.md", "# no frontmatter\n"),
     ]);
     expect(findings.map(({ file, line, rule }) => [file, line, rule])).toEqual([
       ["a.md", 1, "R2"],
       ["a.md", 4, "W2"],
       ["b.md", 1, "W1"],
       ["b.md", 1, "W1"],
+      ["c.md", 1, "R1"],
     ]);
   });
 
   test("a type that is not a string is an R2 error", () => {
-    const findings = validateBundle([file("a.md", "---\ntype: [X]\ntitle: t\ndescription: d\n---\n")]);
+    const findings = validateBundle([
+      file("a.md", "---\ntype: [X]\ntitle: t\ndescription: d\n---\n"),
+    ]);
     expect(findings).toMatchObject([{ rule: "R2", line: 2, message: /must be a string/ }]);
   });
 
+  test("an error other than a parse error is not swallowed", () => {
+    const spy = jest.spyOn(conceptModule, "parseConceptLocated").mockImplementation(() => {
+      throw new TypeError("unexpected");
+    });
+    try {
+      expect(() => validateBundle([file("a.md", "")])).toThrow(TypeError);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("validateBundle reserved files", () => {
   test("index.md and log.md may lack frontmatter, at any level", () => {
     const findings = validateBundle([
       file("index.md", "# Guides\n"),
@@ -259,13 +279,20 @@ describe("validateBundle details", () => {
     expect(validateBundle([file("log.md", log)])).toMatchObject([{ rule: "R3", line: 4 }]);
   });
 
-  test("29 February is a valid log date only in a leap year", () => {
-    const leap = validateBundle([file("log.md", "## 2028-02-29\n")]);
-    const notLeap = validateBundle([file("log.md", "## 2027-02-29\n")]);
-    expect(leap).toEqual([]);
-    expect(notLeap).toMatchObject([{ rule: "R3", line: 1 }]);
+  test.each([
+    ["2028-02-29", true],
+    ["2000-02-29", true],
+    ["2027-02-29", false],
+    ["2100-02-29", false],
+    ["2026-11-00", false],
+    ["2026-11-31", false],
+  ])("log date %s is valid: %s", (date, valid) => {
+    const findings = validateBundle([file("log.md", `## ${date}\n`)]);
+    expect(findings).toHaveLength(valid ? 0 : 1);
   });
+});
 
+describe("validateBundle field shapes", () => {
   test.each([
     ["a date without time", "2026-11-13"],
     ["an hour of 24", "2026-11-13T24:00:00Z"],

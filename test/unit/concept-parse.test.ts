@@ -1,4 +1,9 @@
-import { ConceptParseError, parseConcept, type Frontmatter } from "../../src/core/concept";
+import {
+  ConceptParseError,
+  parseConcept,
+  parseConceptLocated,
+  type Frontmatter,
+} from "../../src/core/concept";
 
 // parseConcept is the entry point for every OKF file cap-okf reads: curated concepts,
 // the official sample bundles and, later, its own generated output.
@@ -157,5 +162,52 @@ describe("parseConcept errors", () => {
   test("line numbers stay right with CRLF and a byte order mark", () => {
     const text = BOM + "---\r\ntype: X\r\ntags: [a,\r\n---\r\n";
     expect(parseError("a.md", text)).toMatchObject({ line: 3 });
+  });
+});
+
+describe("parseConceptLocated", () => {
+  const TEXT = [
+    "---", // 1
+    "type: X", // 2
+    "generated:", // 3
+    "  by: human:a", // 4
+    "sources:", // 5
+    "  - id: a", // 6
+    "    resource: r", // 7
+    "---", // 8
+    "# Body", // 9
+  ].join("\n");
+
+  test("gives the same concept as parseConcept", () => {
+    expect(parseConceptLocated("a.md", TEXT).concept).toEqual(parseConcept("a.md", TEXT));
+  });
+
+  test("the body starts on the line after the closing ---", () => {
+    expect(parseConceptLocated("a.md", TEXT).bodyLine).toBe(9);
+  });
+
+  test.each([
+    ["a top-level key", ["type"], 2],
+    ["a nested key", ["generated", "by"], 4],
+    ["a list item", ["sources", 0], 6],
+    ["a key inside a list item", ["sources", 0, "resource"], 7],
+    ["a missing nested key, at its parent", ["generated", "at"], 3],
+    ["a missing list item, at its list", ["sources", 5, "id"], 5],
+    ["a number used on a mapping, at the mapping", ["generated", 0], 3],
+    ["a missing first key, on line 1", ["title"], 1],
+  ])("lineOf finds %s", (_label, keyPath, line) => {
+    expect(parseConceptLocated("a.md", TEXT).lineOf(keyPath)).toBe(line);
+  });
+
+  test("an empty frontmatter block has its body after the two delimiters", () => {
+    const located = parseConceptLocated("a.md", "---\n---\n# Body\n");
+    expect(located.bodyLine).toBe(3);
+    expect(located.lineOf(["type"])).toBe(1);
+  });
+
+  test("a file without frontmatter starts its body on line 1", () => {
+    const located = parseConceptLocated("index.md", "# Guides\n");
+    expect(located.bodyLine).toBe(1);
+    expect(located.lineOf(["type"])).toBe(1);
   });
 });
