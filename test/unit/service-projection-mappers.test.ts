@@ -167,7 +167,9 @@ describe("projection mapper", () => {
       ].join("\n"),
     );
   });
+});
 
+describe("projection mapper, views and missing sources", () => {
   test("a view on one entity says so", () => {
     expect(map("CatalogService.TopBooks").body).toContain(
       "\n# TopBooks\n\nView on [Books](/model/shop/Books.md)\n",
@@ -180,5 +182,24 @@ describe("projection mapper", () => {
 
   test("shows no authorization detail, @readonly included (ADR-0003, task 2.4)", () => {
     expect(serializeConcept(map("CatalogService.Books"))).not.toMatch(/restrict|readonly|shopper/i);
+  });
+
+  test("a source outside the model is still linked, by its short name", () => {
+    const outside: Csn = {
+      definitions: {
+        "S.Things": {
+          kind: "entity",
+          projection: { from: { ref: ["other.Thing"] } },
+          elements: {},
+        },
+      },
+    };
+    const concept = projectionMapper.map(
+      "S.Things",
+      outside.definitions["S.Things"]!,
+      defaultMapperContext(outside),
+    );
+    expect(concept.body).toBe("\n# Things\n\nProjection on [Thing](/model/other/Thing.md)\n");
+    expect(concept.frontmatter?.["description"]).toBeUndefined();
   });
 });

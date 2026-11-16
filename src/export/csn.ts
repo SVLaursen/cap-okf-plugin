@@ -10,17 +10,27 @@ export interface Csn {
 /** One definition, e.g. an entity, service, type or action. */
 export interface CsnDefinition {
   kind?: string;
+  /** For type definitions: the type they are based on. */
+  type?: string | { ref: string[] };
   /** The /** doc comment *\/, when the model was loaded with { docs: true }. */
   doc?: string;
   /** Aspects and entities it includes, e.g. ["cuid", "managed"]. */
   includes?: string[];
   elements?: Record<string, CsnElement>;
-  /** Set on projections ("as projection on …"). */
-  projection?: unknown;
-  /** Set on views ("as select from …"). */
-  query?: unknown;
+  /** Set on projections ("as projection on …"); from.ref[0] names the source. */
+  projection?: { from?: CsnSource };
+  /** Set on views ("as select from …"); SELECT.from.ref[0] names the source, unless it's a join. */
+  query?: { SELECT?: { from?: CsnSource } };
   /** Annotations, e.g. "@title". */
   [annotation: `@${string}`]: unknown;
+}
+
+/** Where a projection or view selects from: a reference to one definition, or a join. */
+export interface CsnSource {
+  ref?: unknown[];
+  /** For a join: the kind of join and the sources it joins. */
+  join?: string;
+  args?: unknown[];
 }
 
 /** One element of an entity, type or aspect. */

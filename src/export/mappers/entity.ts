@@ -1,37 +1,48 @@
 // Entities: one concept per entity, with its elements and its associations as links.
 // Authorization annotations are left out on purpose: they only go into the marked section that
 // task 2.4 adds (ADR-0003). Every text from the model is escaped before it goes into Markdown.
-import { conceptId } from "../../core/concept";
+import type { Concept } from "../../core/concept";
 import { escapeHtml, escapeLinkText, inlineCode, oneLine, tableCell } from "../../core/markdown";
 import type { CsnDefinition, CsnElement } from "../csn";
-import { conceptLinkFor, conceptPathFor } from "../paths";
+import { conceptLinkFor } from "../paths";
 import type { Mapper, MapperContext } from "./context";
-import { baseFrontmatter, shortName, titleOf } from "./shared";
+import { baseFrontmatter, generatedConcept, shortName, titleOf } from "./shared";
 
 export const entityMapper: Mapper = {
   kind: "entity",
-  map(name, definition, context) {
-    const path = conceptPathFor(name);
-    const sections = [
-      `# ${escapeHtml(titleOf(name, definition, context))}`,
-      ...docSection(definition),
-      ...includesSection(definition),
-      ...elementsSection(definition),
-      ...associationsSection(definition, context),
-    ];
-    return {
-      path,
-      id: conceptId(path),
-      frontmatter: baseFrontmatter(name, definition, context, "Entity"),
-      // A blank line between the frontmatter and the first heading, and one newline at the end.
-      body: `\n${sections.join("\n\n")}\n`,
-    };
-  },
+  map: (name, definition, context) => entityConcept(name, definition, context),
 };
 
+/** What a projection adds to an entity concept. */
+export interface EntityExtras {
+  /** Lines right under the heading, e.g. "Projection on [Books](…)". */
+  lead: string[];
+  /** Where the doc comment and description come from when the definition has none. */
+  fallback: CsnDefinition;
+}
+
+/** An entity concept: also the base of projections and views. */
+export function entityConcept(
+  name: string,
+  definition: CsnDefinition,
+  context: MapperContext,
+  extras: EntityExtras = { lead: [], fallback: definition },
+): Concept {
+  const sections = [
+    `# ${escapeHtml(titleOf(name, definition, context))}`,
+    ...extras.lead,
+    ...docSection(definition.doc ?? extras.fallback.doc),
+    ...includesSection(definition),
+    ...elementsSection(definition),
+    ...associationsSection(definition, context),
+  ];
+  const frontmatter = baseFrontmatter(name, definition, context, "Entity", extras.fallback);
+  return generatedConcept(name, frontmatter, sections);
+}
+
 // The doc comment keeps its own lines and Markdown, but no HTML (see escapeHtml).
-function docSection(definition: CsnDefinition): string[] {
-  return definition.doc === undefined ? [] : [escapeHtml(definition.doc)];
+function docSection(doc: string | undefined): string[] {
+  return doc === undefined ? [] : [escapeHtml(doc)];
 }
 
 function includesSection(definition: CsnDefinition): string[] {

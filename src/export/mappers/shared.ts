@@ -1,7 +1,8 @@
 // Frontmatter and text helpers that every mapper uses, so all concepts look alike.
-import type { Frontmatter } from "../../core/concept";
+import { conceptId, type Concept, type Frontmatter } from "../../core/concept";
 import { oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
+import { conceptPathFor } from "../paths";
 import type { MapperContext } from "./context";
 
 /** The last segment of a fully qualified name: "sample.bookshop.Books" → "Books". */
@@ -42,14 +43,18 @@ function firstSentence(text: string): string {
   return end === -1 ? line : line.slice(0, end + 1);
 }
 
-/** The frontmatter every generated concept starts with (spec §4.1). */
+/**
+ * The frontmatter every generated concept starts with (spec §4.1). Without a description of its
+ * own, the definition takes `fallback`'s, e.g. a projection its source's.
+ */
 export function baseFrontmatter(
   name: string,
   definition: CsnDefinition,
   context: MapperContext,
   type: string,
+  fallback: CsnDefinition = definition,
 ): Frontmatter {
-  const description = descriptionOf(definition, context);
+  const description = descriptionOf(definition, context) ?? descriptionOf(fallback, context);
   const namespace = namespaceOf(name);
   return {
     type,
@@ -57,5 +62,21 @@ export function baseFrontmatter(
     ...(description === undefined ? {} : { description }),
     resource: `cds:${name}`,
     tags: ["cds", type.toLowerCase(), ...(namespace === undefined ? [] : [namespace])],
+  };
+}
+
+/** A generated concept for `name`, with its body made of Markdown sections. */
+export function generatedConcept(
+  name: string,
+  frontmatter: Frontmatter,
+  sections: string[],
+): Concept {
+  const path = conceptPathFor(name);
+  return {
+    path,
+    id: conceptId(path),
+    frontmatter,
+    // A blank line between the frontmatter and the first section, and one newline at the end.
+    body: `\n${sections.join("\n\n")}\n`,
   };
 }
