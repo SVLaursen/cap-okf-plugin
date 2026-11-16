@@ -2,41 +2,37 @@
 // Authorization annotations are left out on purpose: they only go into the marked section that
 // task 2.4 adds (ADR-0003). Every text from the model is escaped before it goes into Markdown.
 import type { Concept } from "../../core/concept";
-import { escapeHtml, escapeLinkText, inlineCode, oneLine, tableCell } from "../../core/markdown";
+import { escapeHtml, inlineCode, oneLine, tableCell } from "../../core/markdown";
 import type { CsnDefinition, CsnElement } from "../csn";
-import { conceptLinkFor } from "../paths";
 import type { Mapper, MapperContext } from "./context";
-import { baseFrontmatter, generatedConcept, shortName, titleOf } from "./shared";
+import { baseFrontmatter, generatedConcept, inheritedDoc, linkTo, titleOf } from "./shared";
 
 export const entityMapper: Mapper = {
   kind: "entity",
   map: (name, definition, context) => entityConcept(name, definition, context),
 };
 
-/** What a projection adds to an entity concept. */
-export interface EntityExtras {
-  /** Lines right under the heading, e.g. "Projection on [Books](…)". */
-  lead: string[];
-  /** Where the doc comment and description come from when the definition has none. */
-  fallback: CsnDefinition;
-}
-
-/** An entity concept: also the base of projections and views. */
+/**
+ * An entity concept: also the base of projections and views, which add `lead` lines under the
+ * heading (e.g. "Projection on [Books](…)"). Doc comment and description each come from the
+ * nearest definition down the source chain that has one, so a projection with its own
+ * @description can still show its source's doc comment.
+ */
 export function entityConcept(
   name: string,
   definition: CsnDefinition,
   context: MapperContext,
-  extras: EntityExtras = { lead: [], fallback: definition },
+  lead: string[] = [],
 ): Concept {
   const sections = [
     `# ${escapeHtml(titleOf(name, definition, context))}`,
-    ...extras.lead,
-    ...docSection(definition.doc ?? extras.fallback.doc),
+    ...lead,
+    ...docSection(inheritedDoc(definition, context)),
     ...includesSection(definition),
     ...elementsSection(definition),
     ...associationsSection(definition, context),
   ];
-  const frontmatter = baseFrontmatter(name, definition, context, "Entity", extras.fallback);
+  const frontmatter = baseFrontmatter(name, definition, context, "Entity");
   return generatedConcept(name, frontmatter, sections);
 }
 
@@ -79,10 +75,7 @@ function isAssociation(element: CsnElement): boolean {
 
 // "- `author` → [Authors](/model/sample/bookshop/Authors.md) (to one)"
 function associationLine(name: string, element: CsnElement, context: MapperContext): string {
-  const target = element.target!;
-  const targetDefinition = context.model.definitions[target];
-  const title = targetDefinition ? titleOf(target, targetDefinition, context) : shortName(target);
-  const link = `[${escapeLinkText(escapeHtml(title))}](${conceptLinkFor(target)})`;
+  const link = linkTo(element.target!, context);
   const details = [
     // A key association is part of the primary key, e.g. up_ in a "Composition of many { … }".
     ...(element.key ? ["key"] : []),

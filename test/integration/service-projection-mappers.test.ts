@@ -78,40 +78,39 @@ describe("services and projections of the bookshop fixture", () => {
 });
 
 // Shapes the bookshop doesn't have, compiled by CAP so the CSN is real.
-describe("services and projections on real CSN shapes", () => {
-  const SHAPES = `
-    namespace db;
-    /** A book. Sold by the piece. */
-    entity Books { key ID : Integer; stock : Integer; author : Association to Authors; }
-    /** A person who writes. */
-    entity Authors { key ID : Integer; name : String; }
-    service S {
-      entity Books as projection on db.Books;
-      entity ProjOnProj as projection on Books;
-      entity AuthorOf as projection on db.Books:author;
-      entity InStock as projection on db.Books[stock > 0];
-      entity ![Dotted.Name] as projection on db.Authors;
-      entity Joined as select from db.Books join db.Authors on Books.author.ID = Authors.ID { Books.ID };
-      entity Both as select from db.Books { ID } union select from db.Authors { ID };
-      event BookEvt : projection on db.Books { ID };
-      type BookType : projection on db.Books { ID };
-    }
-  `;
-  let shapes: Csn;
-
-  beforeAll(() => {
-    shapes = cds.compile(SHAPES) as unknown as Csn;
-  });
-
-  function mapShape(name: string): Concept {
-    const definition = shapes.definitions[name]!;
-    return mapperFor(registryKeyOf(definition))!.map(
-      name,
-      definition,
-      defaultMapperContext(shapes),
-    );
+const SHAPES = `
+  namespace db;
+  /** A book. Sold by the piece. */
+  entity Books { key ID : Integer; stock : Integer; author : Association to Authors; }
+  /** A person who writes. */
+  entity Authors { key ID : Integer; name : String; }
+  service S {
+    entity Books as projection on db.Books;
+    entity ProjOnProj as projection on Books;
+    entity AuthorOf as projection on db.Books:author;
+    entity InStock as projection on db.Books[stock > 0];
+    entity ![Dotted.Name] as projection on db.Authors;
+    entity Joined as select from db.Books join db.Authors on Books.author.ID = Authors.ID { Books.ID };
+    entity Both as select from db.Books { ID } union select from db.Authors { ID };
+    event BookEvt : projection on db.Books { ID };
+    type BookType : projection on db.Books { ID };
   }
+`;
+let shapes: Csn;
 
+beforeAll(() => {
+  // CAP's docs document cds.compile(model, { docs: true }), but its TypeScript types take only
+  // the model; the cast passes the option that keeps doc comments.
+  const compile = cds.compile as unknown as (model: string, options: { docs: boolean }) => unknown;
+  shapes = compile(SHAPES, { docs: true }) as Csn;
+});
+
+function mapShape(name: string): Concept {
+  const definition = shapes.definitions[name]!;
+  return mapperFor(registryKeyOf(definition))!.map(name, definition, defaultMapperContext(shapes));
+}
+
+describe("services and projections on real CSN shapes", () => {
   test("only entities can be projections: an event or type built as one keeps its kind", () => {
     expect(registryKeyOf(shapes.definitions["db.S.BookEvt"]!)).toBe("event");
     expect(registryKeyOf(shapes.definitions["db.S.BookType"]!)).toBe("type");
@@ -136,7 +135,9 @@ describe("services and projections on real CSN shapes", () => {
     );
     expect(projOnProj.frontmatter?.["description"]).toBe("A book.");
   });
+});
 
+describe("services and projections on real CSN shapes, views and members", () => {
   test("a view on a join or a union has no single source", () => {
     expect(mapShape("db.S.Joined").body).toContain("\n# Joined\n\nView\n");
     expect(mapShape("db.S.Both").body).toContain("\n# Both\n\nView\n");

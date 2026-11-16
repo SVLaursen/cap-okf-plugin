@@ -1,9 +1,10 @@
 // Frontmatter and text helpers that every mapper uses, so all concepts look alike.
 import { conceptId, type Concept, type Frontmatter } from "../../core/concept";
-import { oneLine } from "../../core/markdown";
+import { escapeHtml, escapeLinkText, oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
-import { conceptPathFor } from "../paths";
+import { conceptLinkFor, conceptPathFor } from "../paths";
 import type { MapperContext } from "./context";
+import { sourceChain } from "./sources";
 
 /** The last segment of a fully qualified name: "sample.bookshop.Books" → "Books". */
 export function shortName(name: string): string {
@@ -44,17 +45,43 @@ function firstSentence(text: string): string {
 }
 
 /**
- * The frontmatter every generated concept starts with (spec §4.1). Without a description of its
- * own, the definition takes `fallback`'s, e.g. a projection its source's.
+ * The definition's description, else that of the first definition down its source chain that has
+ * one: a projection on a projection on Books gets Books' description.
  */
+export function inheritedDescription(
+  definition: CsnDefinition,
+  context: MapperContext,
+): string | undefined {
+  for (const each of sourceChain(definition, context.model)) {
+    const description = descriptionOf(each, context);
+    if (description !== undefined) return description;
+  }
+  return undefined;
+}
+
+/** The definition's doc comment, else the first one down its source chain. */
+export function inheritedDoc(
+  definition: CsnDefinition,
+  context: MapperContext,
+): string | undefined {
+  return sourceChain(definition, context.model).find((each) => each.doc !== undefined)?.doc;
+}
+
+/** A Markdown link to a definition's concept, with its title as the text. */
+export function linkTo(name: string, context: MapperContext): string {
+  const definition = context.model.definitions[name];
+  const title = definition ? titleOf(name, definition, context) : shortName(name);
+  return `[${escapeLinkText(escapeHtml(title))}](${conceptLinkFor(name)})`;
+}
+
+/** The frontmatter every generated concept starts with (spec §4.1). */
 export function baseFrontmatter(
   name: string,
   definition: CsnDefinition,
   context: MapperContext,
   type: string,
-  fallback: CsnDefinition = definition,
 ): Frontmatter {
-  const description = descriptionOf(definition, context) ?? descriptionOf(fallback, context);
+  const description = inheritedDescription(definition, context);
   const namespace = namespaceOf(name);
   return {
     type,

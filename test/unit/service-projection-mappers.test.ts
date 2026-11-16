@@ -207,4 +207,24 @@ describe("projection mapper, views and missing sources", () => {
     expect(concept.body).toBe("\n# Things\n\nProjection on `other.Thing`\n");
     expect(concept.frontmatter?.["description"]).toBeUndefined();
   });
+
+  // Compiled CSN only has paths along associations; any other path has no single source.
+  test("a path that can't be followed has no source, rather than a wrong one", () => {
+    const model: Csn = {
+      definitions: {
+        "db.Books": { kind: "entity", elements: { title: { type: "cds.String" } } },
+        "S.Titles": {
+          kind: "entity",
+          projection: { from: { ref: ["db.Books", "title", "deeper"] } },
+          elements: {},
+        },
+      },
+    };
+    const concept = projectionMapper.map(
+      "S.Titles",
+      model.definitions["S.Titles"]!,
+      defaultMapperContext(model),
+    );
+    expect(concept.body).toBe("\n# Titles\n\nProjection\n");
+  });
 });

@@ -1,22 +1,19 @@
 // Services: one concept per service, listing what it exposes as links. Its @requires is left out
 // on purpose (ADR-0003); task 2.4 adds it inside the marked authorization section.
-import { escapeHtml, escapeLinkText, inlineCode, oneLine } from "../../core/markdown";
+import { escapeHtml, inlineCode, oneLine } from "../../core/markdown";
 import type { CsnDefinition } from "../csn";
-import { conceptLinkFor } from "../paths";
 import type { Mapper, MapperContext } from "./context";
-import { descriptionOrSources } from "./projection";
-import { registryKeyOf } from "./registry-key";
-import { baseFrontmatter, generatedConcept, titleOf } from "./shared";
+import { baseFrontmatter, generatedConcept, inheritedDescription, linkTo, titleOf } from "./shared";
 
 /**
- * The sections a service lists its members in, by registry key, in this order. A lookup table,
- * so adding a kind adds a row, never a branch.
+ * The sections a service lists its members in, by CSN kind, in this order. A lookup table, so
+ * adding a kind adds a row, never a branch. (Projections and views are kind "entity" in CSN.)
  */
-const SECTIONS: readonly { heading: string; keys: readonly string[] }[] = [
-  { heading: "Entities", keys: ["entity", "projection"] },
-  { heading: "Actions", keys: ["action"] },
-  { heading: "Functions", keys: ["function"] },
-  { heading: "Events", keys: ["event"] },
+const SECTIONS: readonly { heading: string; kind: string }[] = [
+  { heading: "Entities", kind: "entity" },
+  { heading: "Actions", kind: "action" },
+  { heading: "Functions", kind: "function" },
+  { heading: "Events", kind: "event" },
 ];
 
 export const serviceMapper: Mapper = {
@@ -27,10 +24,10 @@ export const serviceMapper: Mapper = {
       `# ${escapeHtml(titleOf(name, definition, context))}`,
       ...(definition.doc === undefined ? [] : [escapeHtml(definition.doc)]),
       ...pathSection(definition),
-      ...SECTIONS.flatMap(({ heading, keys }) =>
+      ...SECTIONS.flatMap(({ heading, kind }) =>
         listSection(
           heading,
-          members.filter((member) => keys.includes(member.key)),
+          members.filter((member) => member.definition.kind === kind),
           context,
         ),
       ),
@@ -42,17 +39,26 @@ export const serviceMapper: Mapper = {
 interface Member {
   name: string;
   definition: CsnDefinition;
-  /** The registry key, e.g. "entity" or "projection". */
-  key: string;
 }
 
-// The service's own definitions: "CatalogService.Books", but not "CatalogService.Books.texts",
-// which belongs to Books. In the order they are declared.
+/**
+ * The service's own definitions, in the order they are declared. A definition inside another
+ * one, such as "S.Books.texts" inside "S.Books", belongs to that one and is reached through its
+ * associations; a dotted name such as "S.Dotted.Name" with no "S.Dotted" is the service's own.
+ */
 function membersOf(service: string, context: MapperContext): Member[] {
   const prefix = `${service}.`;
   return Object.entries(context.model.definitions)
-    .filter(([name]) => name.startsWith(prefix) && !name.slice(prefix.length).includes("."))
-    .map(([name, definition]) => ({ name, definition, key: registryKeyOf(definition) }));
+    .filter(([name]) => name.startsWith(prefix) && !isInsideAnother(prefix, name, context))
+    .map(([name, definition]) => ({ name, definition }));
+}
+
+// "S.Books.texts" with prefix "S.": is "S.Books" a definition?
+function isInsideAnother(prefix: string, name: string, context: MapperContext): boolean {
+  const segments = name.slice(prefix.length).split(".");
+  return segments
+    .slice(0, -1)
+    .some((_, index) => context.model.definitions[prefix + segments.slice(0, index + 1).join(".")]);
 }
 
 // "Path: `/catalog`": where the service is served, when the model says so.
@@ -65,9 +71,8 @@ function pathSection(definition: CsnDefinition): string[] {
 function listSection(heading: string, members: Member[], context: MapperContext): string[] {
   if (members.length === 0) return [];
   const lines = members.map(({ name, definition }) => {
-    const title = escapeLinkText(escapeHtml(titleOf(name, definition, context)));
-    const description = descriptionOrSources(definition, context);
-    const link = `- [${title}](${conceptLinkFor(name)})`;
+    const description = inheritedDescription(definition, context);
+    const link = `- ${linkTo(name, context)}`;
     return description === undefined ? link : `${link} - ${escapeHtml(description)}`;
   });
   return [[`## ${heading}`, "", ...lines].join("\n")];

@@ -27,6 +27,7 @@ export interface CsnDefinition {
 
 /** Where a projection or view selects from: a reference to one definition, or a join. */
 export interface CsnSource {
+  /** Names: "db.Books", or { id: "db.Books", where: … } with a filter; more for a path. */
   ref?: unknown[];
   /** For a join: the kind of join and the sources it joins. */
   join?: string;
