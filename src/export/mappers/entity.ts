@@ -13,15 +13,16 @@ export const entityMapper: Mapper = {
 };
 
 /**
- * An entity concept: also the base of projections and views, which add `lead` lines under the
- * heading (e.g. "Projection on [Books](…)"). Doc comment and description each come from the
- * nearest definition down the source chain that has one, so a projection with its own
- * @description can still show its source's doc comment.
+ * An entity concept: also the base of projections and views, which pass their own OKF `type`
+ * and `lead` lines under the heading (e.g. "Projection on [Books](…)"). Doc comment and
+ * description each come from the nearest definition down the source chain that has one, so a
+ * projection with its own @description can still show its source's doc comment.
  */
 export function entityConcept(
   name: string,
   definition: CsnDefinition,
   context: MapperContext,
+  type = "Entity",
   lead: string[] = [],
 ): Concept {
   const sections = [
@@ -32,7 +33,7 @@ export function entityConcept(
     ...elementsSection(definition),
     ...associationsSection(definition, context),
   ];
-  const frontmatter = baseFrontmatter(name, definition, context, "Entity");
+  const frontmatter = baseFrontmatter(name, definition, context, type);
   return generatedConcept(name, frontmatter, sections);
 }
 

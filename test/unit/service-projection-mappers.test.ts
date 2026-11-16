@@ -198,6 +198,9 @@ describe("projection mapper, views and missing sources", () => {
   });
 
   // CAP never compiles such a model, but a link to a missing concept would only be a broken link.
+});
+
+describe("projection mapper, missing sources", () => {
   test("a source outside the model is named, but not linked", () => {
     const outside: Csn = {
       definitions: {
