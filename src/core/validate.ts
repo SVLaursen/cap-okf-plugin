@@ -6,6 +6,7 @@ import {
   type LocatedConcept,
 } from "./concept";
 import { findingAtKey, findingOnLine, type Finding } from "./finding";
+import { bundlePathsOf, checkLinks, type BundlePaths } from "./validate-links";
 import { checkIndexFile, checkLogFile } from "./validate-reserved";
 import { checkFieldShapes } from "./validate-shapes";
 import { isNonEmptyString } from "./values";
@@ -27,16 +28,18 @@ const RECOMMENDED_KEYS = ["title", "description"];
 const RESERVED_FILE_NAMES = ["index.md", "log.md"];
 
 /**
- * Checks every file of a bundle. Rules R1–R3 are errors, W1–W3 warnings (see Rule).
+ * Checks every file of a bundle. Rules R1–R3 are errors, W1–W4 warnings (see Rule).
  * Findings are sorted by file, then line, so the result is the same for any input order.
  */
 export function validateBundle(files: readonly BundleFile[]): Finding[] {
   // §11 covers only .md files; anything else in a bundle is a reference or an attachment.
+  // Links may point at any file, so all paths count, not only the Markdown ones.
+  const bundle = bundlePathsOf(files.map((file) => file.path));
   const markdownFiles = files.filter((file) => file.path.endsWith(".md"));
-  return markdownFiles.flatMap(validateFile).sort(byFileThenLine);
+  return markdownFiles.flatMap((file) => validateFile(file, bundle)).sort(byFileThenLine);
 }
 
-function validateFile(file: BundleFile): Finding[] {
+function validateFile(file: BundleFile, bundle: BundlePaths): Finding[] {
   const name = fileName(file.path);
   let located: LocatedConcept;
   try {
@@ -46,6 +49,10 @@ function validateFile(file: BundleFile): Finding[] {
     if (error instanceof ConceptParseError) return [findingFromParseError(error, name)];
     throw error;
   }
+  return [...checkByFileKind(located, name), ...checkLinks(located, bundle)];
+}
+
+function checkByFileKind(located: LocatedConcept, name: string): Finding[] {
   if (name === "index.md") return checkIndexFile(located);
   if (name === "log.md") return checkLogFile(located);
   return checkConceptFile(located);

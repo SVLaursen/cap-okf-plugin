@@ -10,11 +10,14 @@ const FIXTURES_DIR = path.join(__dirname, "..", "fixtures");
 const BROKEN_DIR = path.join(FIXTURES_DIR, "broken");
 const SAMPLES_DIR = path.join(FIXTURES_DIR, "okf-spec", "bundles");
 
-/** All Markdown files under a folder, with paths relative to it, as validateBundle takes them. */
+/**
+ * All files under a folder, with paths relative to it, as validateBundle takes them. Not only
+ * Markdown: links may point at other files, such as an attester's .py file.
+ */
 function readBundle(folder: string): BundleFile[] {
   return fs
     .readdirSync(folder, { recursive: true, encoding: "utf8" })
-    .filter((file) => file.endsWith(".md"))
+    .filter((file) => fs.statSync(path.join(folder, file)).isFile())
     .sort()
     .map((file) => ({
       // Bundle paths always use /, also where readdirSync returns \ (Windows).
@@ -191,17 +194,22 @@ describe("validateBundle broken fixtures", () => {
 
 describe("validateBundle valid bundles", () => {
   test.each(["acme_retail", "crypto_bitcoin", "ga4", "stackoverflow"])(
-    "the official %s sample has no errors",
+    "the official %s sample has no findings",
     (bundle) => {
-      const errors = validateBundle(readBundle(path.join(SAMPLES_DIR, bundle))).filter(
-        (finding) => finding.severity === "error",
-      );
-      expect(errors).toEqual([]);
+      // No warnings either: in particular, footnote citations (§5.1) are not broken links.
+      expect(validateBundle(readBundle(path.join(SAMPLES_DIR, bundle)))).toEqual([]);
     },
   );
 
-  test("the demo app's curated bundle has no findings at all", () => {
-    expect(validateBundle(readBundle(path.join(__dirname, "..", "..", "demo", "okf")))).toEqual([]);
+  // The curated guides link into model/, which the exporter generates (Phase 2). Until the
+  // two are merged into one bundle, those links are the only findings.
+  test("the demo app's curated bundle has no findings except links into model/", () => {
+    const findings = validateBundle(readBundle(path.join(__dirname, "..", "..", "demo", "okf")));
+    const unexpected = findings.filter(
+      (finding) => !(finding.rule === "W4" && /link target "\/?model\//.test(finding.message)),
+    );
+    expect(unexpected).toEqual([]);
+    expect(findings.length).toBeGreaterThan(0);
   });
 
   test("a concept using every v0.2 family correctly has no findings", () => {
@@ -382,7 +390,8 @@ describe("validateBundle index.md entries", () => {
     ["a reference-style link", "* [Orders][orders]\n\n[orders]: orders.md"],
     ["a bold link", "* **[Orders](orders.md)** - All orders."],
   ])("an index.md with %s has no findings", (_label, body) => {
-    expect(validateBundle([file("index.md", `# Guides\n\n${body}\n`)])).toEqual([]);
+    const orders = file("orders.md", "---\ntype: X\ntitle: t\ndescription: d\n---\n");
+    expect(validateBundle([file("index.md", `# Guides\n\n${body}\n`), orders])).toEqual([]);
   });
 });
 

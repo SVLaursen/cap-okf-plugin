@@ -10,9 +10,10 @@ import type { KeyPath, LocatedConcept } from "./concept";
  * Warnings are soft guidance that consumers must not reject a bundle for:
  * - W1 a recommended field (title, description) is missing (§4.1);
  * - W2 a v0.2 field has the wrong shape (§5);
- * - W3 a deprecated v0.1 field is used (§13.1).
+ * - W3 a deprecated v0.1 field is used (§13.1);
+ * - W4 a link points at a file that is not in the bundle (§6.1: consumers must tolerate it).
  */
-export type Rule = "R1" | "R2" | "R3" | "W1" | "W2" | "W3";
+export type Rule = "R1" | "R2" | "R3" | "W1" | "W2" | "W3" | "W4";
 
 export type Severity = "error" | "warning";
 
@@ -37,6 +38,7 @@ const SEVERITY: Record<Rule, Severity> = {
   W1: "warning",
   W2: "warning",
   W3: "warning",
+  W4: "warning",
 };
 
 /** The text of a finding: what is wrong and how to fix it. */

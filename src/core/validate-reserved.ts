@@ -3,6 +3,7 @@
 import type { LocatedConcept } from "./concept";
 import { isIsoDate } from "./datetime";
 import { findingAtKey, findingOnLine, type Finding } from "./finding";
+import { linesOutsideCode, type BodyLine } from "./markdown";
 
 /** The only key allowed in index.md frontmatter, and only in the bundle-root index.md (§12). */
 const ROOT_INDEX_KEY = "okf_version";
@@ -22,15 +23,6 @@ const STARTS_WITH_LINK = new RegExp(String.raw`^(?:\*\*|__|\*|_)?` + LINK_TEXT +
 
 // "## 2026-11-13", indented up to three spaces, optionally closed with hashes ("## … ##").
 const LOG_DATE_HEADING = /^ {0,3}##[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
-
-// A code fence: ``` or ~~~ (three or more), indented up to three spaces.
-const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})/;
-
-interface BodyLine {
-  text: string;
-  /** File line, counting from 1. */
-  line: number;
-}
 
 /** R3 findings for an index.md at any level. */
 export function checkIndexFile(located: LocatedConcept): Finding[] {
@@ -124,27 +116,6 @@ function logNotNewestFirst(
   });
 }
 
-/**
- * Body lines outside code blocks, with their file line numbers. Code blocks hold examples,
- * not structure. A block ends only at a fence of the same kind (` or ~) that is at least as
- * long as the one that opened it, as in CommonMark.
- */
 function bodyLines(located: LocatedConcept): BodyLine[] {
-  const result: BodyLine[] = [];
-  let openFence: string | undefined;
-  located.concept.body.split("\n").forEach((text, index) => {
-    const fence = CODE_FENCE.exec(text)?.[1];
-    if (openFence === undefined && fence !== undefined) {
-      openFence = fence;
-    } else if (openFence !== undefined) {
-      if (fence !== undefined && closesFence(openFence, fence)) openFence = undefined;
-    } else {
-      result.push({ text, line: located.bodyLine + index });
-    }
-  });
-  return result;
-}
-
-function closesFence(openFence: string, fence: string): boolean {
-  return fence[0] === openFence[0] && fence.length >= openFence.length;
+  return linesOutsideCode(located.concept.body, located.bodyLine);
 }

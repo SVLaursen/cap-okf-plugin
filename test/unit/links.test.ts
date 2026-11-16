@@ -41,6 +41,13 @@ describe("extractLinks", () => {
     expect(linksIn("Write `[a](a.md)` to link, like [b](b.md).")).toEqual([["b.md", 1]]);
   });
 
+  // §5.1 cites sources with footnotes: "[^source-id]: Title" is a note, not a link definition.
+  test("a footnote definition is not a link, but a link inside it is", () => {
+    const body =
+      "[^policy]: Revenue Policy (FY2026)\n[^docs]: [GA4 docs](https://example.com/ga4)\n";
+    expect(linksIn(body)).toEqual([["https://example.com/ga4", 2]]);
+  });
+
   test("a reference link use like [text][label] has no target of its own", () => {
     expect(linksIn("See [orders][o].")).toEqual([]);
   });
