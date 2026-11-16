@@ -70,7 +70,9 @@ describe("generateIndex layout", () => {
       ].join("\n"),
     );
   });
+});
 
+describe("generateIndex sections", () => {
   test("a folder without subfolders has no Subdirectories section", () => {
     expect(generateIndex("model/admin/audit", BOOKSHOP).body).toBe(
       "# Entity\n\n* [Audit log](Log.md)\n",
@@ -121,7 +123,9 @@ describe("generateIndex entries", () => {
     );
     expect(generateIndex("model/a%3Ab", [encoded]).body).toContain("* [Notes](my%20notes.md)\n");
   });
+});
 
+describe("generateIndex special cases", () => {
   test("concepts without a type are listed under Other, after the typed sections", () => {
     const concepts = [
       concept("a.md", { title: "A" }),
@@ -129,6 +133,13 @@ describe("generateIndex entries", () => {
     ];
     expect(generateIndex("", concepts).body).toBe(
       "# Zebra\n\n* [B](b.md)\n\n# Other\n\n* [A](a.md)\n",
+    );
+  });
+
+  // R1 reports such a file; the index still lists it, so nothing silently disappears.
+  test("a concept without frontmatter is listed under Other, by its file name", () => {
+    expect(generateIndex("", [concept("notes.md", null)]).body).toBe(
+      "# Other\n\n* [notes](notes.md)\n",
     );
   });
 
