@@ -20,9 +20,22 @@
       "auth": {
         "kind": "mocked",
         "users": {
-          "alice": { "password": "alice", "roles": ["admin"] },
-          "bob": { "password": "bob", "roles": [] },
-          "carol": { "password": "carol", "roles": ["support"] }
+          "alice": {
+            "password": "alice",
+            "roles": [
+              "admin"
+            ]
+          },
+          "bob": {
+            "password": "bob",
+            "roles": []
+          },
+          "carol": {
+            "password": "carol",
+            "roles": [
+              "support"
+            ]
+          }
         }
       }
     },

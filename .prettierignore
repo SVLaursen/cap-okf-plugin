@@ -1,0 +1,15 @@
+# Build output and generated files
+lib
+coverage
+node_modules
+package-lock.json
+gen
+bundle-preview
+# Markdown is left alone: Accepted ADRs and signed gate reports are immutable, the OKF spec copy
+# is third-party, and curated OKF concepts are content, not code.
+*.md
+# Fixtures are inputs that tests pin byte for byte.
+test/fixtures
+test/golden
+# Human-maintained governance tooling (protected by the project hooks)
+.claude

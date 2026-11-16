@@ -64,7 +64,9 @@ describe("bookshop fixture: definitions", () => {
   });
 
   test("CatalogService.Books is a projection on the domain entity", () => {
-    expect(definition("CatalogService.Books").projection?.from.ref).toEqual(["sample.bookshop.Books"]);
+    expect(definition("CatalogService.Books").projection?.from.ref).toEqual([
+      "sample.bookshop.Books",
+    ]);
   });
 
   test("CatalogService.Books has a bound action reserve", () => {

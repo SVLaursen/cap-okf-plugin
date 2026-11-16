@@ -12,6 +12,7 @@ _None._
 
 ## Done
 
+- 2026-11-16 · style · Prettier added like cap-mcp-v2 (`printWidth: 100`); code and config only (Markdown, fixtures, `.claude/` excluded); `npm run check` and CI run `npm run format` · branch `chore/prettier`
 - 2026-11-16 · 1.0 · TypeScript migration per ADR-0009: `src/` → `tsc` → CommonJS `lib/` (gitignored, built by `prepack`), `cds-plugin.js` hands `cds` to `lib/index.js`, tests in TS via ts-jest (unit and integration projects; integration loads `src/`, child processes use `lib/`), typescript-eslint, `npm run check` = typecheck + lint + test; plan layout and CI updated; `CLAUDE.md` left for the maintainer (read-only) · branch `chore/typescript-migration`
 - 2026-11-13 · adr · ADR-0009 (Proposed): write cap-okf in TypeScript, mirroring cap-mcp-v2 (src/ → tsc → lib/, ts-jest, typescript-eslint); task 1.1 (JS, branch `feat/1.1-parse-concept`) to be redone in TS after the migration · branch `docs/adr-0009-typescript`
 - 2026-11-13 · G1 · Maintainer decisions: ADR-0005 accepted (no index-page link), ADR-0007 accepted (plan updated), ADR-0006 open points settled and Contract A agreed (handoff in `docs/upstream/gavdi-cap-mcp/`); `LICENSE` and `LICENSES/Apache-2.0.txt` added (unblocks the REUSE job); CI waived until a remote exists · branch `docs/gate-G1`
