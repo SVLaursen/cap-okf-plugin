@@ -129,6 +129,8 @@ describe("parseConcept errors", () => {
   test("a duplicate key is invalid YAML on the line of the second key", () => {
     const error = parseError("a.md", "---\ntype: X\ntype: Y\n---\n");
     expect(error).toMatchObject({ file: "a.md", line: 3, rule: "R1" });
+    // Only yaml's reason is kept: no " at line N, column M:" and no code excerpt.
+    expect(error.message).toBe("frontmatter is not valid YAML: Map keys must be unique");
   });
 
   test("an opening --- without a closing one is an error on line 1", () => {
