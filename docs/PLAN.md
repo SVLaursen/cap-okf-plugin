@@ -61,7 +61,7 @@ test/
 
 - [x] **1.0 TypeScript migration (ADR-0009).** Move to TypeScript before the first core module: `src/` compiled by `tsc` to CommonJS `lib/`, tests in TypeScript via ts-jest, typescript-eslint, `npm run check` = typecheck + lint + test.
   - Done when: every test from Phase 0 runs as TypeScript and passes; `npm pack` builds and ships `lib/`; the demo builds.
-- [ ] **1.1 Parse.** `parseConcept(path, text)` → `{ path, id, frontmatter, body }`. Splits `---` frontmatter, parses YAML.
+- [x] **1.1 Parse.** `parseConcept(path, text)` → `{ path, id, frontmatter, body }`. Splits `---` frontmatter, parses YAML.
   - Test first: valid file; no frontmatter; invalid YAML (error has line number); unknown keys kept; CRLF line endings; UTF-8 BOM.
 - [ ] **1.2 Serialize.** `serializeConcept(concept)` with stable key order (`type, title, description, resource, tags, status, generated, verified, stale_after, sources`, then unknown keys in original order).
   - Test first: round-trip `parse(serialize(c))` deep-equals `c` for every sample fixture; output ends with exactly one newline.
