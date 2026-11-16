@@ -85,7 +85,7 @@ test/
 - [x] **2.4 Authorization section (ADR-0003).** Render `@restrict` and `@requires` into a section wrapped in `<!-- okf:auth:start -->` / `<!-- okf:auth:end -->` under `## Authorization`. Nothing about authorization appears outside it.
   - Test first: AdminService fixture renders the section; a grep test asserts no `@restrict` content outside the markers.
   - Maintainer decisions 2026-11-16: `@readonly`, `@insertonly` and `@Capabilities` count as authorization and go inside the section; a member of a service repeats the service's rules there, as inherited.
-- [ ] **2.5 i18n.** Resolve `{i18n>key}` titles and descriptions in the default language; fall back to the key name.
+- [x] **2.5 i18n.** Resolve `{i18n>key}` titles and descriptions in the default language; fall back to the key name.
 - [ ] **2.6 Include/exclude.** `include: "services"` (default) exports only definitions reachable from services; `"all"` exports everything; `@okf: false` excludes; `@okf.tags` adds tags.
   - Note from 2.3: concepts link to model types (element, parameter and return types), association targets and projection sources. Reachability must follow these references, and a reference to an excluded definition must be written as a plain name, not a link that breaks (W4).
 - [ ] **2.7 Exporter.** Orchestrates mappers, generates `index.md` files, injects `{ now, version }` into `generated`.
