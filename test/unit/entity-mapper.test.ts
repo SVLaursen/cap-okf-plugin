@@ -1,7 +1,9 @@
 import { serializeConcept } from "../../src/core/concept";
 import type { Csn, CsnDefinition } from "../../src/export/csn";
 import { entityMapper } from "../../src/export/mappers/entity";
-import { MAPPERS, mapperFor } from "../../src/export/mappers/index";
+import { MAPPERS, mapperFor, registryKeyOf } from "../../src/export/mappers/index";
+import { parseConcept } from "../../src/core/concept";
+import { validateBundle } from "../../src/core/validate";
 import { conceptPathFor, conceptLinkFor } from "../../src/export/paths";
 import { defaultMapperContext } from "../../src/export/mappers/context";
 
@@ -65,6 +67,18 @@ describe("mapper registry", () => {
 
   test("has no mapper for a kind nobody registered", () => {
     expect(mapperFor("no-such-kind")).toBeUndefined();
+  });
+
+  // Projections and views are kind "entity" in CSN too; the registry tells them apart, so no
+  // mapper or exporter ever has to.
+  test.each([
+    [{ kind: "entity" }, "entity"],
+    [{ kind: "entity", projection: { from: { ref: ["x.Orders"] } } }, "projection"],
+    [{ kind: "entity", query: { SELECT: {} } }, "projection"],
+    [{ kind: "service" }, "service"],
+    [{}, "unknown"],
+  ])("the registry key of %j is %s", (definition, key) => {
+    expect(registryKeyOf(definition)).toBe(key);
   });
 
   test("every registered mapper is registered under its own kind", () => {
@@ -149,7 +163,8 @@ describe("entity mapper body", () => {
         "| `summary` | `String(2000)` | Short text \\| shown on the detail page. |",
         "| `price` | `Decimal(9, 2)` |  |",
         "| `copies` | `Integer` | default: 0 |",
-        "| `createdBy` | `User(255)` |  |",
+        // Size facets show only on built-in types: inferred CSN copies them onto User too.
+        "| `createdBy` | `User` |  |",
         "",
         "## Associations",
         "",
@@ -202,9 +217,59 @@ describe("entity mapper body, less common shapes", () => {
     expect(empty.body).toBe("\n# Empty\n");
   });
 
-  test("the concept serializes to valid OKF text", () => {
-    const text = serializeConcept(mapEntity("sample.bookshop.Books"));
-    expect(text.startsWith("---\ntype: Entity\ntitle: Books\n")).toBe(true);
+  test("the concepts serialize to valid OKF text, with every link resolving", () => {
+    const concepts = Object.keys(MODEL.definitions).map(mapEntity);
+    const files = concepts.map((concept) => ({
+      path: concept.path,
+      text: serializeConcept(concept),
+    }));
+    for (const [index, file] of files.entries()) {
+      expect(parseConcept(file.path, file.text)).toEqual(concepts[index]);
+    }
+    // W1 only: Chapters and Plain have no description.
+    expect(validateBundle(files).map((finding) => finding.rule)).toEqual(["W1", "W1"]);
+  });
+});
+
+describe("entity mapper and Markdown safety", () => {
+  const awkward: Csn = {
+    definitions: {
+      Odd: {
+        kind: "entity",
+        "@title": "Odd ] title\nline2 <b>",
+        doc: "Hides <!-- okf:auth:start --> nothing",
+        elements: {
+          "we|ird`name": { key: true, type: "cds.String", doc: "a <!-- b" },
+          self: { type: "cds.Association", target: "Odd" },
+        },
+      },
+    },
+  };
+  const concept = entityMapper.map(
+    "Odd",
+    awkward.definitions["Odd"]!,
+    defaultMapperContext(awkward),
+  );
+
+  test("a title stays one heading and one link text", () => {
+    expect(concept.body).toContain("\n# Odd ] title line2 &lt;b>\n");
+    expect(concept.body).toContain(
+      "- `self` → [Odd \\] title line2 &lt;b>](/model/Odd.md) (to one)",
+    );
+  });
+
+  test("a doc comment can't start HTML, so it can't fake an auth marker (ADR-0003)", () => {
+    expect(concept.body).toContain("Hides &lt;!-- okf:auth:start --> nothing");
+    expect(concept.body).not.toContain("<!--");
+  });
+
+  test("an element name with | or a backtick keeps the table row intact", () => {
+    expect(concept.body).toContain("| ``we\\|ird`name`` | `String` | key; a &lt;!-- b |");
+  });
+
+  test("the result still parses and validates", () => {
+    const file = { path: concept.path, text: serializeConcept(concept) };
+    expect(validateBundle([file]).filter((finding) => finding.severity === "error")).toEqual([]);
   });
 });
 

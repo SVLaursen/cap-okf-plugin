@@ -78,3 +78,50 @@ describe("entity mapper on the bookshop fixture", () => {
     expect(brokenLinks).toEqual([]);
   });
 });
+
+// Shapes the bookshop fixture doesn't have, compiled by CAP itself so the CSN is real.
+describe("entity mapper on real CSN shapes", () => {
+  const SHAPES = `
+    namespace x;
+    entity Orders {
+      key ID     : Integer;
+      status     : String(10) enum { open; closed };
+      tags       : many String;
+      lines      : many { qty : Integer };
+      owner      : String default $user;
+      items      : Composition of many { key pos : Integer; note : String };
+      mine       : Association to many Orders on mine.owner = $user;
+    }
+    entity Ref { key ID : Integer; s : type of Orders:status; }
+  `;
+  let shapes: Csn;
+
+  beforeAll(() => {
+    shapes = cds.compile(SHAPES, { docs: true }) as unknown as Csn;
+  });
+
+  function mapShape(name: string): string {
+    return entityMapper.map(name, shapes.definitions[name]!, defaultMapperContext(shapes)).body;
+  }
+
+  test("arrayed elements show as many <type>", () => {
+    const orders = mapShape("x.Orders");
+    expect(orders).toContain("| `tags` | `many String` |  |");
+    expect(orders).toContain("| `lines` | `many structured` |  |");
+  });
+
+  test("a type reference shows the element it refers to", () => {
+    expect(mapShape("x.Ref")).toContain("| `s` | `x.Orders:status` |  |");
+  });
+
+  test("an association that is part of the key says so", () => {
+    expect(mapShape("x.Orders.items")).toContain(
+      "- `up_` → [Orders](/model/x/Orders.md) (key, to one)",
+    );
+  });
+
+  // ADR-0003: a $user condition or default is about who sees what; it is never rendered.
+  test("$user in an ON condition or a default appears nowhere", () => {
+    expect(mapShape("x.Orders")).not.toContain("$user");
+  });
+});
