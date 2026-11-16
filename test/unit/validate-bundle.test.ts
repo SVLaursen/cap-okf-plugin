@@ -209,6 +209,7 @@ describe("validateBundle valid bundles", () => {
       (finding) => !(finding.rule === "W4" && /link target "\/?model\//.test(finding.message)),
     );
     expect(unexpected).toEqual([]);
+    // A tripwire, meant to fail once model/ is merged in: then expect no findings at all.
     expect(findings.length).toBeGreaterThan(0);
   });
 
@@ -277,13 +278,23 @@ describe("validateBundle general behaviour", () => {
 describe("validateBundle links", () => {
   test("a broken link suggests the closest bundle path", () => {
     const findings = validateBundle(readBundle(path.join(BROKEN_DIR, "w4-broken-link")));
-    expect(findings).toMatchObject([{ rule: "W4", fix: 'Did you mean "/guides/returns.md"?' }]);
+    expect(findings).toMatchObject([
+      {
+        rule: "W4",
+        fix: 'Change the link to "/guides/returns.md", the closest path in the bundle',
+      },
+    ]);
   });
 
   test("without a close path, the fix says to create the concept or correct the link", () => {
     const findings = validateBundle([file("index.md", "* [Orders](tables/orders.md)\n")]);
     expect(findings).toMatchObject([
-      { file: "index.md", line: 1, rule: "W4", fix: expect.stringMatching(/^Create /) },
+      {
+        file: "index.md",
+        line: 1,
+        rule: "W4",
+        fix: "Create /tables/orders.md, or correct the link",
+      },
     ]);
   });
 
@@ -308,6 +319,20 @@ describe("validateBundle links", () => {
     expect(findings).toMatchObject([
       { rule: "W4", message: expect.stringMatching(/points outside the bundle/) },
     ]);
+  });
+
+  // One suggestion per distinct missing path, and short-cuts in the distance search, keep
+  // large bundles fast. The time limit is generous; before the fix this took over 10 seconds.
+  test("a large bundle with many broken links is validated quickly", () => {
+    const files = Array.from({ length: 2000 }, (_, index) =>
+      file(
+        `model/n${index}/Entity${index}.md`,
+        `---\ntype: X\ntitle: t\ndescription: d\n---\n[a](Missing${index}.md) [b](/gone/x${index}.md)\n`,
+      ),
+    );
+    const started = performance.now();
+    expect(validateBundle(files)).toHaveLength(4000);
+    expect(performance.now() - started).toBeLessThan(3000);
   });
 
   test("links in a file with broken frontmatter are not checked: its R1 comes first", () => {

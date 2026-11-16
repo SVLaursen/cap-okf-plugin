@@ -48,6 +48,38 @@ describe("extractLinks", () => {
     expect(linksIn(body)).toEqual([["https://example.com/ga4", 2]]);
   });
 
+  test.each([
+    ["a double-backtick span holding a backtick link", "`` `[b](y.md)` `` and [c](c.md)", ["c.md"]],
+    ["a span closed by the same run only", "``a`b`` [c](c.md)", ["c.md"]],
+    ["an escaped bracket", "\\[not](a.md) but [yes](b.md)", ["b.md"]],
+    ["balanced parentheses in the target", "[w](notes_(draft).md)", ["notes_(draft).md"]],
+    ["an unclosed angle bracket, kept as written", "[a](<foo)", ["<foo"]],
+  ])("handles %s", (_label, body, targets) => {
+    expect(extractLinks(body, 1).map((link) => link.target)).toEqual(targets);
+  });
+
+  test("a link whose text wraps onto the next line is found, on the line it starts", () => {
+    const body = "Intro.\n\nSee [the\norders table](orders.md) and\n[users](\nusers.md).\n";
+    expect(linksIn(body)).toEqual([
+      ["orders.md", 3],
+      ["users.md", 4],
+    ]);
+  });
+
+  test("a blank line ends a paragraph, so a link can't span it", () => {
+    expect(linksIn("[a\n\nb](b.md)")).toEqual([]);
+  });
+
+  test.each([
+    ["an info string with a backtick, which is not a fence", "```npm test``` runs it\n[b](b.md)\n"],
+    [
+      "a closing fence with an info string, which does not close",
+      "```\n```js\n[a](a.md)\n```\n[b](b.md)\n",
+    ],
+  ])("code blocks follow CommonMark: %s", (_label, body) => {
+    expect(extractLinks(body, 1).map((link) => link.target)).toEqual(["b.md"]);
+  });
+
   test("a reference link use like [text][label] has no target of its own", () => {
     expect(linksIn("See [orders][o].")).toEqual([]);
   });
@@ -70,6 +102,7 @@ describe("resolveLink", () => {
     ["a percent-encoded space", "a.md", "my%20notes.md", "my notes.md"],
     ["broken percent-encoding, kept as written", "a.md", "100%.md", "100%.md"],
     ["a folder link, without its trailing /", "index.md", "tables/", "tables"],
+    ["an encoded /, which reads as a folder separator", "g/x.md", "a%2Fb.md", "g/a/b.md"],
   ])("resolves %s", (_label, from, target, path) => {
     expect(resolveLink(from, target)).toEqual({ kind: "bundle", path });
   });
@@ -80,6 +113,7 @@ describe("resolveLink", () => {
     ["cds:sample.bookshop.Books"],
     ["#steps"],
     [""],
+    ["//cdn.example.com/a.md"],
   ])("%j is not a bundle path", (target) => {
     expect(resolveLink("a.md", target)).toEqual({ kind: "external" });
   });
@@ -104,6 +138,12 @@ describe("editDistance", () => {
     expect(editDistance(a, b)).toBe(distance);
     expect(editDistance(b, a)).toBe(distance);
   });
+
+  test("with a limit, stops early and returns limit + 1 once the distance must exceed it", () => {
+    expect(editDistance("kitten", "sitting", 3)).toBe(3);
+    expect(editDistance("kitten", "sitting", 2)).toBe(3);
+    expect(editDistance("aaaaaaaa", "bbbbbbbb", 1)).toBe(2);
+  });
 });
 
 describe("closestPath", () => {
@@ -113,12 +153,23 @@ describe("closestPath", () => {
     expect(closestPath("guides/retuns.md", PATHS)).toBe("guides/returns.md");
   });
 
-  test("on a tie, suggests the path that sorts first", () => {
-    expect(closestPath("x/b.md", ["x/c.md", "x/a.md"])).toBe("x/a.md");
+  test("on a tie, suggests the path that comes first in the (sorted) candidates", () => {
+    expect(closestPath("x/b.md", ["x/a.md", "x/c.md"])).toBe("x/a.md");
   });
 
   test("suggests nothing when every path is too different", () => {
     expect(closestPath("reference/attesters/revenue.py", PATHS)).toBeUndefined();
+  });
+
+  // "guides/abc.md" has 13 characters, so up to floor(13 / 3) = 4 edits are allowed.
+  test("suggests a path exactly at the allowed distance, and nothing one edit beyond", () => {
+    expect(closestPath("guides/abc.md", ["guides/wxyz.md"])).toBe("guides/wxyz.md");
+    expect(closestPath("guides/abc.md", ["guides/vwxyz.md"])).toBeUndefined();
+  });
+
+  test("allows at least 2 edits for a short path", () => {
+    expect(closestPath("a.md", ["abc.md"])).toBe("abc.md");
+    expect(closestPath("a.md", ["abcd.md"])).toBeUndefined();
   });
 
   test("suggests nothing in an empty bundle", () => {
