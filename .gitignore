@@ -7,3 +7,4 @@ bundle-preview/
 .env.*
 .DS_Store
 .claude/settings.local.json
+lib/

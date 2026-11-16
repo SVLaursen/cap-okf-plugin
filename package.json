@@ -25,24 +25,16 @@
     }
   },
   "scripts": {
+    "build": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build",
     "lint": "eslint .",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:update-golden": "UPDATE_GOLDEN=1 jest test/golden",
-    "check": "npm run lint && npm test",
-    "demo": "npm run watch --workspace=demo",
-    "demo:build": "npm run build --workspace=demo"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/test/**/*.test.js"
-    ],
-    "collectCoverageFrom": [
-      "lib/**/*.js"
-    ],
-    "modulePathIgnorePatterns": [
-      "<rootDir>/demo/gen/"
-    ]
+    "check": "npm run typecheck && npm run lint && npm test",
+    "demo": "npm run build && npm run watch --workspace=demo",
+    "demo:build": "npm run build && npm run build --workspace=demo"
   },
   "keywords": [
     "cap",
@@ -77,5 +69,6 @@
   },
   "workspaces": [
     "demo"
-  ]
+  ],
+  "types": "lib/index.d.ts"
 }
