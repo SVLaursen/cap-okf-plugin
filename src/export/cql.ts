@@ -4,8 +4,8 @@
 /**
  * An expression as the text a developer writes in CDS:
  * { xpr: [{ ref: ["country"] }, "=", { ref: ["$user", "country"] }] } → "country = $user.country".
- * Older CSN gives the text as a string, which is kept. Anything unknown is shown as JSON, so a
- * condition is never silently lost.
+ * A where written in quotes (where: 'country = $user.country') stays a string in CSN and is kept.
+ * Anything unknown is shown as JSON, so a condition is never silently lost.
  */
 export function renderExpression(expression: unknown): string {
   if (typeof expression === "string") return expression;
@@ -35,9 +35,22 @@ function renderToken(token: unknown): string {
   return JSON.stringify(token);
 }
 
-// A path segment is a name, or { id, where } with a filter, shown by its name.
+/**
+ * A path segment: a name, or { id, where } with a filter, or { id, args } with parameters.
+ * The filter narrows the condition, so it is always shown: "items[status = 'open']".
+ */
 function refSegment(segment: unknown): string {
-  return typeof segment === "string" ? segment : String((segment as { id: unknown }).id);
+  if (typeof segment === "string") return segment;
+  const { id, where, args } = segment as { id: unknown; where?: unknown[]; args?: unknown };
+  const filter = where === undefined ? "" : `[${renderTokens(where)}]`;
+  return `${String(id)}${argumentsText(args)}${filter}`;
+}
+
+// Parameters by name, as CXN writes them: { currency: { val: "EUR" } } → "(currency: 'EUR')".
+function argumentsText(args: unknown): string {
+  if (args === undefined) return "";
+  const named = Object.entries(args as Record<string, unknown>);
+  return `(${named.map(([name, value]) => `${name}: ${renderToken(value)}`).join(", ")})`;
 }
 
 // Strings in single quotes, a quote doubled, as CDL writes them; everything else as it is.

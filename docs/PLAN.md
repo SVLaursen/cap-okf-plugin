@@ -112,6 +112,7 @@ test/
 
 - [ ] **4.1 Contract suite.** `test/contract/server.contract.ts` run against every channel (static route, MCP resources, MCP tools): lists concepts, reads a concept, not-found on unknown path, strips the auth section when unauthenticated, keeps it when authenticated, serves nothing when disabled. Every channel reads one merged `BundleSource`, picked at startup: the built `okf-bundle/` in a deployed app, otherwise generated in memory (ADR-0007).
 - [ ] **4.2 Auth filter.** `filter.ts` removes marked sections; pure, unit tested.
+  - Contract from 2.4: a marker counts only as a whole line (`<!-- okf:auth:start -->` / `<!-- okf:auth:end -->` alone on a line), and a generated concept has at most one section, at the end of its body. Text elsewhere can contain marker-like text (e.g. a title), which must not cut anything.
 - [ ] **4.3 Static route (Node).** `cds.okf.serve.static: false | true | "/path"`, `text/markdown; charset=utf-8`, uses CAP's auth middleware to decide authentication. Not listed on the CAP index page (ADR-0005).
 - [ ] **4.4 MCP selector.** `src/serve/mcp/index.ts` reads `cds.okf.serve.mcp` (`false` | `true` | `{ plugin, as }`, ADR-0004) and picks an `McpIntegration`.
   - Test first, a table of cases: off → nothing, no warning; on + no MCP plugin → one warning; on + one plugin → that one; on + both + `auto` → error naming `plugin`; explicit plugin not installed → error; unknown `as` value → warning naming the allowed values. Detection alone never serves anything.

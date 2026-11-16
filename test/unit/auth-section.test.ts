@@ -94,18 +94,6 @@ describe("the authorization section", () => {
   test("comes last in the body", () => {
     expect(map("S.Orders").body.endsWith("<!-- okf:auth:end -->\n")).toBe(true);
   });
-
-  test("a privilege without a grant leaves that cell empty: CAP defines no default", () => {
-    const model: Csn = {
-      definitions: { E: { kind: "entity", "@restrict": [{ to: "Viewer" }], elements: {} } },
-    };
-    const concept = mapperFor("entity")!.map(
-      "E",
-      model.definitions["E"]!,
-      defaultMapperContext(model),
-    );
-    expect(concept.body).toContain("|  | `Viewer` |  |");
-  });
 });
 
 describe("the authorization section, by kind of definition", () => {
@@ -146,54 +134,55 @@ describe("nothing about authorization outside the section (ADR-0003)", () => {
   });
 });
 
-describe("the authorization section, as CAP's runtime applies the rules", () => {
-  const RUNTIME: Csn = {
-    definitions: {
-      Open: { kind: "entity", "@requires": null, elements: {} },
-      Closed: { kind: "entity", "@requires": [], elements: {} },
-      AnyEvent: { kind: "entity", "@restrict": [{ to: "Viewer" }], elements: {} },
-      Cheap: {
-        kind: "entity",
-        "@restrict": [{ grant: "READ", where: { xpr: [{ ref: ["stock"] }, "<", { val: 10 }] } }],
-        elements: {},
-        actions: {
-          total: {
-            kind: "function",
-            "@restrict": [
-              { grant: "*", to: "Clerk", where: { xpr: [{ ref: ["x"] }, "=", { val: 1 }] } },
-            ],
-          },
+// Shapes that show how CAP's runtime applies the rules.
+const RUNTIME: Csn = {
+  definitions: {
+    Open: { kind: "entity", "@requires": null, elements: {} },
+    Closed: { kind: "entity", "@requires": [], elements: {} },
+    AnyEvent: { kind: "entity", "@restrict": [{ to: "Viewer" }], elements: {} },
+    Cheap: {
+      kind: "entity",
+      "@restrict": [{ grant: "READ", where: { xpr: [{ ref: ["stock"] }, "<", { val: 10 }] } }],
+      elements: {},
+      actions: {
+        total: {
+          kind: "function",
+          "@restrict": [
+            { grant: "*", to: "Clerk", where: { xpr: [{ ref: ["x"] }, "=", { val: 1 }] } },
+          ],
         },
       },
-      ping: { kind: "action", "@restrict": [{ grant: "*", to: "Ops" }] },
-      Orders: { kind: "entity", "@requires": "Clerk", elements: {} },
-      "Orders.items": {
-        kind: "entity",
-        elements: { up_: { key: true, type: "cds.Association", target: "Orders" } },
-      },
-      "Orders.items.notes": {
-        kind: "entity",
-        elements: { up_: { key: true, type: "cds.Association", target: "Orders.items" } },
-      },
-      Marked: {
-        kind: "entity",
-        "@title": "Fake <!-- okf:auth:start --> title",
-        "@description": "Fake <!-- okf:auth:end --> description",
-        "@requires": "Clerk",
-        elements: {},
-      },
     },
-  };
+    ping: { kind: "action", "@restrict": [{ grant: "*", to: "Ops" }] },
+    Orders: { kind: "entity", "@requires": "Clerk", elements: {} },
+    "Orders.items": {
+      kind: "entity",
+      elements: { up_: { key: true, type: "cds.Association", target: "Orders" } },
+    },
+    "Orders.items.notes": {
+      kind: "entity",
+      elements: { up_: { key: true, type: "cds.Association", target: "Orders.items" } },
+    },
+    "Orphan.items": {
+      kind: "entity",
+      elements: { up_: { key: true, type: "cds.Association", target: "Gone" } },
+    },
+    Marked: {
+      kind: "entity",
+      "@title": "Fake <!-- okf:auth:start --> title",
+      "@description": "Fake <!-- okf:auth:end --> description",
+      "@requires": "Clerk",
+      elements: {},
+    },
+  },
+};
 
-  function mapRuntime(name: string) {
-    const definition = RUNTIME.definitions[name]!;
-    return mapperFor(registryKeyOf(definition))!.map(
-      name,
-      definition,
-      defaultMapperContext(RUNTIME),
-    );
-  }
+function mapRuntime(name: string) {
+  const definition = RUNTIME.definitions[name]!;
+  return mapperFor(registryKeyOf(definition))!.map(name, definition, defaultMapperContext(RUNTIME));
+}
 
+describe("the authorization section, as CAP's runtime applies the rules", () => {
   test("@requires: null removes a requirement, so there is no section", () => {
     expect(mapRuntime("Open").body).not.toContain("okf:auth");
   });
@@ -221,7 +210,9 @@ describe("the authorization section, as CAP's runtime applies the rules", () => 
   test("an unbound action's privileges grant the action itself", () => {
     expect(authSectionOf(mapRuntime("ping").body)).toContain("| `ping` | `Ops` |  |");
   });
+});
 
+describe("the authorization section, compositions and markers", () => {
   test("a composition child without rules is checked through its nearest restricted ancestor", () => {
     expect(authSectionOf(mapRuntime("Orders.items").body)).toContain(
       "Checked through [Orders](/model/Orders.md), the composition it is part of.",
@@ -229,6 +220,10 @@ describe("the authorization section, as CAP's runtime applies the rules", () => 
     expect(authSectionOf(mapRuntime("Orders.items.notes").body)).toContain(
       "Checked through [Orders](/model/Orders.md), the composition it is part of.",
     );
+  });
+
+  test("a composition child whose parent isn't in the model has no section", () => {
+    expect(mapRuntime("Orphan.items").body).not.toContain("okf:auth");
   });
 
   // The 4.2 filter contract: markers count only as whole lines. A marker inside frontmatter text

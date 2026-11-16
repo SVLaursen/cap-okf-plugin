@@ -21,6 +21,13 @@ describe("renderExpression", () => {
       { xpr: [{ val: 1 }, "<", { val: 2 }, "and", { val: true }, "or", { val: null }] },
       "1 < 2 and true or null",
     ],
+  ])("renders %s", (_label, expression, text) => {
+    expect(renderExpression(expression)).toBe(text);
+  });
+});
+
+describe("renderExpression, nested and special tokens", () => {
+  test.each([
     [
       "a nested expression in parentheses",
       { xpr: [{ ref: ["a"] }, "and", { xpr: [{ ref: ["b"] }, "or", { ref: ["c"] }] }] },

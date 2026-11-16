@@ -1,6 +1,6 @@
 // Actions and functions: the same layout for an unbound one's own concept and for a bound one's
-// subsection on its entity (maintainer decision for task 2.3). Their @requires and @restrict
-// are left out on purpose (ADR-0003).
+// subsection on its entity (maintainer decision for task 2.3). Their @requires and @restrict go
+// only into the authorization section (ADR-0003, auth-section.ts).
 import { escapeBlock, escapeHtml, oneLine } from "../../core/markdown";
 import type { CsnDefinition, CsnElement } from "../csn";
 import type { MapperContext } from "./context";
