@@ -71,7 +71,7 @@ test/
   - Test first: one fixture per rule in `test/fixtures/broken/`, each producing exactly the expected finding.
 - [x] **1.4 Links.** Extract Markdown links, resolve against bundle paths, report broken ones with a "did you mean" suggestion (closest path by edit distance).
 - [x] **1.5 index.md.** Generate `index.md` per folder like the official samples (maintainer decision 2026-11-16): one `# <type>` section per concept type with `* [title](path) - description` entries, then `# Subdirectories` with `* [folder](folder/index.md) - <n> concepts: <types>`. Deterministic order (types by name, entries by path).
-- [ ] **1.6 Bundle I/O.** `BundleSource { list(), read(path) }`, `FileBundleSource`, `BundleSink { write(concept) }`, `FileBundleSink`.
+- [x] **1.6 Bundle I/O.** `BundleSource { list(), read(path) }`, `FileBundleSource`, `BundleSink { write(path, text) }` with a `writeConcept(sink, concept)` helper, `FileBundleSink`. Async and text-only (maintainer decisions 2026-11-16).
   - Test first: in-memory fake and file implementation pass the same test suite.
 - [ ] **1.7 Conformance suite.** Every official sample bundle parses, validates with zero errors and round-trips byte-identically (or with only key-order differences, documented).
 
