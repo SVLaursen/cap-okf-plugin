@@ -16,7 +16,11 @@ function readBundle(folder: string): BundleFile[] {
     .readdirSync(folder, { recursive: true, encoding: "utf8" })
     .filter((file) => file.endsWith(".md"))
     .sort()
-    .map((file) => ({ path: file, text: fs.readFileSync(path.join(folder, file), "utf8") }));
+    .map((file) => ({
+      // Bundle paths always use /, also where readdirSync returns \ (Windows).
+      path: file.split(path.sep).join("/"),
+      text: fs.readFileSync(path.join(folder, file), "utf8"),
+    }));
 }
 
 function file(filePath: string, text: string): BundleFile {
@@ -167,11 +171,12 @@ describe("validateBundle broken fixtures", () => {
     ]);
   });
 
-  test("every finding says how to fix it", () => {
+  // A printer adds "[okf] <file>:<line> — " and the final periods (CLAUDE.md, Style).
+  test("messages start lowercase and fixes start uppercase, neither ends with a period", () => {
     for (const folder of Object.keys(BROKEN_CASES)) {
       for (const finding of validateBundle(readBundle(path.join(BROKEN_DIR, folder)))) {
-        expect(finding.fix).toEqual(expect.any(String));
-        expect(finding.fix.length).toBeGreaterThan(10);
+        expect(finding.message).toMatch(/^[a-z"].*[^.]$/s);
+        expect(finding.fix).toMatch(/^[A-Z].*[^.]$/s);
       }
     }
   });
@@ -200,7 +205,7 @@ describe("validateBundle valid bundles", () => {
       "description: Recognized revenue for a period.",
       "status: deprecated",
       "generated: { by: reference_agent/v1, at: 2026-06-30T14:00:00.250+02:00 }",
-      "verified: { by: human:a, at: 2026-07-01T09:00Z }",
+      "verified: { by: human:a, at: 2026-07-01T09:00-05:30 }",
       "stale_after: 2026-12-31T00:00:00Z",
       "sources:",
       "  - { id: a, resource: policies/a.md }",
@@ -235,9 +240,13 @@ describe("validateBundle general behaviour", () => {
     const findings = validateBundle([
       file("a.md", "---\ntype: [X]\ntitle: t\ndescription: d\n---\n"),
     ]);
-    expect(findings).toMatchObject([{ rule: "R2", line: 2, message: /must be a string/ }]);
+    expect(findings).toMatchObject([
+      { rule: "R2", line: 2, message: expect.stringMatching(/must be a string/) },
+    ]);
   });
 
+  // parseConceptLocated throws only ConceptParseError today; the spy stands in for a future bug,
+  // which must surface instead of being reported as a finding about the user's file.
   test("an error other than a parse error is not swallowed", () => {
     const spy = jest.spyOn(conceptModule, "parseConceptLocated").mockImplementation(() => {
       throw new TypeError("unexpected");
@@ -247,6 +256,30 @@ describe("validateBundle general behaviour", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("validateBundle file kinds", () => {
+  test("files that are not Markdown are skipped, as §11 covers only .md files", () => {
+    const attester = file("references/attesters/revenue.py", "def attest(): pass\n");
+    expect(validateBundle([attester])).toEqual([]);
+  });
+
+  test.each(["index.md", "guides/log.md"])(
+    "broken YAML in reserved %s is an R3 error, not R1",
+    (reservedPath) => {
+      const findings = validateBundle([file(reservedPath, "---\nokf_version: [\n---\n")]);
+      expect(findings).toMatchObject([{ file: reservedPath, rule: "R3", severity: "error" }]);
+    },
+  );
+
+  test("a title that is not text is reported as such", () => {
+    const findings = validateBundle([
+      file("a.md", "---\ntype: X\ntitle: 42\ndescription: d\n---\n"),
+    ]);
+    expect(findings).toMatchObject([
+      { rule: "W1", message: expect.stringMatching(/"title" is missing, empty or not text/) },
+    ]);
   });
 });
 
@@ -274,9 +307,53 @@ describe("validateBundle reserved files", () => {
     expect(validateBundle([file("index.md", index), file("log.md", index)])).toEqual([]);
   });
 
+  test.each([
+    ["a ``` fence inside a ~~~ block", "~~~\n```\n* example\n~~~\n"],
+    ["a longer closing fence", "```\n* example\n`````\n"],
+    ["an indented fence", "   ```\n* example\n   ```\n"],
+  ])("a code block stays open across %s", (_label, body) => {
+    expect(validateBundle([file("index.md", `# Guides\n\n${body}`)])).toEqual([]);
+  });
+
+  test.each([
+    ["a shorter fence", "````\n```\n````\n* not a link\n"],
+    ["a fence of the other kind", "~~~\n```\n~~~\n* not a link\n"],
+  ])("the code block ends at its own closing fence, despite %s", (_label, body) => {
+    const findings = validateBundle([file("index.md", `# Guides\n\n${body}`)]);
+    expect(findings).toMatchObject([{ rule: "R3", line: 6 }]);
+  });
+
+  test.each([
+    ["a thematic break", "* * *"],
+    ["a nested detail under an entry", "* [Orders](orders.md) - All orders.\n  * detail"],
+    ["an indented code line", "    * code"],
+    ["brackets in the link text", "* [Orders [beta]](orders.md) - All orders."],
+    ["a reference-style link", "* [Orders][orders]\n\n[orders]: orders.md"],
+    ["a bold link", "* **[Orders](orders.md)** - All orders."],
+  ])("an index.md with %s has no findings", (_label, body) => {
+    expect(validateBundle([file("index.md", `# Guides\n\n${body}\n`)])).toEqual([]);
+  });
+
+  test.each([
+    ["closing hashes", "## 2026-05-22 ##"],
+    ["an indent of up to three spaces", "   ## 2026-05-22"],
+  ])("a log heading with %s is read as its date", (_label, heading) => {
+    expect(validateBundle([file("log.md", `${heading}\n`)])).toEqual([]);
+    const invalid = heading.replace("05-22", "05-32");
+    expect(validateBundle([file("log.md", `${invalid}\n`)])).toMatchObject([{ rule: "R3" }]);
+  });
+
   test("the same date twice in log.md is reported: one heading per date", () => {
     const log = "## 2026-11-13\n* a\n\n## 2026-11-13\n* b\n";
-    expect(validateBundle([file("log.md", log)])).toMatchObject([{ rule: "R3", line: 4 }]);
+    expect(validateBundle([file("log.md", log)])).toMatchObject([
+      {
+        rule: "R3",
+        line: 4,
+        message: expect.stringMatching(
+          /2026-11-13 repeats an earlier heading; one heading per date/,
+        ),
+      },
+    ]);
   });
 
   test.each([
@@ -299,6 +376,10 @@ describe("validateBundle field shapes", () => {
     ["a 13th month", "2026-13-01T00:00:00Z"],
     ["a number", "1731488400"],
     ["a lowercase z", "2026-11-13T09:00:00z"],
+    ["no UTC offset (§5 requires one)", "2026-11-13T09:00:00"],
+    ["an offset hour of 24", "2026-11-13T09:00:00+24:00"],
+    ["an offset minute of 60", "2026-11-13T09:00:00+01:60"],
+    ["a basic-format offset", "2026-11-13T09:00:00+0200"],
   ])("generated.at with %s is a W2 warning", (_label, at) => {
     const text = `---\ntype: X\ntitle: t\ndescription: d\ngenerated: { by: human:a, at: ${at} }\n---\n`;
     expect(validateBundle([file("a.md", text)])).toMatchObject([{ rule: "W2" }]);
@@ -311,6 +392,8 @@ describe("validateBundle field shapes", () => {
     ["a sources entry", "sources: [x]", /"sources\[0\]" must be a mapping/],
   ])("%s with the wrong shape is a W2 warning", (_label, line, message) => {
     const text = `---\ntype: X\ntitle: t\ndescription: d\n${line}\n---\n`;
-    expect(validateBundle([file("a.md", text)])).toMatchObject([{ rule: "W2", line: 5, message }]);
+    expect(validateBundle([file("a.md", text)])).toMatchObject([
+      { rule: "W2", line: 5, message: expect.stringMatching(message) },
+    ]);
   });
 });
