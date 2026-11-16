@@ -100,10 +100,15 @@ describe("a concept never mentions what isn't exported", () => {
   const books = map("db.Books");
   const text = serializeConcept(books);
 
-  test("associations, typed elements and includes of excluded definitions are left out", () => {
-    for (const name of ["secret", "x.Hidden", "Hidden", "flag", "HiddenType", "cuid", "Includes"]) {
+  test("associations and includes of excluded definitions are left out", () => {
+    for (const name of ["secret", "x.Hidden", "Hidden", "HiddenType", "cuid", "Includes"]) {
       expect(text).not.toContain(name);
     }
+  });
+
+  // Maintainer decision: the element exists on the wire, so it stays, with its built-in type.
+  test("an element of an excluded type shows the built-in type instead", () => {
+    expect(books.body).toContain("| `flag` | `String` |  |");
   });
 
   test("elements and associations marked @okf: false are left out", () => {
