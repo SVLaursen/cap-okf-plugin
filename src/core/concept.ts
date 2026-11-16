@@ -1,0 +1,139 @@
+// OKF concept files: Markdown with optional YAML frontmatter (OKF v0.2 §4).
+// Pure module: text in, values out. No file system, no clock, no CAP.
+import YAML from "yaml";
+
+/** Frontmatter keys and values as written; unknown keys are kept (OKF v0.2 §4.1). */
+export type Frontmatter = Record<string, unknown>;
+
+/** One OKF file, split into its parts. */
+export interface Concept {
+  /** Bundle-relative path, e.g. "guides/ordering.md". */
+  path: string;
+  /** The concept ID: the path without its .md suffix (OKF v0.2 §2). */
+  id: string;
+  /** Null when the file has none; reserved files (index.md, log.md) may legitimately lack it. */
+  frontmatter: Frontmatter | null;
+  /** Everything after the frontmatter. */
+  body: string;
+}
+
+const DELIMITER = "---";
+// Written as a char code, not a literal: the character itself is invisible in editors.
+const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
+
+/**
+ * A file that breaks conformance rule R1 (frontmatter must be valid YAML).
+ * Carries the same fields as a validation finding, so callers can report both the same way.
+ */
+export class ConceptParseError extends Error {
+  readonly file: string;
+  readonly line: number;
+  readonly rule = "R1";
+  readonly severity = "error";
+  readonly fix: string;
+
+  constructor(details: { file: string; line: number; message: string; fix: string }) {
+    super(details.message);
+    this.name = "ConceptParseError";
+    this.file = details.file;
+    this.line = details.line;
+    this.fix = details.fix;
+  }
+}
+
+/**
+ * Splits an OKF file into its parts.
+ *
+ * Known limit: frontmatter is a plain JS object, and JS lists integer-like keys ("1", "2")
+ * before all other keys. Such keys don't keep their written order.
+ */
+export function parseConcept(path: string, text: string): Concept {
+  const lines = normalize(text).split("\n");
+  const id = conceptId(path);
+  const closingLine = findClosingDelimiter(path, lines);
+  if (closingLine === undefined) {
+    return { path, id, frontmatter: null, body: lines.join("\n") };
+  }
+  const yamlText = lines.slice(1, closingLine).join("\n");
+  return {
+    path,
+    id,
+    frontmatter: parseFrontmatter(path, yamlText),
+    body: lines.slice(closingLine + 1).join("\n"),
+  };
+}
+
+// Line numbers and comparisons below assume LF only and no byte order mark.
+function normalize(text: string): string {
+  const withoutBom = text.startsWith(BYTE_ORDER_MARK) ? text.slice(1) : text;
+  return withoutBom.replace(/\r\n/g, "\n");
+}
+
+function conceptId(path: string): string {
+  return path.replace(/\.md$/, "");
+}
+
+// Trailing spaces after --- are invisible in editors, so they don't make a line "not a delimiter".
+function isDelimiter(line: string | undefined): boolean {
+  return line?.trimEnd() === DELIMITER;
+}
+
+/** Index of the closing `---`, or undefined when the file has no frontmatter. */
+function findClosingDelimiter(path: string, lines: string[]): number | undefined {
+  if (!isDelimiter(lines[0])) return undefined;
+  const closing = lines.findIndex((line, index) => index > 0 && isDelimiter(line));
+  if (closing === -1) {
+    throw new ConceptParseError({
+      file: path,
+      line: 1,
+      message: "frontmatter is not closed: the opening --- has no matching --- line",
+      fix: "Add a line with only --- after the last frontmatter key",
+    });
+  }
+  return closing;
+}
+
+function parseFrontmatter(path: string, yamlText: string): Frontmatter {
+  const lineCounter = new YAML.LineCounter();
+  // logLevel 'error': yaml would otherwise print warnings (e.g. for an unknown !tag) to stderr,
+  // and src/core must not have side effects. Such values are kept as plain strings.
+  const document = YAML.parseDocument(yamlText, { lineCounter, logLevel: "error" });
+  const fileLine = (offset: number) => lineCounter.linePos(offset).line + 1; // +1: the opening ---
+
+  const firstError = document.errors[0];
+  if (firstError) throw yamlError(path, firstError, fileLine);
+
+  const value: unknown = document.toJS();
+  // An empty block (--- directly followed by ---) is valid and has no keys.
+  if (value === null) return {};
+  if (!isPlainObject(value)) {
+    throw new ConceptParseError({
+      file: path,
+      // contents is null only for an empty block, which returned above.
+      line: fileLine(document.contents!.range[0]),
+      message: "frontmatter is not a YAML mapping of keys to values",
+      fix: 'Write the frontmatter as "key: value" lines, starting with "type: <Type name>"',
+    });
+  }
+  return value;
+}
+
+// Lists, plain values and special types such as !!binary are not frontmatter.
+function isPlainObject(value: unknown): value is Frontmatter {
+  return typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function yamlError(
+  path: string,
+  error: YAML.YAMLError,
+  fileLine: (offset: number) => number,
+): ConceptParseError {
+  // yaml's message continues with " at line N, column M:" and a code excerpt; keep the reason.
+  const reason = error.message.replace(/ at line \d+, column \d+:[\s\S]*$/, "");
+  return new ConceptParseError({
+    file: path,
+    line: fileLine(error.pos[0]),
+    message: `frontmatter is not valid YAML: ${reason}`,
+    fix: 'Correct the YAML between the two --- lines; quote values that contain ": " or start with [, {, * or #',
+  });
+}
