@@ -73,8 +73,8 @@ function refuseMisleadingOptions(options: CompileOptions): void {
 }
 
 // CAP's writer takes many files only as a generator (ADR-0005 (a); an array would be one file).
-// It writes strings
-// only, so a curated file that isn't UTF-8 text (e.g. an image) is left out, with a note.
+// It writes strings only, so a curated file that isn't UTF-8 text (e.g. an image) is left out,
+// with a note.
 function* compiledFiles(files: MergedFile[]): Generator<CompiledFile> {
   for (const file of files) {
     if (file.bytes !== undefined && !isUtf8(file.bytes)) {
