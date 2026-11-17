@@ -384,6 +384,7 @@ instead of a file.
 
 ## Known limits
 
+- CAP Node.js only: Java isn't supported in this release.
 - Texts come from `cds.i18n.default_language` only; `cds compile -l` is refused, and so are
   `-s <service>` (the bundle holds every exported service), a model piped in on stdin and
   `--sort` (cap-okf loads the model's files again, with doc comments).
