@@ -29,11 +29,8 @@ test("the demo app's merged bundle validates without findings", async () => {
   const merged = mergeBundle(generated, curated, OKF_VERSION);
   expect(merged.findings).toEqual([]);
   const findings = validateBundle(merged.files).map((each) => `${each.rule} ${each.file}`);
-  expect(findings).toEqual([
-    "W1 model/AdminService/Genres/texts.md",
-    "W1 model/CatalogService/Genres/texts.md",
-    "W1 model/demo/bookshop/Genres/texts.md",
-  ]);
+  // No findings at all: the generated .texts concepts have a description since task 4.12.
+  expect(findings).toEqual([]);
   expect(merged.curatedPaths.has("guides/ordering.md")).toBe(true);
 });
 

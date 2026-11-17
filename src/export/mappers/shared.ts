@@ -59,6 +59,30 @@ export function inheritedDescription(
   return undefined;
 }
 
+/**
+ * The description a concept shows: the definition's own or inherited one (inheritedDescription),
+ * else, for a ".texts" entity CAP generated for localized elements, one built from its parent
+ * entity (task 4.12), so apps with localized data don't get a W1 warning for every texts entity.
+ */
+export function describedOf(
+  name: string,
+  definition: CsnDefinition,
+  context: MapperContext,
+): string | undefined {
+  return inheritedDescription(definition, context) ?? textsDescription(name, context);
+}
+
+// "shop.Genres.texts" is generated when shop.Genres has a "texts" composition pointing at it.
+function textsDescription(name: string, context: MapperContext): string | undefined {
+  const suffix = ".texts";
+  if (!name.endsWith(suffix)) return undefined;
+  const parentName = name.slice(0, -suffix.length);
+  const parent = context.model.definitions[parentName];
+  const texts = parent?.elements?.["texts"] as { target?: unknown } | undefined;
+  if (parent === undefined || texts?.target !== name) return undefined;
+  return `Translated texts of ${titleOf(parentName, parent, context)}, one row per language.`;
+}
+
 /** The definition's doc comment, else the first one down its source chain. */
 export function inheritedDoc(
   definition: CsnDefinition,
@@ -83,7 +107,7 @@ export function baseFrontmatter(
   context: MapperContext,
   type: string,
 ): Frontmatter {
-  const description = inheritedDescription(definition, context);
+  const description = describedOf(name, definition, context);
   const namespace = namespaceOf(name);
   return {
     type,

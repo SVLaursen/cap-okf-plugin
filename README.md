@@ -399,7 +399,6 @@ instead of a file.
 - `cds compile --to okf` reports only problems with `okf/` (L1, L2); the full OKF check
   (R1–R3, W1–W4) runs in `cds build`.
 - Markdown inside i18n texts (e.g. a link) isn't escaped, so it renders as Markdown.
-- CAP's generated `.texts` entities have no description, so their concepts get a W1 warning.
 - `cds compile -o` adds and overwrites files but never deletes any; compile into an empty folder,
   or use `cds build`.
 - An `okf/` folder whose only Markdown file is its own `index.md` isn't listed in a generated

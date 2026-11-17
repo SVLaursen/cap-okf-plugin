@@ -4,7 +4,7 @@ import { escapeBlock, escapeHtml, inlineCode, oneLine } from "../../core/markdow
 import type { Csn, CsnDefinition } from "../csn";
 import type { Mapper, MapperContext } from "./context";
 import { generatedConcept } from "./concept-builder";
-import { inheritedDescription, linkTo, titleOf } from "./shared";
+import { describedOf, linkTo, titleOf } from "./shared";
 
 /**
  * The sections a service lists its members in, by CSN kind, in this order. A lookup table, so
@@ -75,7 +75,7 @@ function pathSection(definition: CsnDefinition): string[] {
 function listSection(heading: string, members: Member[], context: MapperContext): string[] {
   if (members.length === 0) return [];
   const lines = members.map(({ name, definition }) => {
-    const description = inheritedDescription(definition, context);
+    const description = describedOf(name, definition, context);
     const link = `- ${linkTo(name, context)}`;
     return description === undefined ? link : `${link} - ${escapeHtml(description)}`;
   });
