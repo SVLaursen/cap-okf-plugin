@@ -1,0 +1,12 @@
+# Written by hand to show the format, not a real agent's answers.
+agent: example agent (illustration)
+bundle: true
+answers:
+  delete-book: >
+    Only users with the catalog-manager role, through AdminService (Books grants CREATE,
+    UPDATE and DELETE to catalog-manager; every user of the service must be authenticated).
+  reserve: >
+    Through the bound action reserve(copies) on CatalogService.Books, which returns the copies
+    left; the event BookReserved is emitted afterwards.
+  genres: >
+    Yes: each genre has a parent association and a composition of children.

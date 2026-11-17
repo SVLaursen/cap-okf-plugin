@@ -1,0 +1,23 @@
+# Example question set for the bookshop fixture (test/fixtures/bookshop). It shows the format;
+# the questions for the real pilot come from the maintainer (task 3.6).
+domain: Bookshop (test/fixtures/bookshop)
+questions:
+  - id: delete-book
+    question: Who may delete a book, and through which service?
+    expect:
+      - catalog-manager
+      - [AdminService, admin service]
+    avoid: [anyone can, shoppers can delete]
+
+  - id: reserve
+    question: How does a shopper reserve copies of a book, and what tells other parts of the app?
+    expect:
+      - reserve
+      - [BookReserved, book reserved]
+    avoid: [AdminService]
+
+  - id: genres
+    question: Can genres be nested?
+    expect:
+      - parent
+      - [children, sub-genres, subgenres]

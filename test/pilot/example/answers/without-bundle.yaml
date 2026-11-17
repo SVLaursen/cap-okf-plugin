@@ -1,0 +1,11 @@
+# Written by hand to show the format, not a real agent's answers.
+agent: example agent (illustration)
+bundle: false
+answers:
+  delete-book: >
+    Probably an administrator, through the admin part of the app. I can't see the
+    authorization rules.
+  reserve: >
+    There is likely an order or cart entity; I don't know of a specific action.
+  genres: >
+    I don't know; genres are often a flat list.
