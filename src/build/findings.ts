@@ -16,7 +16,8 @@ export function buildMessagesOf(findings: readonly Finding[]): {
 
 /**
  * The merge's layout findings and the validator's findings, each naming the file to open:
- * - layout findings (L1, L2) are always about a curated file, also one left out: okf/<path>;
+ * - layout and marker findings (L1–L4) are always about a curated file, also one left out:
+ *   okf/<path>;
  * - a validator finding names okf/<path> for a curated file, else <bundle folder>/<path>
  *   (just <path> when `bundleFolder` is "").
  */

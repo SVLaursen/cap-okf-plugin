@@ -74,7 +74,11 @@ function linesOf(text: string): Line[] {
   return lines;
 }
 
-function markerOf(content: string): "start" | "end" | undefined {
+/**
+ * The marker a line is, as the filter reads it ("start", "end"), or undefined. Shared with the
+ * build's marker check (auth-markers.ts), so both read markers alike.
+ */
+export function markerOf(content: string): "start" | "end" | undefined {
   const cleaned = content
     .replace(FORMAT_CHARACTERS, "")
     .trim()

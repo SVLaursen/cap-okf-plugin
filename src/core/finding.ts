@@ -16,12 +16,16 @@ import type { KeyPath, LocatedConcept } from "./concept";
  * cap-okf's own layout rules for merging the curated okf/ folder (ADR-0007), not spec rules:
  * - L1 (error) a curated file is in model/, which belongs to the generator, or its path differs
  *   from another only in letter case or Unicode form;
- * - L2 (warning) a curated root index.md doesn't link to model/.
+ * - L2 (warning) a curated root index.md doesn't link to model/;
+ * - L3 (error) an authorization marker in a curated file is broken in a way that costs anonymous
+ *   readers the file or would show them the section (ADR-0003, task 4.11);
+ * - L4 (warning) a marker the filter understands but that is written slightly wrong, or sits in
+ *   a code block, where it still cuts.
  *
  * M1 (error, thrown by the exporter as ModelClashError, not a Finding): two CDS definitions
  * whose concepts would share a path, or paths that differ only in letter case or Unicode form.
  */
-export type Rule = "R1" | "R2" | "R3" | "W1" | "W2" | "W3" | "W4" | "L1" | "L2";
+export type Rule = "R1" | "R2" | "R3" | "W1" | "W2" | "W3" | "W4" | "L1" | "L2" | "L3" | "L4";
 
 export type Severity = "error" | "warning";
 
@@ -49,6 +53,8 @@ const SEVERITY: Record<Rule, Severity> = {
   W4: "warning",
   L1: "error",
   L2: "warning",
+  L3: "error",
+  L4: "warning",
 };
 
 /** The text of a finding: what is wrong and how to fix it. */

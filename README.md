@@ -253,7 +253,11 @@ without an authenticated user ([ADR-0003](docs/adr/0003-authorization-sections.m
 comments, `@title`, `@description`, i18n texts, tags and the rest of the frontmatter. Keep access
 rules out of them: write `/** Orders placed in the shop. */`, not
 `/** Support staff only see their own orders. */`; the rule itself appears in the section. In
-`okf/` files, put such text between the same two marker lines.
+`okf/` files, put such text between the same two marker lines, each alone on its own line, below
+the frontmatter. `cds build` stops on a marker it can't trust (L3): an end without a start, a
+start without an end, a marker in the frontmatter, or one inside a list item or heading, where it
+wouldn't hide anything. It warns about a marker written slightly differently, or inside a code
+block, where it still cuts the text (L4).
 
 **The files on disk always contain them.** That includes `gen/okf` and the copy in your deployed
 app (`gen/srv/okf-bundle/`). If you commit `gen/okf`, publish it, or ship it anywhere public,
@@ -377,6 +381,8 @@ model name the `.cds` file and line.
 | W4 | warning | A link points at a file that isn't in the bundle. |
 | L1 | error | A file in `okf/` can't go into the bundle (in `model/`, a reserved name, or a path clash). |
 | L2 | warning | `okf/index.md` doesn't link to `model/`. |
+| L3 | error | An authorization marker in an `okf/` file is broken (unpaired, in the frontmatter, or in a list item or heading); the file is left out. |
+| L4 | warning | An authorization marker in an `okf/` file is written slightly differently, or sits in a code block. |
 | M1 | error | Two definitions would get the same path, or paths that differ only in letter case. |
 
 Setting mistakes (e.g. `cds.okf.include: "everything"`) name the setting and its allowed values

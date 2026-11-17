@@ -90,7 +90,7 @@ function* compiledFiles(files: MergedFile[]): Generator<CompiledFile> {
 }
 
 // cds compile doesn't validate the bundle (cds build does), but a curated file it had to leave
-// out (L1) would give a misleading bundle, so those stop it; warnings (L2) are printed.
+// out (L1, L3) would give a misleading bundle, so those stop it; warnings (L2, L4) are printed.
 function refuseLayoutErrors(bundle: MergedBundle): void {
   const { errors, warnings } = buildMessagesOf(namedFindings(bundle, [], ""));
   for (const warning of warnings) console.warn(warning);

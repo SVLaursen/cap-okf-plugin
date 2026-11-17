@@ -11,7 +11,10 @@
 // - A curated folder without its own index.md gets a generated one, so every folder the root
 //   index links to has an index.
 // - log.md and files that aren't Markdown are kept as they are and never listed.
+// - A curated Markdown file whose authorization markers are broken (L3, task 4.11) is left out,
+//   so it is never served half cut; markers written slightly wrong are warnings (L4).
 import { parseConcept, serializeConcept, type Concept } from "../core/concept";
+import { authMarkerFindings } from "../core/auth-markers";
 import { findingAt, type Finding } from "../core/finding";
 import { compareText, generateIndex } from "../core/index-md";
 import { extractLinks, resolveLink } from "../core/links";
@@ -111,12 +114,17 @@ function keptCuratedFiles(
   const kept: CuratedFile[] = [];
   for (const file of [...curated].sort((a, b) => compareText(a.path, b.path))) {
     const problem = layoutProblem(file.path, taken);
-    if (problem === undefined) {
-      remember(file.path, taken);
-      kept.push(file);
-    } else {
+    if (problem !== undefined) {
       findings.push(problem);
+      continue;
     }
+    const markerFindings = file.path.endsWith(".md")
+      ? authMarkerFindings(file.path, file.text)
+      : [];
+    findings.push(...markerFindings);
+    if (markerFindings.some((finding) => finding.severity === "error")) continue;
+    remember(file.path, taken);
+    kept.push(file);
   }
   return kept;
 }

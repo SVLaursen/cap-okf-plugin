@@ -314,3 +314,42 @@ describe("mergeBundle: links to model/ in a curated root index", () => {
     expect(merged.findings.some((each) => each.rule === "L2")).toBe(warns);
   });
 });
+
+describe("mergeBundle: authorization markers in curated files (L3, L4; task 4.11)", () => {
+  const START = "<!-- okf:auth:start -->";
+  const END = "<!-- okf:auth:end -->";
+
+  test("a file with a broken marker is an error (L3) and left out", () => {
+    const text = `---\ntype: Guide\ntitle: Broken\n---\n# Broken\n${END}\nMore.\n`;
+    const merged = mergeBundle(GENERATED, [curated("guides/broken.md", text)], "0.2");
+    expect(merged.findings).toEqual([
+      expect.objectContaining({ file: "guides/broken.md", line: 6, rule: "L3", severity: "error" }),
+    ]);
+    expect(paths(merged.files)).not.toContain("guides/broken.md");
+    expect(merged.curatedPaths.has("guides/broken.md")).toBe(false);
+  });
+
+  test("a marker written slightly wrong is a warning (L4) and the file stays", () => {
+    const text = `---\ntype: Guide\ntitle: Loose\n---\n# Loose\n<!--okf:auth:start-->\nS.\n${END}\n`;
+    const merged = mergeBundle(GENERATED, [curated("guides/loose.md", text)], "0.2");
+    expect(merged.findings).toEqual([
+      expect.objectContaining({
+        file: "guides/loose.md",
+        line: 6,
+        rule: "L4",
+        severity: "warning",
+      }),
+    ]);
+    expect(paths(merged.files)).toContain("guides/loose.md");
+  });
+
+  test("well-formed sections and files that aren't Markdown give no finding", () => {
+    const good = `---\ntype: Guide\ntitle: Good\n---\n# Good\n${START}\nS.\n${END}\n`;
+    const merged = mergeBundle(
+      GENERATED,
+      [curated("guides/good.md", good), curated("notes.txt", `${END}\n`)],
+      "0.2",
+    );
+    expect(merged.findings).toEqual([]);
+  });
+});
