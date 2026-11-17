@@ -93,7 +93,7 @@ test/
   - Note from 2.6: pass inferred CSN as `cds.load` returns it (CSN compiled for a runtime adds foreign keys and draft tables that name hidden associations), and always pass `selectExported(model, include)` as the context's `isExported`; its default lets everything through.
   - Note from 2.5: build the text lookup with `defaultLanguageTexts(cds, model)` from the model as `cds.load` returns it (it needs `$sources`). A model compiled from a string has `$sources: ['<stdin>.cds']`, so its `_i18n` folder is looked up relative to the working directory.
   - Test first: two runs with the same inputs produce byte-identical output.
-- [ ] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it.
+- [x] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it. Maintainer decisions 2026-11-17: without `-o` it prints one path per line; the clock is `SOURCE_DATE_EPOCH` when set, else the current time.
 - [ ] **2.9 `cds build` task.** Writes `gen/okf` and, for staging builds with a `nodejs` task, the same files to `<nodejs dest>/okf-bundle/` (ADR-0007); runs validation; fails only on errors. In-place builds (`build.target: "."`) never touch `okf/`.
   - Test first: `cds build` of a fixture app writes `gen/okf` and `gen/srv/okf-bundle/`; an in-place build leaves `okf/` untouched.
 - [ ] **2.10 Golden tests.** Commit `test/golden/bookshop/`; diff on every run.
