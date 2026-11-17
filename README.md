@@ -283,8 +283,14 @@ Then `cds watch` serves the bundle at `/okf/`:
   `cds build` validated. Without one (`cds watch`, `cds serve`, tests), cap-okf generates the
   bundle in memory at startup from the app's model and `okf/`; curated files with errors are left
   out and reported, so startup never fails over them. Under `NODE_ENV=production` that gets a
-  warning, because the app was deployed without the okf build task. Changes to `okf/` show up
-  when the server restarts (`cds watch` restarts on CDS changes).
+  warning, because the app was deployed without the okf build task.
+- Changes show up when the server restarts. `cds watch` restarts when CDS files change, but not
+  when Markdown files do, and a plugin can't change that. To restart on edits in `okf/` too, add
+  `md` to its file types; `--ext` replaces the default list, so repeat it:
+
+  ```sh
+  cds watch --ext cds,csn,csv,ts,mjs,cjs,js,json,properties,edmx,xml,env,md
+  ```
 
 ## Building and deploying
 

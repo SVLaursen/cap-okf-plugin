@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "cds-serve",
-    "watch": "cds watch",
+    "watch": "cds watch --ext cds,csn,csv,ts,mjs,cjs,js,json,properties,edmx,xml,env,md",
     "build": "cds build"
   },
   "cds": {
