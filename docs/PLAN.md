@@ -103,7 +103,7 @@ test/
 
 ## Phase 3 — Curation and developer experience → Gate G4 → release 0.1
 
-- [ ] **3.1 Merge.** Merge curated `okf/` with generated `model/`; a curated file under `model/` is an error with a fix hint.
+- [x] **3.1 Merge.** Merge curated `okf/` with generated `model/`; a curated file under `model/` is an error with a fix hint. Decisions (defaults, open to the maintainer): `cds compile --to okf` merges `<cds.root>/okf` too, so `-o` gives what `cds build` gives; a curated folder without its own `index.md` gets a generated one, so every folder the root index links to has an index; cap-okf layout rules L1 (error: curated file in `model/`, or a path that differs from another only in letter case or Unicode form; the file is left out) and L2 (warning: a curated root `index.md` that doesn't link to `model/`); messages name `okf/<path>` for curated files; non-Markdown curated files are copied byte for byte by `cds build`, while `cds compile -o` writes them only when they are UTF-8 text (CAP's writer takes strings) and notes the rest.
 - [ ] **3.2 Messages.** `[okf] <file>:<line> — <what>.` + indented fix. Errors fail the build; warnings never do.
 - [ ] **3.3 `cds add okf`.** Creates `okf/index.md`, one example concept, `.gitignore` entry for `gen/okf`, a commented `cds.okf` block. Idempotent.
 - [ ] **3.4 `cds watch`.** Serving under `cds watch` uses the in-memory bundle, which follows model changes because the server restarts (ADR-0007). Optional: regenerate `gen/okf` for inspection on change (debounced); no file writes outside `gen/okf`.

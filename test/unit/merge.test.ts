@@ -49,7 +49,7 @@ const paths = (files: { path: string }[]) => files.map((file) => file.path);
 const textOf = (files: { path: string; text: string }[], path: string) =>
   files.find((file) => file.path === path)?.text;
 
-describe("mergeBundle", () => {
+describe("mergeBundle: files", () => {
   test("keeps generated and curated files, sorted by path, curated ones at their okf/ path", () => {
     const merged = mergeBundle(
       GENERATED,
@@ -68,7 +68,6 @@ describe("mergeBundle", () => {
     expect(merged.findings).toEqual([]);
     expect([...merged.curatedPaths]).toEqual(["guides/ordering.md"]);
   });
-
   test("without a curated index.md, the root index declares okf_version and lists model/ and the curated folders", () => {
     const merged = mergeBundle(
       GENERATED,
@@ -98,7 +97,9 @@ describe("mergeBundle", () => {
     );
     expect(textOf(merged.files, "notes/index.md")).toBe(own);
   });
+});
 
+describe("mergeBundle: the root index", () => {
   test("a curated root index.md replaces the generated one", () => {
     const own = '---\nokf_version: "0.2"\n---\n# Model\n\n* [Model](model/) - Generated.\n';
     const merged = mergeBundle(GENERATED, [curated("index.md", own)], "0.2");
@@ -132,7 +133,9 @@ describe("mergeBundle", () => {
       },
     ]);
   });
+});
 
+describe("mergeBundle: layout errors (L1)", () => {
   test.each(["model/notes.md", "model/x/Books.md", "Model/notes.md", "model/index.md"])(
     "a curated file at okf/%s is an error and left out: model/ belongs to the generator",
     (path) => {
@@ -170,7 +173,9 @@ describe("mergeBundle", () => {
     expect(paths(merged.files)).not.toContain("guides/a.md");
     expect(paths(merged.files)).toContain("Guides/b.md");
   });
+});
 
+describe("mergeBundle: other files and the validator", () => {
   test("other curated files and log.md are kept as they are, and never listed", () => {
     const merged = mergeBundle(
       GENERATED,

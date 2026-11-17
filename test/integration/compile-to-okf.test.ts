@@ -237,3 +237,53 @@ test("scripts/cds-with-okf.js runs the cds CLI with cap-okf loaded, keeping plug
   expect(plugins["cap-okf"]?.impl).toBe(path.join(ROOT, "cds-plugin.js"));
   expect(plugins["other"]?.impl).toBe(path.join(ROOT, "test", "cds-plugin-src.js"));
 });
+
+// Task 3.1: cds compile merges the curated okf/ folder at the project root, as cds build does.
+describe("cds compile --to okf with a curated okf/ folder", () => {
+  let app: string;
+  beforeEach(() => {
+    // Inside the repository (gen/ is git-ignored): cds compile reads okf/ at its working
+    // directory, and outside the repository cds-dk would load another @sap/cds than the plugin.
+    fs.mkdirSync(path.join(ROOT, "gen"), { recursive: true });
+    app = fs.mkdtempSync(path.join(ROOT, "gen", "compile-curated-"));
+    fs.cpSync(FIXTURE, app, { recursive: true });
+    fs.mkdirSync(path.join(app, "okf", "guides"), { recursive: true });
+    fs.writeFileSync(
+      path.join(app, "okf", "guides", "ordering.md"),
+      "---\ntype: Guide\ntitle: Ordering\ndescription: How to order.\n---\n",
+    );
+  });
+  afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
+
+  test("prints the curated paths in the tree, with the folder index made for them", () => {
+    const result = cdsWithOkf(["compile", ".", "--to", "okf"], {}, { cwd: app });
+    expect(result.status).toBe(0);
+    const tree = result.stdout.trim().split("\n");
+    expect(tree).toEqual(
+      expect.arrayContaining(["guides/index.md", "guides/ordering.md", "index.md"]),
+    );
+  });
+
+  test("with -o, writes text files as they are and leaves out a file that isn't text, with a note", () => {
+    fs.writeFileSync(path.join(app, "okf", "guides", "q.sql"), "select 1;\n");
+    fs.writeFileSync(
+      path.join(app, "okf", "guides", "logo.png"),
+      Buffer.from([0x89, 0x50, 0xff, 0xfe]),
+    );
+    const out = path.join(app, "out");
+    const result = cdsWithOkf(["compile", ".", "--to", "okf", "-o", out], {}, { cwd: app });
+    expect(result.status).toBe(0);
+    expect(fs.readFileSync(path.join(out, "guides", "q.sql"), "utf8")).toBe("select 1;\n");
+    expect(fs.existsSync(path.join(out, "guides", "logo.png"))).toBe(false);
+    expect(result.stderr).toContain("[okf] okf/guides/logo.png — isn't text");
+  });
+
+  test("a curated file under okf/model/ stops the compile with the [okf] message", () => {
+    fs.mkdirSync(path.join(app, "okf", "model"));
+    fs.writeFileSync(path.join(app, "okf", "model", "notes.md"), "---\ntype: Guide\n---\n");
+    const result = cdsWithOkf(["compile", ".", "--to", "okf"], {}, { cwd: app });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("[okf] okf/model/notes.md:1 — model/ belongs to the generator");
+    expect(result.stderr).not.toMatch(/\n\s+at /);
+  });
+});

@@ -70,7 +70,7 @@ describe("the okf build task and validation findings", () => {
     await plugin.build();
     expect(plugin.messages).toEqual([
       expect.objectContaining({
-        message: expect.stringMatching(/^\[okf\] model\/x\/A\.md:2 — /),
+        message: expect.stringMatching(/^\[okf\] gen\/okf\/model\/x\/A\.md:2 — /),
         severity: "Warning",
       }),
     ]);
@@ -81,10 +81,12 @@ describe("the okf build task and validation findings", () => {
     jest.mocked(validateBundle).mockReturnValue([ERROR, WARNING]);
     const plugin = okfPlugin(out);
     const failure = plugin.build();
-    await expect(failure).rejects.toThrow(/\[okf\] .* — the bundle breaks OKF v0\.2 in 1 place/);
+    await expect(failure).rejects.toThrow(/\[okf\] .* — the bundle has 1 error/);
     await expect(failure).rejects.toMatchObject({
       name: "BuildError",
-      messages: [expect.stringMatching(/^\[okf\] model\/x\/A\.md:2 — "type" is empty \(R2\)/)],
+      messages: [
+        expect.stringMatching(/^\[okf\] gen\/okf\/model\/x\/A\.md:2 — "type" is empty \(R2\)/),
+      ],
     });
     // gen/okf stays for review; only the deployed copy is held back.
     expect(fs.existsSync(path.join(ROOT_GEN, "okf"))).toBe(false);

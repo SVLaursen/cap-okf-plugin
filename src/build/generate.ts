@@ -3,13 +3,15 @@
 // (ADR-0007, one model for generation and build).
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { mergeBundle, type MergedBundle } from "../bundle/merge";
 import type { Concept } from "../core/concept";
 import type { Csn } from "../export/csn";
-import { exportModel } from "../export/exporter";
+import { exportModel, OKF_VERSION } from "../export/exporter";
 import { defaultLanguageTexts } from "../export/i18n";
 import { INCLUDE_VALUES, type Include } from "../export/selection";
 import type { Cds } from "../index";
 import { clockFrom } from "./clock";
+import { CURATED_FOLDER, readCuratedFolder } from "./curated";
 import { setupError } from "./errors";
 
 /**
@@ -23,6 +25,16 @@ export function generateConcepts(cds: Cds, model: Csn): Concept[] {
     version: ownVersion(),
     texts: defaultLanguageTexts(cds, model),
   });
+}
+
+/**
+ * The whole bundle: the concepts generated from `model` merged with the curated files in the
+ * app's okf/ folder (task 3.1, ADR-0007). Layout problems come back as findings (L1, L2).
+ */
+export async function generateBundle(cds: Cds, model: Csn): Promise<MergedBundle> {
+  const concepts = generateConcepts(cds, model);
+  const curated = await readCuratedFolder(path.join(cds.root, CURATED_FOLDER));
+  return mergeBundle(concepts, curated, OKF_VERSION);
 }
 
 // cds.okf.include: "services" (default) or "all" (task 2.6), from cds.env, so profiles and

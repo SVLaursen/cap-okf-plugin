@@ -7,19 +7,20 @@
 //   project root itself (which would pull in loose .cds files) and without feature toggles.
 // - In staging builds it puts the same files into the Node.js app that is deployed,
 //   <nodejs dest>/okf-bundle/ (gen/srv/okf-bundle/), where the server finds them in production.
+// - It merges the curated okf/ folder into the bundle (task 3.1, src/bundle/merge.ts).
 // - It validates the bundle: warnings are reported, errors fail the build before the bundle is
-//   put into the deployed app.
+//   put into the deployed app. Messages name okf/<path> for curated files.
 // - In-place builds (build.target: ".") write <root>/gen/okf only; the curated okf/ folder is
 //   never touched.
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { serializeConcept } from "../core/concept";
-import { validateBundle, type BundleFile } from "../core/validate";
+import type { MergedBundle, MergedFile } from "../bundle/merge";
+import { validateBundle } from "../core/validate";
 import type { Csn } from "../export/csn";
 import type { Cds } from "../index";
 import { SetupError } from "./errors";
-import { buildMessagesOf } from "./findings";
-import { generateConcepts } from "./generate";
+import { buildMessagesOf, namedFindings } from "./findings";
+import { generateBundle } from "./generate";
 
 /** The bundle's folder inside the build output: gen/okf. */
 const BUNDLE_FOLDER = "okf";
@@ -41,7 +42,7 @@ interface BuildPlugin {
   init(): void;
   options(): Record<string, unknown>;
   baseModel(): Promise<unknown>;
-  write(data: string): { to(file: string): Promise<void> };
+  write(data: string | Buffer): { to(file: string): Promise<void> };
   pushMessage(message: string, severity: string): void;
 }
 
@@ -80,30 +81,35 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
       const model = await this.baseModel();
       // CAP has already logged that the app has no CDS model.
       if (model === undefined || model === null) return;
-      const files = bundleFiles(cds, build, model as Csn);
-      await this.writeFiles(files, this.task.dest);
-      this.reportFindings(files);
+      const bundle = await mergedBundle(cds, build, model as Csn);
+      await this.writeFiles(bundle.files, this.task.dest);
+      this.reportFindings(bundle);
       const deployedApp = this.deployedNodejsApp();
       if (deployedApp !== undefined) {
-        await this.writeFiles(files, path.join(deployedApp, DEPLOYED_BUNDLE_FOLDER));
+        await this.writeFiles(bundle.files, path.join(deployedApp, DEPLOYED_BUNDLE_FOLDER));
       }
     }
 
     // The folder is cap-okf's alone, so it is emptied first.
-    private async writeFiles(files: BundleFile[], folder: string): Promise<void> {
+    private async writeFiles(files: MergedFile[], folder: string): Promise<void> {
       await rm(folder, { recursive: true, force: true });
       for (const file of files) {
-        await this.write(file.text).to(path.join(folder, ...file.path.split("/")));
+        // Curated files that aren't Markdown are copied byte for byte.
+        const content = file.bytes === undefined ? file.text : Buffer.from(file.bytes);
+        await this.write(content).to(path.join(folder, ...file.path.split("/")));
       }
     }
 
     // Warnings are logged after the build; errors fail it, listed one per message.
-    private reportFindings(files: BundleFile[]): void {
-      const { errors, warnings } = buildMessagesOf(validateBundle(files));
+    // Each message names the file to open: okf/<path> for curated files, else gen/okf/<path>.
+    private reportFindings(bundle: MergedBundle): void {
+      const bundleFolder = path.relative(cds.root, this.task.dest).split(path.sep).join("/");
+      const findings = namedFindings(bundle, validateBundle(bundle.files), bundleFolder);
+      const { errors, warnings } = buildMessagesOf(findings);
       for (const warning of warnings) this.pushMessage(warning, build.Plugin.WARNING);
       if (errors.length > 0) {
         throw new build.BuildError(
-          `[okf] ${path.relative(cds.root, this.task.dest)} — the bundle breaks OKF v0.2 in ${errors.length} place(s).\n` +
+          `[okf] ${bundleFolder} — the bundle has ${errors.length} error(s).\n` +
             "  Fix the problems listed; the bundle stays there for review, but isn't deployed.",
           errors,
         );
@@ -135,12 +141,9 @@ function withoutProjectRoot(cds: Cds, model: string[] | undefined): string[] | u
 
 // A setup mistake becomes a BuildError: CAP's CLI prints its message plainly, and any other
 // error with brackets around it.
-function bundleFiles(cds: Cds, build: BuildApi, model: Csn): BundleFile[] {
+async function mergedBundle(cds: Cds, build: BuildApi, model: Csn): Promise<MergedBundle> {
   try {
-    return generateConcepts(cds, model).map((concept) => ({
-      path: concept.path,
-      text: serializeConcept(concept),
-    }));
+    return await generateBundle(cds, model);
   } catch (error) {
     if (error instanceof SetupError) throw new build.BuildError(error.message, []);
     throw error;

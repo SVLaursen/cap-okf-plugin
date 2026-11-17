@@ -2,16 +2,19 @@
 // prints the tree of paths, one per line; with -o it writes the bundle. The clock is
 // SOURCE_DATE_EPOCH when set.
 //
-// The bundle depends only on the CDS files compiled and on cds.okf.include: the model is loaded
-// again from those files, inferred and with doc comments (ADR-0007, one model for generation and
-// build). So --for, --flavor and --docs change nothing, and options that would suggest otherwise
+// The bundle depends only on the CDS files compiled, cds.okf.include and the curated okf/ folder
+// at the project root, merged in as cds build does (task 3.1): the model is loaded again from
+// those files, inferred and with doc comments (ADR-0007, one model for generation and build). So --for, --flavor and --docs change nothing, and options that would suggest otherwise
 // (-l, -s <service>) are refused. With -o, CAP's writer adds and overwrites files but never
 // deletes any: compile into an empty folder, or use cds build (task 2.9), which writes gen/okf.
-import { serializeConcept, type Concept } from "../core/concept";
+import path from "node:path";
+import type { MergedBundle, MergedFile } from "../bundle/merge";
 import type { Csn } from "../export/csn";
 import type { Cds } from "../index";
+import { CURATED_FOLDER, isUtf8 } from "./curated";
 import { setupError } from "./errors";
-import { generateConcepts } from "./generate";
+import { buildMessagesOf, namedFindings } from "./findings";
+import { generateBundle } from "./generate";
 
 /** One file for CAP's compile writer: its text, and where it goes (ADR-0005 (a)). */
 type CompiledFile = [content: string, place: { file: string; suffix: string }];
@@ -47,9 +50,10 @@ async function compileToOkf(
   options: CompileOptions,
 ): Promise<string | Generator<CompiledFile>> {
   const model = await withDocComments(cds, csn);
-  const concepts = generateConcepts(cds, model);
-  if (options.dest === undefined) return concepts.map((concept) => concept.path).join("\n");
-  return compiledFiles(concepts);
+  const bundle = await generateBundle(cds, model);
+  refuseLayoutErrors(bundle);
+  if (options.dest === undefined) return bundle.files.map((file) => file.path).join("\n");
+  return compiledFiles(bundle.files);
 }
 
 function refuseMisleadingOptions(options: CompileOptions): void {
@@ -69,11 +73,31 @@ function refuseMisleadingOptions(options: CompileOptions): void {
 }
 
 // CAP's writer takes many files only as a generator (ADR-0005 (a); an array would be one file).
-// It appends the suffix to `file`, so the path goes in without its ".md".
-function* compiledFiles(concepts: Concept[]): Generator<CompiledFile> {
-  for (const concept of concepts) {
-    yield [serializeConcept(concept), { file: concept.path.replace(/\.md$/, ""), suffix: ".md" }];
+// It appends the suffix to `file`, so the path goes in without its extension. It writes strings
+// only, so a curated file that isn't UTF-8 text (e.g. an image) is left out, with a note.
+function* compiledFiles(files: MergedFile[]): Generator<CompiledFile> {
+  for (const file of files) {
+    if (file.bytes !== undefined && !isUtf8(file.bytes)) {
+      console.warn(
+        `[okf] ${CURATED_FOLDER}/${file.path} — isn't text, so cds compile can't write it.\n` +
+          "  Use cds build, which copies it as it is.",
+      );
+      continue;
+    }
+    const extension = path.posix.extname(file.path);
+    yield [
+      file.text,
+      { file: file.path.slice(0, file.path.length - extension.length), suffix: extension },
+    ];
   }
+}
+
+// cds compile doesn't validate the bundle (cds build does), but a curated file it had to leave
+// out (L1) would give a misleading bundle, so those stop it; warnings (L2) are printed.
+function refuseLayoutErrors(bundle: MergedBundle): void {
+  const { errors, warnings } = buildMessagesOf(namedFindings(bundle, [], ""));
+  for (const warning of warnings) console.warn(warning);
+  if (errors.length > 0) throw setupError(errors.join("\n"));
 }
 
 /**
