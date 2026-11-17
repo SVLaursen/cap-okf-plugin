@@ -10,9 +10,15 @@ import type { Answer, Channel, Reader } from "./server.contract";
 /** A client per reader: one signed in, one anonymous. */
 export type Clients = (reader: Reader) => Promise<McpClient>;
 
-/** The login used for "authenticated" readers; every other reader is anonymous. */
-export function loginOf(reader: Reader, login: Login): Login | undefined {
-  return reader === "authenticated" ? login : undefined;
+/** The fixture's users: one who meets requires, and one signed in without the required role. */
+export interface Logins {
+  authenticated: Login;
+  "without-required-role": Login;
+}
+
+/** The login a reader uses; "anonymous" uses none. */
+export function loginOf(reader: Reader, logins: Logins): Login | undefined {
+  return reader === "anonymous" ? undefined : logins[reader];
 }
 
 export function toolsChannel(clientFor: Clients): Channel {
@@ -34,7 +40,8 @@ export function toolsChannel(clientFor: Clients): Channel {
           name: "OkfService_Index_query",
           arguments: { top: 100, ...(cursor && { cursor }) },
         });
-        if (result.isError === true) return [];
+        // Listing is the setup of most contract checks: a failure must say why.
+        if (result.isError === true) throw new Error(`Index query failed: ${toolText(result)}`);
         const page = result.structuredContent as { rows: { path: string }[]; nextCursor?: string };
         paths.push(...page.rows.map((row) => row.path));
         cursor = page.nextCursor;
@@ -67,7 +74,9 @@ export function resourcesChannel(clientFor: Clients, namespace: string): Channel
   };
 }
 
-// An MCP error (thrown by the client) is the channel's not-found answer.
+// A JSON-RPC error (numeric code, thrown by the client) is the channel's not-found answer.
+// Anything else (an HTTP or transport failure) is rethrown, so two equal failures can't pass
+// for "the same not-found answer".
 async function notFoundOnError<T>(
   asked: string,
   call: () => Promise<T>,
@@ -76,15 +85,17 @@ async function notFoundOnError<T>(
     return { value: await call() };
   } catch (error) {
     const { code, message } = error as { code?: unknown; message?: string };
+    if (typeof code !== "number") throw error;
     return { notFound: `${String(code)} ${String(message).replaceAll(asked, "<path>")}` };
   }
 }
 
 function toolAnswer(result: ToolResult, path: string): Answer {
-  if (result.isError === true) {
-    const text = result.content?.[0]?.text ?? "tool error";
-    return { notFound: text.replaceAll(path, "<path>") };
-  }
+  if (result.isError === true) return { notFound: toolText(result).replaceAll(path, "<path>") };
   const value = (result.structuredContent as { value?: unknown } | undefined)?.value;
   return typeof value === "string" ? { text: value } : { notFound: "no text" };
+}
+
+function toolText(result: ToolResult): string {
+  return result.content?.[0]?.text ?? "tool error";
 }

@@ -43,10 +43,14 @@ jobs:
 
   # Task 4.8: the contract suite through @gavdi/cap-mcp v2 and a real MCP client. Until the plugin
   # is released, it is checked out and built here; set the repository variables
-  # CAP_MCP_V2_REPOSITORY (owner/name) and CAP_MCP_V2_REF, and the secret CAP_MCP_V2_TOKEN if that
-  # repository is private. Without the variable the job is skipped.
+  # CAP_MCP_V2_REPOSITORY (owner/name) and CAP_MCP_V2_REF (a commit SHA, so a green run can be
+  # reproduced), and the secret CAP_MCP_V2_TOKEN if that repository is private. Without the
+  # variable the job is skipped; so is it for pull requests from forks, which get no secrets.
   integrations:
-    if: vars.CAP_MCP_V2_REPOSITORY != ''
+    if: >-
+      vars.CAP_MCP_V2_REPOSITORY != '' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +60,8 @@ jobs:
           ref: ${{ vars.CAP_MCP_V2_REF }}
           token: ${{ secrets.CAP_MCP_V2_TOKEN || github.token }}
           path: cap-mcp-v2
+          # The token must not stay in .git/config, where the code under test could read it.
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24

@@ -8,12 +8,17 @@ import { hiddenContract, serverContract } from "./server.contract";
 
 // Task 4.8: the fixture app test/fixtures/app-gavdi-mcp serves its bundle through @gavdi/cap-mcp
 // on both channels (resources and tools), and a real MCP client (the official SDK, with its
-// initialize handshake) runs the server contract on each. With the default requires, anonymous
-// callers reach nothing, so the "no authorization section for anonymous readers" check can only
-// fail in the requires: "any" runs (mcp-tools-anonymous, mcp-resources-anonymous).
+// initialize handshake) runs the server contract on each. requires names a role: reader has it,
+// outsider is signed in without it (the hidden check). Anonymous callers reach nothing, so the
+// "no authorization section for anonymous readers" check can only fail in the requires: "any"
+// runs (mcp-tools-anonymous, mcp-resources-anonymous).
 
 const NAMESPACE = "okf-fixture";
-const READER = { username: "reader", password: "reader" };
+// reader has the role requires names; outsider is signed in without it.
+const LOGINS = {
+  authenticated: { username: "reader", password: "reader" },
+  "without-required-role": { username: "outsider", password: "outsider" },
+};
 const EXPECTED = {
   reader: "authenticated" as const,
   concept: { path: "model/CatalogService/Books.md", contains: "type: Projection" },
@@ -56,7 +61,7 @@ function readerClients(serverUrl: () => string): (reader: Reader) => Promise<Mcp
     for (const client of clients.values()) await (await client).close();
   });
   return (reader) => {
-    const login = loginOf(reader, READER);
+    const login = loginOf(reader, LOGINS);
     const key = login?.username ?? "anonymous";
     let client = clients.get(key);
     if (client === undefined) {
@@ -92,6 +97,20 @@ function pluginOffers(clientFor: (reader: Reader) => Promise<McpClient>): void {
         name: `okf-${NAMESPACE}-concepts`,
       }),
     );
+  });
+
+  test("Index_get reads one row by its path", async () => {
+    const result = await (
+      await clientFor("authenticated")
+    ).callTool({
+      name: "OkfService_Index_get",
+      arguments: { path: EXPECTED.curated },
+    });
+    expect(result.structuredContent).toMatchObject({
+      path: EXPECTED.curated,
+      type: "Guide",
+      title: "Shipping books",
+    });
   });
 }
 
@@ -130,7 +149,11 @@ function pluginAnswers(clientFor: (reader: Reader) => Promise<McpClient>): void 
       EXPECTED.concept.path,
       "authenticated",
     );
+    // Compared as a pair, so a failure shows both answers.
+    expect({ tools: "text" in tools, resources: "text" in resources }).toEqual({
+      tools: true,
+      resources: true,
+    });
     expect(tools).toEqual(resources);
-    expect("text" in tools).toBe(true);
   });
 }

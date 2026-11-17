@@ -8,13 +8,14 @@
       "auth": {
         "kind": "mocked",
         "users": {
-          "reader": { "password": "reader", "roles": [] }
+          "reader": { "password": "reader", "roles": ["okf-reader"] },
+          "outsider": { "password": "outsider", "roles": [] }
         }
       }
     },
     "okf": {
       "serve": {
-        "mcp": { "plugin": "@gavdi/cap-mcp", "as": ["resources", "tools"], "namespace": "okf-fixture" }
+        "mcp": { "plugin": "@gavdi/cap-mcp", "as": ["resources", "tools"], "namespace": "okf-fixture", "requires": "okf-reader" }
       }
     }
   }
