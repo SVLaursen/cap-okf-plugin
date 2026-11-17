@@ -12,8 +12,9 @@ import type { MapperContext } from "./mappers/context";
 import { linkTo } from "./mappers/shared";
 import { shownEntries } from "./mappers/visibility";
 
-export const AUTH_START = "<!-- okf:auth:start -->";
-export const AUTH_END = "<!-- okf:auth:end -->";
+// The markers live with the filter that removes the sections, so the two can't drift apart.
+import { AUTH_END, AUTH_START } from "../core/filter";
+export { AUTH_END, AUTH_START };
 
 // How CAP combines the rules, so an agent doesn't read AND where CAP means OR, or the reverse.
 const LEGEND =

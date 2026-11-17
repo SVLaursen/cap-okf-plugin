@@ -40,7 +40,9 @@ describe("withoutAuthSections", () => {
     const text = `Open.\r\n\r\n  ${START}  \r\nSecret.\r\n\t${END}\r\nAfter.\r\n`;
     expect(withoutAuthSections(text)).toBe("Open.\r\nAfter.\r\n");
   });
+});
 
+describe("withoutAuthSections, unbalanced and nested markers fail closed", () => {
   test("a start marker without an end removes everything after it, so nothing leaks", () => {
     const text = `Open.\n\n${START}\nSecret.\nMore secret.\n`;
     expect(withoutAuthSections(text)).toBe("Open.\n");
@@ -50,14 +52,19 @@ describe("withoutAuthSections", () => {
     expect(withoutAuthSections(`Open.\r\n${START}\r\nSecret.\r\n`)).toBe("Open.\r\n");
   });
 
-  test("a start marker inside a section doesn't end it; the first end marker does", () => {
-    const text = `A.\n${START}\nx\n${START}\ny\n${END}\nB.\n`;
+  test("sections nest: a section ends only at its own end marker", () => {
+    const text = `A.\n${START}\nx\n${START}\ny\n${END}\nouter secret\n${END}\nB.\n`;
     expect(withoutAuthSections(text)).toBe("A.\nB.\n");
   });
 
-  test("an end marker without a start is removed, and the text around it stays", () => {
-    const text = `A.\n${END}\nB.\n`;
-    expect(withoutAuthSections(text)).toBe("A.\nB.\n");
+  test("an inner section left open keeps the outer one open to the end of the file", () => {
+    const text = `A.\n${START}\nx\n${START}\ny\n${END}\nB.\n`;
+    expect(withoutAuthSections(text)).toBe("A.\n");
+  });
+
+  test("an end marker without a start withholds everything before it: its start was broken", () => {
+    const text = `A.\nsecret\n${END}\nB.\n`;
+    expect(withoutAuthSections(text)).toBe("B.\n");
   });
 
   test("markers inside a code block still count: the filter fails closed", () => {
@@ -68,6 +75,39 @@ describe("withoutAuthSections", () => {
   test("a text without a final newline keeps having none", () => {
     expect(withoutAuthSections(`A.\n${START}\nx\n${END}`)).toBe("A.");
     expect(withoutAuthSections("A.")).toBe("A.");
+  });
+});
+
+describe("withoutAuthSections, markers written slightly wrong still count", () => {
+  test.each([
+    "<!--okf:auth:start-->",
+    "<!-- OKF:Auth:Start -->",
+    "<!--   okf:auth:start   -->",
+    "> <!-- okf:auth:start -->",
+    "\u200B<!-- okf:auth:start -->\u2060",
+    "\uFEFF<!-- okf:auth:start -->",
+  ])("start marker %j", (marker) => {
+    expect(withoutAuthSections(`Open.\n${marker}\nSecret.\n${END}\nAfter.\n`)).toBe(
+      "Open.\nAfter.\n",
+    );
+  });
+
+  test("an end marker written slightly wrong still ends the section", () => {
+    expect(withoutAuthSections(`Open.\n${START}\nSecret.\n<!--okf:auth:END-->\nAfter.\n`)).toBe(
+      "Open.\nAfter.\n",
+    );
+  });
+
+  test("old Mac line endings (a lone \\r) separate lines too", () => {
+    expect(withoutAuthSections(`Open.\r${START}\rSecret.\r${END}\rAfter.\r`)).toBe(
+      "Open.\rAfter.\r",
+    );
+  });
+
+  test("a start marker in the frontmatter removes the rest, so nothing leaks", () => {
+    expect(withoutAuthSections(`---\ntype: X\n${START}\nrole: admin\n---\nBody.\n`)).toBe(
+      "---\ntype: X\n",
+    );
   });
 });
 
@@ -84,6 +124,16 @@ describe("forReader", () => {
 });
 
 describe("withoutAuthSections on real bundles", () => {
+  test("the demo's curated guide loses only its section", () => {
+    const file = path.join(__dirname, "..", "..", "demo", "okf", "guides", "ordering.md");
+    const text = fs.readFileSync(file, "utf8");
+    const filtered = withoutAuthSections(text);
+    expect(filtered).not.toMatch(/okf:auth|only see orders/);
+    expect(filtered).toContain(
+      "Shop staff look orders up in [AdminService](/model/AdminService.md).",
+    );
+  });
+
   const GOLDEN = path.join(__dirname, "..", "golden", "bookshop");
 
   test("the golden bundle: no marker and no role left, everything else unchanged", () => {
