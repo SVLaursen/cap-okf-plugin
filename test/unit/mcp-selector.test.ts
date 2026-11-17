@@ -1,4 +1,4 @@
-import { selectMcp } from "../../src/serve/mcp/select";
+import { installedPlugins, selectMcp } from "../../src/serve/mcp/select";
 
 // Task 4.4 (ADR-0004, ADR-0006, ADR-0010): cds.okf.serve.mcp is false | true |
 // { plugin, as, namespace, requires }. Detection (by package name in CAP's plugin list) only
@@ -116,9 +116,10 @@ describe("selectMcp: namespace (ADR-0010)", () => {
   });
 
   test("no namespace and no package name to derive one: a startup error", () => {
-    expect(() => select(true, [GAVDI], undefined)).toThrow(
-      /^\[okf\] cds\.okf\.serve\.mcp\.namespace — is missing/,
-    );
+    // Directly: the helper's default would replace an explicit undefined.
+    expect(() =>
+      selectMcp({ okf: { serve: { mcp: true } }, installed: [GAVDI], packageName: undefined }),
+    ).toThrow(/^\[okf\] cds\.okf\.serve\.mcp\.namespace — is missing/);
   });
 });
 
@@ -146,5 +147,17 @@ describe("selectMcp: a setting that isn't false, true or an object", () => {
     expect(() => select("yes", [GAVDI])).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp — "yes" is not a known value/,
     );
+  });
+});
+
+describe("installedPlugins", () => {
+  test("reads the package names from cds.env.plugins", () => {
+    const env = { plugins: { "@gavdi/cap-mcp": { impl: "x" }, "cap-okf": { impl: "y" } } };
+    expect(installedPlugins(env)).toEqual(["@gavdi/cap-mcp", "cap-okf"]);
+  });
+
+  test("no plugin list: none", () => {
+    expect(installedPlugins({})).toEqual([]);
+    expect(installedPlugins(undefined)).toEqual([]);
   });
 });
