@@ -6,6 +6,8 @@ import { validateBundle, type BundleFile, type Finding } from "../../src/core/va
 // Coverage instrumentation slows code down several times, so a wall-clock limit means nothing
 // in a coverage run (maintainer decision at gate G3). Timing tests are skipped there; CI runs
 // them on their own, without coverage: npm run test:timing.
+// `__coverage__` is the global that Jest's default (babel/istanbul) coverage provider creates;
+// switching jest.config.js to coverageProvider "v8" needs another signal here.
 const isCoverageRun = "__coverage__" in globalThis;
 const timingTest = isCoverageRun ? test.skip : test;
 
