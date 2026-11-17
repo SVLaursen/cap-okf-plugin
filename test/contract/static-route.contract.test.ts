@@ -11,7 +11,9 @@ const { GET, axios } = cds.test(DEMO);
 // Error statuses are answers the adapter checks, not failures.
 axios.defaults.validateStatus = () => true;
 
+// The static route has no `requires`: anyone may list and read; only the sections are filtered.
 serverContract("static route", () => staticRouteChannel(GET), {
+  reader: "anonymous",
   concept: { path: "model/CatalogService/Books.md", contains: "type: Projection" },
   curated: "guides/ordering.md",
   withAuthSection: ["model/AdminService/Orders.md", "guides/ordering.md"],

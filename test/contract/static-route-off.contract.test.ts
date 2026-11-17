@@ -6,6 +6,8 @@ import { staticRouteChannel } from "./static-route-channel";
 // The server contract (4.1) on the demo app with the static route turned off: CDS_CONFIG wins
 // over the [development] profile that turns it on (ADR-0002: nothing is served unless on).
 
+// cds.test reads the configuration when the app starts, after this line, so the override counts
+// although `import cds` above runs first. Jest gives each test file its own process.env.
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as Record<string, unknown>;
 process.env["CDS_CONFIG"] = JSON.stringify({ ...config, okf: { serve: { static: false } } });
 
