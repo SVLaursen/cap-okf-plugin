@@ -5,7 +5,7 @@ Newest first. One line per finished task or event: `YYYY-MM-DD · <task id> · <
 ## In flight
 
 - 2026-11-17 · pilot · Parked by the maintainer: G4 was signed off without a pilot run. The harness is ready (`test/pilot/`, task 3.6); the maintainer runs it later with a real domain and questions.
-- 2026-11-17 · ADR-0010 · Proposed, waiting for the maintainer: accept it (with the `bundleHash` placement and the `(tenant, locale)` scope, or changes), mark ADR-0006 Superseded, add the amendment note to ADR-0004, and confirm Contract A as built to the `@gavdi/cap-mcp` maintainers. Phase 4 waits for it; 2.10 does not.
+- 2026-11-17 · ADR-0010 · Proposed, waiting for the maintainer: accept it (with the `bundleHash` placement and the `(tenant, locale)` scope, or changes), mark ADR-0006 Superseded, and add the amendment note to ADR-0004. (The `@gavdi/cap-mcp` maintainers accepted their ADR 0013, Contract A as built, on 2026-11-17.) Phase 4 waits for it; 2.10 does not.
 
 ## Blocked
 
@@ -13,6 +13,7 @@ _None._
 
 ## Done
 
+- 2026-11-17 · ADR-0010 · The `@gavdi/cap-mcp` maintainers accepted their ADR 0013 (second message, same contract table); the reply record, ADR-0010's open points and PLAN 4.6 updated; 4.6 stays blocked until a release emits `mcp:resources` · branch `docs/cap-mcp-adr-0013-accepted`
 - 2026-11-17 · 4.2 · Auth filter: `src/core/filter.ts` (pure, 100% coverage) removes every marked authorization section for unauthenticated readers, failing closed where the 2.4 contract is silent (unclosed start → rest of file, markers in code blocks count); checked on the golden bundle (7 sections, no marker or role left, the rest unchanged); a CRLF bug (doubled `\r` after an unclosed section) found by its own test; review fixes (leaks in curated files): nested sections, near-miss markers (`<!--okf:auth:start-->`, other case, in a quote), zero-width characters and lone `\r` line endings now fail closed, a lone end marker withholds what comes before it; follow-up: a build-time `[okf]` finding for unbalanced or near-miss markers in curated files, flagging any line containing `okf:auth` (list items too), since markers broken the same way at both ends can't be recognised by the filter; servers must never fall back to the raw text if the filter throws (contract suite, 4.1) · branch `feat/4.2-auth-filter`
 - 2026-11-17 · G4 follow-up · The demo's `AdminService.Orders` doc comment described its `where` rule ("support staff only see orders they created"), so the rule's gist appeared outside the auth section (spec-checker, ADR-0003); reworded (and the catalog's "Open to everyone."), the README now warns to keep access rules out of doc comments, `@title`, `@description`, i18n texts and tags (curated files: inside the markers), and a test builds the demo bundle and checks that no role, `$user` or "everyone" appears outside its auth sections · branch `fix/demo-doc-comment`
 - 2026-11-17 · plan · Task 3.4 (`cds watch` serving the in-memory bundle) moved to Phase 4 as 4.3a, after the static route it needs (maintainer decision), so gate G4 can be prepared · branch `docs/gate-G4`

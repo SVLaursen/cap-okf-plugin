@@ -87,7 +87,7 @@ ADR-0006, with the channel shapes below.
 
 ### Contract A — `mcp:resources` in `@gavdi/cap-mcp`, as built
 
-The `@gavdi/cap-mcp` maintainers build this (their ADR 0013, accepted once cap-okf confirms); their
+The `@gavdi/cap-mcp` maintainers built this (their ADR 0013, accepted 2026-11-17); their
 answer, with the reasons for each difference from the first proposal, is in
 `docs/upstream/gavdi-cap-mcp/reply-2026-11-17.md`. Changes from ADR-0006: `contractVersion`;
 `registerTemplate` in the same release; `tenant` in every context; "not found" is a thrown 404,
@@ -283,9 +283,8 @@ served through the template.)
 - **Task 4.5, first step:** check in the `@cap-js/mcp` source whether unbound CDS functions
   become tools (through `call` or `per_action_tool`) and where their descriptions come from. This
   decides between Contract B and its fallback for that plugin. (`@gavdi/cap-mcp`: yes, answered.)
-- **For the maintainer:** confirm Contract A as built to the `@gavdi/cap-mcp` maintainers, so
-  their ADR 0013 is marked accepted. Task 4.6 stays blocked until a release emits
-  `mcp:resources`.
+- **Done (2026-11-17):** the `@gavdi/cap-mcp` maintainers accepted their ADR 0013 with Contract A
+  as above. Task 4.6 stays blocked until a release emits `mcp:resources`.
 - **For the maintainer:** accept the proposed `(tenant, locale)` scope and the `bundleHash`
   placement (now `bundleInfo()` only), or say otherwise.
 
