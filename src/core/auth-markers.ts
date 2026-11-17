@@ -8,11 +8,12 @@
 //   - a marker comment the filter doesn't read as a marker, because the line has more on it
 //     (a bullet, a #, a quote and a bullet, a task box, other text): the section would reach
 //     anonymous readers.
+//   - an HTML comment with marker-like text the filter can't read (<!-- okf: auth:start -->,
+//     <!--- okf:auth:start --->, a comment split over lines): it was meant as a marker.
 // - L4 (warning):
 //   - a marker the filter reads but written slightly wrong (case, spacing, in a quote);
 //   - a marker inside a fenced code block, which the filter still cuts;
-//   - text that looks like a marker but isn't a comment the filter could read
-//     (okf_auth_start, a comment split over lines).
+//   - marker-like text outside a comment (okf_auth_start in prose, a line of only inline code).
 // Code is left alone: inline code (`…`) and, apart from real markers, fenced blocks, so a guide
 // can show markers as examples. One finding per line; an error wins over a warning.
 import { isDelimiter } from "./concept";
@@ -22,8 +23,8 @@ import { AUTH_END, AUTH_START, markerOf } from "./filter";
 const BYTE_ORDER_MARK = "﻿";
 // A marker comment anywhere on a line, as the filter would accept it on a line of its own.
 const MARKER_COMMENT = /<!--\s*okf:auth:(start|end)\s*-->/i;
-// Text that looks like a marker: okf:auth:start, okf_auth_end, OKF-Auth-Start, …
-const MARKER_LIKE = /okf[\s:_-]?auth[\s:_-]?(start|end)/i;
+// Text that looks like a marker: okf:auth:start, okf_auth_end, OKF - Auth : Start, …
+const MARKER_LIKE = /okf[\s:_-]*auth[\s:_-]*(start|end)/i;
 const INLINE_CODE = /`+[^`]*`+/g;
 const FORMAT_CHARACTERS = /\p{Cf}/gu;
 const EXACT = { start: AUTH_START, end: AUTH_END };
@@ -33,25 +34,25 @@ export function authMarkerFindings(file: string, text: string): Finding[] {
   const withoutBom = text.startsWith(BYTE_ORDER_MARK) ? text.slice(1) : text;
   const lines = withoutBom.split(/\r\n|\r|\n/);
   const frontmatterEnd = frontmatterEndOf(lines);
-  const fences = new FenceTracker();
+  const inCode = codeBlockLines(lines, frontmatterEnd);
   const byLine = new Map<number, Finding>();
-  const add = (line: number, rule: Rule, problem: { message: string; fix: string }) => {
+  const add: Add = (line, rule, problem) => {
     if (byLine.get(line)?.rule === "L3") return;
     byLine.set(line, findingAt(file, line, rule, problem));
   };
 
   const openStarts: number[] = [];
+  let inComment = false; // inside an HTML comment that started on an earlier line
   lines.forEach((content, index) => {
     const line = index + 1;
     const inFrontmatter = index <= frontmatterEnd;
-    const inFence = !inFrontmatter && fences.inBlockAfter(content);
     const marker = markerOf(content);
     if (marker === undefined) {
-      if (!inFence) checkNotAMarker(content, line, add);
+      if (!inCode[index]) inComment = checkNotAMarker(content, line, inComment, add);
       return;
     }
     if (inFrontmatter) add(line, "L3", IN_FRONTMATTER);
-    else if (inFence) add(line, "L4", IN_CODE);
+    else if (inCode[index]) add(line, "L4", IN_CODE);
     else if (content.trim() !== EXACT[marker]) add(line, "L4", inexact(marker));
     if (marker === "start") openStarts.push(line);
     else if (openStarts.pop() === undefined) add(line, "L3", LONE_END);
@@ -63,21 +64,38 @@ export function authMarkerFindings(file: string, text: string): Finding[] {
 
 type Add = (line: number, rule: Rule, problem: { message: string; fix: string }) => void;
 
-// A line the filter doesn't read as a marker, but that holds one or looks like one.
-function checkNotAMarker(content: string, line: number, add: Add): void {
+/**
+ * Checks a line the filter doesn't read as a marker, but that holds one or looks like one, and
+ * returns whether an HTML comment is still open after it. Marker-like text in an HTML comment was
+ * meant as a marker, and the filter won't hide anything for it: an error (L3). Elsewhere it is
+ * only a warning (L4).
+ */
+function checkNotAMarker(content: string, line: number, inComment: boolean, add: Add): boolean {
   const visible = content.replace(FORMAT_CHARACTERS, "").trim();
-  // A line that is nothing but inline code was probably meant as a marker.
-  if (/^`+[^`]*`+$/.test(visible) && MARKER_LIKE.test(visible)) {
-    add(line, "L4", LOOKS_LIKE);
-    return;
-  }
   const outsideCode = visible.replace(INLINE_CODE, "");
   const comment = MARKER_COMMENT.exec(outsideCode);
+  const touchesComment = inComment || outsideCode.includes("<!--") || outsideCode.includes("-->");
   if (comment !== null) {
     add(line, "L3", hidden(comment[1]!.toLowerCase() === "end" ? AUTH_END : AUTH_START));
-  } else if (MARKER_LIKE.test(outsideCode)) {
+  } else if (MARKER_LIKE.test(outsideCode) && touchesComment) {
+    add(line, "L3", MISSPELLED);
+  } else if (MARKER_LIKE.test(outsideCode) || isMarkerInInlineCode(visible)) {
     add(line, "L4", LOOKS_LIKE);
   }
+  return commentOpenAfter(outsideCode, inComment);
+}
+
+// A line that is nothing but inline code holding marker-like text was probably meant as a marker.
+function isMarkerInInlineCode(visible: string): boolean {
+  return /^`+[^`]*`+$/.test(visible) && MARKER_LIKE.test(visible);
+}
+
+// Whether an HTML comment is open at the end of the line: the last <!-- comes after the last -->.
+function commentOpenAfter(text: string, openBefore: boolean): boolean {
+  const lastOpen = text.lastIndexOf("<!--");
+  const lastClose = text.lastIndexOf("-->");
+  if (lastOpen === -1 && lastClose === -1) return openBefore;
+  return lastOpen > lastClose;
 }
 
 // The index of the frontmatter's closing ---, or -1 without frontmatter; as concept.ts reads it.
@@ -86,29 +104,47 @@ function frontmatterEndOf(lines: string[]): number {
   return lines.findIndex((content, index) => index > 0 && isDelimiter(content));
 }
 
-/**
- * Follows fenced code blocks (``` or ~~~) line by line, as CommonMark does: a block closes on a
- * fence of the same character, at least as long, with nothing after it. Indented code blocks
- * aren't followed: a marker there is still a whole line, which the filter reads and cuts.
- */
-class FenceTracker {
-  private open: { character: string; length: number } | undefined;
+/** A fence line: optional indentation and quote marks, a run of ``` or ~~~, then the rest. */
+const FENCE_LINE = /^[ \t>]*(`{3,}|~{3,})(.*)$/;
 
-  /** Whether `content` is inside a fenced block (its opening and closing fences count). */
-  inBlockAfter(content: string): boolean {
-    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(content);
-    if (this.open === undefined) {
-      if (fence !== null) this.open = { character: fence[1]![0]!, length: fence[1]!.length };
-      return fence !== null;
+/**
+ * Which lines are in a fenced code block (``` or ~~~), fence lines included. A block opens on a
+ * fence (a ``` fence's info text can't contain a backtick, so ```npm i``` is inline code) and
+ * closes on a fence of the same character, at least as long, with nothing after it. Fences may
+ * be indented or quoted, as in a list item or a quote. A fence that never closes isn't counted:
+ * it is nearly always a typo, and the lines after it are checked as text.
+ */
+function codeBlockLines(lines: string[], frontmatterEnd: number): boolean[] {
+  const inCode = lines.map(() => false);
+  let index = frontmatterEnd + 1;
+  while (index < lines.length) {
+    const close = closingFenceIndex(lines, index);
+    if (close === undefined) {
+      index += 1;
+      continue;
     }
-    const closes =
-      fence !== null &&
-      fence[1]![0] === this.open.character &&
-      fence[1]!.length >= this.open.length &&
-      fence[2]!.trim() === "";
-    if (closes) this.open = undefined;
-    return true;
+    for (let each = index; each <= close; each += 1) inCode[each] = true;
+    index = close + 1;
   }
+  return inCode;
+}
+
+// The index of the fence closing the block that lines[open] opens, or undefined when lines[open]
+// opens no block (it isn't a fence, or nothing closes it).
+function closingFenceIndex(lines: string[], open: number): number | undefined {
+  const opening = FENCE_LINE.exec(lines[open]!);
+  if (opening === null) return undefined;
+  const run = opening[1]!;
+  const info = opening[2]!;
+  if (run.startsWith("`") && info.includes("`")) return undefined;
+  for (let index = open + 1; index < lines.length; index += 1) {
+    const fence = FENCE_LINE.exec(lines[index]!);
+    if (fence === null) continue;
+    const closingRun = fence[1]!;
+    const sameKind = closingRun[0] === run[0] && closingRun.length >= run.length;
+    if (sameKind && fence[2]!.trim() === "") return index;
+  }
+  return undefined;
 }
 
 function hidden(marker: string): { message: string; fix: string } {
@@ -134,6 +170,11 @@ const IN_FRONTMATTER = {
 const IN_CODE = {
   message: "an authorization marker inside a code block still cuts the text for anonymous readers",
   fix: "Leave markers out of code examples, or write them inline in a sentence",
+};
+const MISSPELLED = {
+  message:
+    "this HTML comment looks like an authorization marker but isn't written as one, so anonymous readers would see the section",
+  fix: `Write the markers exactly as ${AUTH_START} and ${AUTH_END}, each alone on its own line`,
 };
 const LOOKS_LIKE = {
   message: "this looks like an authorization marker, but isn't one, so it hides nothing",

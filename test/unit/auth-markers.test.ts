@@ -117,10 +117,9 @@ describe("authMarkerFindings: warnings (L4)", () => {
   );
 
   test.each([
-    ["an underscore spelling", "<!-- okf_auth_start -->"],
-    ["a comment with three dashes", "<!--- okf:auth:start --->"],
+    ["an underscore spelling in prose", "Mark it with okf_auth_start."],
     ["a line that is only inline code", `\`${AUTH_START}\``],
-  ])("text that looks like a marker but isn't one is a warning: %s", (_, line) => {
+  ])("marker-like text outside a comment is a warning: %s", (_, line) => {
     expect(found(`${FRONTMATTER}${line}\nText.\n`)).toEqual([[5, "L4"]]);
   });
 });
@@ -178,5 +177,59 @@ describe("authMarkerFindings: code examples and frontmatter as concept.ts reads 
   test("a BOM and CRLF frontmatter with a marker inside", () => {
     const text = `\uFEFF---\r\ntype: Guide\r\n${AUTH_START}\r\n---\r\n# X\r\n`;
     expect(found(text)).toEqual([[3, "L3"]]);
+  });
+});
+
+describe("authMarkerFindings: HTML comments meant as markers (L3)", () => {
+  test.each([
+    ["an underscore spelling", "<!-- okf_auth_start -->", "<!-- okf_auth_end -->"],
+    ["three dashes", "<!--- okf:auth:start --->", "<!--- okf:auth:end --->"],
+    ["a space after a colon", "<!-- okf: auth:start -->", "<!-- okf:auth: end -->"],
+    ["spaces around both colons", "<!-- okf : auth : start -->", "<!-- okf : auth : end -->"],
+    ["a longer closing", "<!-- okf:auth:start ---->", "<!-- okf:auth:end ---->"],
+    ["a space in the closing", "<!--okf:auth:start -- >", "<!--okf:auth:end -- >"],
+  ])("%s: the filter hides nothing, so it is an error", (_, start, end) => {
+    const text = `${FRONTMATTER}# X\n${start}\nSecret.\n${end}\n`;
+    expect(withoutAuthSections(text)).toContain("Secret.");
+    expect(found(text)).toEqual([
+      [6, "L3"],
+      [8, "L3"],
+    ]);
+  });
+
+  test("a comment split over lines", () => {
+    const text = `${FRONTMATTER}<!--\nokf:auth:start\n-->\nSecret.\n<!--\nokf:auth:end\n-->\n`;
+    expect(withoutAuthSections(text)).toContain("Secret.");
+    expect(found(text)).toEqual([
+      [6, "L3"],
+      [10, "L3"],
+    ]);
+  });
+});
+
+describe("authMarkerFindings: what counts as a fenced code block", () => {
+  const HIDDEN = `- ${AUTH_START}\nSecret.\n- ${AUTH_END}\n`;
+
+  test("a one-line ```snippet``` is inline code, not a fence: markers after it are checked", () => {
+    const text = `${FRONTMATTER}\`\`\`npm install\`\`\`\n${HIDDEN}`;
+    expect(found(text)).toEqual([
+      [6, "L3"],
+      [8, "L3"],
+    ]);
+  });
+
+  test("a fence that never closes isn't one: markers after it are checked", () => {
+    const text = `${FRONTMATTER}\`\`\`md\nexample\n${HIDDEN}`;
+    expect(found(text)).toEqual([
+      [7, "L3"],
+      [9, "L3"],
+    ]);
+  });
+
+  test.each([
+    ["in a list item", "1. Example:\n\n    ```md\n    - <!-- okf:auth:start -->\n    ```\n"],
+    ["in a quote", "> ```md\n> - <!-- okf:auth:start -->\n> ```\n"],
+  ])("an example %s is fine", (_, body) => {
+    expect(found(`${FRONTMATTER}${body}`)).toEqual([]);
   });
 });
