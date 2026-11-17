@@ -12,6 +12,7 @@ import { servableText } from "../text";
 import { bundleHash } from "./bundle-hash";
 import { indexRows, type IndexRow } from "./index-rows";
 import { IndexQueryError, runIndexQuery, type IndexQuery } from "./index-query";
+import { isAuthenticatedUser, meetsRequires } from "./requires";
 import { searchConcepts } from "./search";
 import type { McpChoice } from "./select";
 
@@ -74,16 +75,16 @@ export function attachOkfService(cds: Cds, bundles: Bundles, choice: McpChoice):
   });
 }
 
-// As CAP decides @requires: one of the roles is enough (a privileged user has them all);
-// anonymous callers get 401, others 403.
+// As CAP decides @requires (a privileged user has every role); anonymous callers get 401,
+// others 403.
 function checkRequires(req: Request, roles: readonly string[]): void {
-  if (roles.some((role) => req.user.is(role))) return;
+  if (meetsRequires(req.user, roles)) return;
   if (isAuthenticated(req)) req.reject(403, "Forbidden");
   req.reject(401, "Unauthorized");
 }
 
 function isAuthenticated(req: Request): boolean {
-  return req.user.is("authenticated-user");
+  return isAuthenticatedUser(req.user);
 }
 
 // The concept's text as the caller gets it; unknown and unreadable paths alike are a 404.
