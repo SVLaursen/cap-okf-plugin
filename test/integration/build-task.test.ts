@@ -117,9 +117,14 @@ describe("cds build, in place (build.target: .)", () => {
 
   afterAll(() => fs.rmSync(app, { recursive: true, force: true }));
 
-  test("writes the bundle to <root>/gen/okf, without the stale file", async () => {
+  test("writes the bundle to <root>/gen/okf, curated files merged in, without the stale file", async () => {
     expect(result.status).toBe(0);
-    expect(readTree(path.join(app, "gen", "okf"))).toEqual(await expectedBundle());
+    const written = readTree(path.join(app, "gen", "okf"));
+    const underModel = (files: { path: string }[]) =>
+      files.filter((file) => file.path.startsWith("model/"));
+    expect(underModel(written)).toEqual(underModel(await expectedBundle()));
+    expect(written.find((file) => file.path === "ordering.md")?.text).toBe(curated);
+    expect(written.map((file) => file.path)).not.toContain("stale.md");
   });
 
   test("leaves the curated okf/ folder untouched", () => {
@@ -217,5 +222,55 @@ describe("cds build, where the bundle comes from and goes to", () => {
     expect(cdsBuild(app).status).toBe(0);
     expect(fs.existsSync(path.join(app, "deploy", "okf-bundle", "index.md"))).toBe(true);
     expect(fs.existsSync(stale)).toBe(false);
+  });
+});
+
+// Task 3.1: the curated okf/ folder merged with the generated model/ (ADR-0007).
+describe("cds build with a curated okf/ folder", () => {
+  let app: string;
+  afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
+
+  const ordering =
+    "---\ntype: Guide\ntitle: Placing an order\ndescription: How a shopper orders.\n---\n\n" +
+    "Shoppers browse [Books](/model/CatalogService/Books.md) first.\n";
+
+  test("merges curated files into gen/okf and the deployed copy, with a root index listing both", () => {
+    app = bookshopApp();
+    fs.mkdirSync(path.join(app, "okf", "guides"), { recursive: true });
+    fs.writeFileSync(path.join(app, "okf", "guides", "ordering.md"), ordering);
+    fs.writeFileSync(path.join(app, "okf", "guides", "query.sql"), "select 1;\n");
+    const result = cdsBuild(app);
+    expect({ status: result.status, okf: result.stdout.includes("[okf]") }).toEqual({
+      status: 0,
+      okf: false,
+    });
+    const written = readTree(path.join(app, "gen", "okf"));
+    expect(written.find((file) => file.path === "guides/ordering.md")?.text).toBe(ordering);
+    expect(written.find((file) => file.path === "guides/query.sql")?.text).toBe("select 1;\n");
+    const root = written.find((file) => file.path === "index.md")!.text;
+    expect(root).toContain("* [guides](guides/index.md)");
+    expect(root).toContain("* [model](model/index.md)");
+    expect(readTree(path.join(app, "gen", "srv", "okf-bundle"))).toEqual(written);
+  });
+
+  test("a curated file under okf/model/ fails the build, named by its okf/ path", () => {
+    app = bookshopApp();
+    fs.mkdirSync(path.join(app, "okf", "model"), { recursive: true });
+    fs.writeFileSync(path.join(app, "okf", "model", "notes.md"), ordering);
+    const result = cdsBuild(app);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "[okf] okf/model/notes.md:1 — model/ belongs to the generator",
+    );
+    expect(fs.existsSync(path.join(app, "gen", "srv", "okf-bundle"))).toBe(false);
+  });
+
+  test("a curated file without frontmatter fails the build, named by its okf/ path", () => {
+    app = bookshopApp();
+    fs.mkdirSync(path.join(app, "okf"));
+    fs.writeFileSync(path.join(app, "okf", "broken.md"), "no frontmatter\n");
+    const result = cdsBuild(app);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("[okf] okf/broken.md:1 — ");
   });
 });
