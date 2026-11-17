@@ -202,7 +202,11 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | --- | --- | --- | --- |
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
 | `serve.static` | `false`, `true`, `"/path"` | `false` | Serves the bundle's files from a route: `true` means `/okf`. See [Serving the bundle](#serving-the-bundle). |
-| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`. `as: ["tools"]` works now; `resources` is planned. See [Serving over MCP](#serving-over-mcp) and [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md). |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`, as `okf://` resources, tools or both. See [Serving over MCP](#serving-over-mcp) and [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md). |
+
+cap-okf warns about a key it doesn't know (a typo such as `requries` would otherwise be ignored),
+and about `okf` or `serve` set to something other than an object. During `cds build` and
+`cds compile` it also warns about `serve` settings the deployed app would stop on at startup.
 
 Nothing is ever served unless you turn it on ([ADR-0002](docs/adr/0002-serving-is-opt-in.md)).
 Installing an MCP plugin doesn't change that.

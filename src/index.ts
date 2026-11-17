@@ -2,6 +2,7 @@ import type cds from "@sap/cds";
 import { registerAddFacet } from "./add/facet";
 import { registerBuildTask } from "./build/build-task";
 import { registerCompileTarget } from "./build/compile";
+import { warnAboutConfig } from "./config/warn";
 import { addToolsModel, annotateToolsModel, warnWithoutToolsModel } from "./serve/mcp/tools-model";
 import { registerServing } from "./serve/serving";
 
@@ -15,6 +16,7 @@ export type Cds = typeof cds;
  * and the static route (task 4.3); MCP serving comes in later tasks (ADR-0005).
  */
 export function plugin(cds: Cds): void {
+  warnAboutConfig(cds);
   registerCompileTarget(cds);
   registerBuildTask(cds);
   registerAddFacet(cds);
