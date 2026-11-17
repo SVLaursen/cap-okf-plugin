@@ -96,6 +96,7 @@ test/
 - [x] **2.8 `cds compile --to okf`.** Prints the bundle tree and, with `-o <dir>`, writes it. Maintainer decisions 2026-11-17: without `-o` it prints one path per line; the clock is `SOURCE_DATE_EPOCH` when set, else the current time.
 - [ ] **2.9 `cds build` task.** Writes `gen/okf` and, for staging builds with a `nodejs` task, the same files to `<nodejs dest>/okf-bundle/` (ADR-0007); runs validation; fails only on errors. In-place builds (`build.target: "."`) never touch `okf/`.
   - Test first: `cds build` of a fixture app writes `gen/okf` and `gen/srv/okf-bundle/`; an in-place build leaves `okf/` untouched.
+- [ ] **ADR-0004 revisit (maintainer note, 2026-11-17).** ADR-0004 has changed with regard to the MCP integration. Revisit it immediately after 2.9, before 2.10: read the new ADR-0004, check ADR-0006 and Phase 4 tasks 4.4–4.8 against it, and update the plan.
 - [ ] **2.10 Golden tests.** Commit `test/golden/bookshop/`; diff on every run.
 
 **Gate G3:** golden bundle matches; determinism test green; `@okf: false` and the auth section tested.

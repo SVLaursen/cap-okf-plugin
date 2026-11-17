@@ -4,7 +4,7 @@ Newest first. One line per finished task or event: `YYYY-MM-DD · <task id> · <
 
 ## In flight
 
-_None._
+- 2026-11-17 · ADR-0004 · Maintainer note: ADR-0004 has changed with regard to the MCP integration. Revisit it immediately after task 2.9, before any further task (it affects Phase 4: tasks 4.4–4.8 and ADR-0006).
 
 ## Blocked
 
