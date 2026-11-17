@@ -1,9 +1,9 @@
 // Reading the curated okf/ folder (task 3.1, ADR-0007: "Curated files that are bundled").
 // FileBundleSource decides which files count: regular files only, no symbolic links, no dotfiles.
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { stat } from "node:fs/promises";
 import type { CuratedFile } from "../bundle/merge";
-import { FileBundleSource } from "../bundle/source";
+import { FileBundleSource, missingAsUndefined } from "../bundle/source";
+import { setupError } from "./errors";
 
 /** The curated folder of an app: okf/ at the project root (ADR-0007). */
 export const CURATED_FOLDER = "okf";
@@ -14,19 +14,32 @@ export const CURATED_FOLDER = "okf";
  * and their text is the UTF-8 reading when they are valid UTF-8, else "".
  */
 export async function readCuratedFolder(folder: string): Promise<CuratedFile[]> {
+  await refuseFile(folder);
   const source = new FileBundleSource(folder);
   const files: CuratedFile[] = [];
   for (const bundlePath of await source.list()) {
+    const bytes = await source.readBytes(bundlePath);
+    // A file removed or replaced by a link since list() is simply not there.
+    if (bytes === undefined) continue;
     if (bundlePath.endsWith(".md")) {
-      const text = await source.read(bundlePath);
-      // A file removed or replaced by a link since list() is simply not there.
-      if (text !== undefined) files.push({ path: bundlePath, text });
+      files.push({ path: bundlePath, text: bytes.toString("utf8") });
     } else {
-      const bytes = await readFile(path.join(folder, ...bundlePath.split("/")));
       files.push({ path: bundlePath, text: utf8OrEmpty(bytes), bytes });
     }
   }
   return files;
+}
+
+// okf as a file is a setup mistake the developer can fix, so it gets an [okf] message, not a
+// stack trace. A missing folder is fine: the app has no curated files.
+async function refuseFile(folder: string): Promise<void> {
+  const found = await stat(folder).catch(missingAsUndefined);
+  if (found !== undefined && !found.isDirectory()) {
+    throw setupError(
+      `[okf] ${CURATED_FOLDER} — is a file, not a folder.\n` +
+        `  Rename or remove it; curated concepts go in the ${CURATED_FOLDER}/ folder.`,
+    );
+  }
 }
 
 /** Whether a file that isn't Markdown is text that can be written as a string. */
@@ -39,6 +52,7 @@ export function isUtf8(bytes: Uint8Array): boolean {
   }
 }
 
+// ignoreBOM keeps a byte order mark as text, so writing the text gives the same bytes back.
 function utf8OrEmpty(bytes: Uint8Array): string {
-  return isUtf8(bytes) ? new TextDecoder("utf-8").decode(bytes) : "";
+  return isUtf8(bytes) ? new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes) : "";
 }

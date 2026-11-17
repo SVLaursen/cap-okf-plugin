@@ -70,13 +70,13 @@ export class PathSpellings {
 }
 
 // "a/b/c.md" → ["a", "a/b", "a/b/c.md"]: the file and each folder it is in.
-function pathPrefixes(path: string): string[] {
+export function pathPrefixes(path: string): string[] {
   const segments = path.split("/");
   return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
 }
 
 // Two spellings that fold to the same text name one file on macOS and Windows.
-function fold(path: string): string {
+export function fold(path: string): string {
   return path.normalize("NFC").toLowerCase();
 }
 

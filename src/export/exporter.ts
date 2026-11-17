@@ -2,6 +2,7 @@
 // version are injected (CLAUDE.md), so the same inputs always give the same bytes. The inputs
 // include the order definitions are declared in, which a service's member list follows (2.2);
 // cds.load gives the same order for the same sources on every machine.
+import { fold, pathPrefixes } from "../bundle/paths";
 import type { Concept } from "../core/concept";
 import { compareText, generateIndex, generateIndexes } from "../core/index-md";
 import type { Csn } from "./csn";
@@ -81,7 +82,7 @@ function assertNoCollisions(concepts: { name: string; concept: Concept }[]): voi
   // Folded spelling of a path or folder → where it came from.
   const seen = new Map<string, { path: string; name: string }>();
   for (const { name, concept } of concepts) {
-    for (const path of pathAndFolders(concept.path)) {
+    for (const path of pathPrefixes(concept.path)) {
       const earlier = seen.get(fold(path));
       if (earlier === undefined) {
         seen.set(fold(path), { path, name });
@@ -108,14 +109,4 @@ function collisionError(
     `[okf] ${name} — ${what} differs from ${earlier.path} (${earlier.name}) only in letter case.\n` +
       "  Rename one of the definitions, or leave one out with @okf: false.",
   );
-}
-
-// "model/a/b.md" → ["model", "model/a", "model/a/b.md"].
-function pathAndFolders(path: string): string[] {
-  const segments = path.split("/");
-  return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
-}
-
-function fold(path: string): string {
-  return path.normalize("NFC").toLowerCase();
 }

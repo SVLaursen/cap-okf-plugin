@@ -4,10 +4,10 @@
 //
 // The bundle depends only on the CDS files compiled, cds.okf.include and the curated okf/ folder
 // at the project root, merged in as cds build does (task 3.1): the model is loaded again from
-// those files, inferred and with doc comments (ADR-0007, one model for generation and build). So --for, --flavor and --docs change nothing, and options that would suggest otherwise
+// those files, inferred and with doc comments (ADR-0007, one model for generation and build).
+// So --for, --flavor and --docs change nothing, and options that would suggest otherwise
 // (-l, -s <service>) are refused. With -o, CAP's writer adds and overwrites files but never
 // deletes any: compile into an empty folder, or use cds build (task 2.9), which writes gen/okf.
-import path from "node:path";
 import type { MergedBundle, MergedFile } from "../bundle/merge";
 import type { Csn } from "../export/csn";
 import type { Cds } from "../index";
@@ -73,7 +73,7 @@ function refuseMisleadingOptions(options: CompileOptions): void {
 }
 
 // CAP's writer takes many files only as a generator (ADR-0005 (a); an array would be one file).
-// It appends the suffix to `file`, so the path goes in without its extension. It writes strings
+// It writes strings
 // only, so a curated file that isn't UTF-8 text (e.g. an image) is left out, with a note.
 function* compiledFiles(files: MergedFile[]): Generator<CompiledFile> {
   for (const file of files) {
@@ -84,11 +84,8 @@ function* compiledFiles(files: MergedFile[]): Generator<CompiledFile> {
       );
       continue;
     }
-    const extension = path.posix.extname(file.path);
-    yield [
-      file.text,
-      { file: file.path.slice(0, file.path.length - extension.length), suffix: extension },
-    ];
+    // An empty suffix appends nothing, so the path is written exactly as it is.
+    yield [file.text, { file: file.path, suffix: "" }];
   }
 }
 

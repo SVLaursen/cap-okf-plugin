@@ -16,6 +16,10 @@ import { findingAt, type Finding } from "../core/finding";
 import { compareText, generateIndex } from "../core/index-md";
 import { extractLinks, resolveLink } from "../core/links";
 import { MODEL_FOLDER } from "../export/paths";
+import { fold, pathPrefixes } from "./paths";
+
+/** OKF's reserved file names (spec §3.1); a curated index.md is a folder's own index. */
+const RESERVED_FILE_NAMES = ["index.md", "log.md"];
 
 /** One file from the curated okf/ folder, at its bundle path. */
 export interface CuratedFile {
@@ -56,13 +60,14 @@ export function mergeBundle(
   const findings: Finding[] = [];
   const generatedFiles = generated.filter((concept) => concept.path !== "index.md");
   const kept = keptCuratedFiles(curated, generatedFiles, findings);
-  const curatedConcepts = parsedConcepts(kept);
-  const allConcepts = [...generatedFiles, ...curatedConcepts];
+  const allConcepts = [...generatedFiles, ...parsedConcepts(kept)];
+  const ownIndexes = new Set(kept.map((file) => file.path));
+  const missingIndexes = listedFolders(kept).filter((folder) => !ownIndexes.has(indexOf(folder)));
 
   const files: MergedFile[] = [
     ...generatedFiles.map((concept) => ({ path: concept.path, text: serializeConcept(concept) })),
     ...kept.map(asMergedFile),
-    ...curatedFolderIndexes(kept, allConcepts),
+    ...missingIndexes.map((folder) => asFile(generateIndex(folder, allConcepts))),
   ];
   const curatedRoot = kept.find((file) => file.path === "index.md");
   if (curatedRoot === undefined) {
@@ -78,47 +83,96 @@ export function mergeBundle(
   };
 }
 
+/** What a path names in the bundle: a file, or a folder files are in. */
+type Kind = "file" | "folder";
+
+/** Folded spelling → the spelling first seen and what it names. */
+type TakenPaths = Map<string, { spelling: string; kind: Kind }>;
+
 /**
  * The curated files that may go into the bundle, in path order; an L1 finding for each one left
- * out. Generated paths always win a clash, and among curated files the first in path order.
+ * out. Generated paths, and the index.md files that will be generated, always win a clash;
+ * among curated files the first in path order wins.
  */
 function keptCuratedFiles(
   curated: readonly CuratedFile[],
   generated: readonly Concept[],
   findings: Finding[],
 ): CuratedFile[] {
-  const taken = new Map<string, string>();
-  for (const concept of generated) rememberPathAndFolders(concept.path, taken);
-  // The generated root index.md, unless okf/ has its own: reserved before the curated files.
-  if (!curated.some((file) => file.path === "index.md")) rememberPathAndFolders("index.md", taken);
+  const taken: TakenPaths = new Map();
+  for (const concept of generated) remember(concept.path, taken);
+  // The index.md files the merge will generate: the root's, and each curated folder's that has
+  // none of its own. Reserved first, so no curated file or folder can take their place.
+  const curatedPaths = new Set(curated.map((file) => file.path));
+  for (const folder of ["", ...listedFolders(curated)]) {
+    if (!curatedPaths.has(indexOf(folder))) remember(indexOf(folder), taken);
+  }
 
   const kept: CuratedFile[] = [];
   for (const file of [...curated].sort((a, b) => compareText(a.path, b.path))) {
-    if (fold(firstSegment(file.path)) === fold(MODEL_FOLDER)) {
-      findings.push(inModelFolder(file.path));
-    } else if (clashingSpelling(file.path, taken) !== undefined) {
-      findings.push(caseClash(file.path, clashingSpelling(file.path, taken)!));
-    } else {
-      rememberPathAndFolders(file.path, taken);
+    const problem = layoutProblem(file.path, taken);
+    if (problem === undefined) {
+      remember(file.path, taken);
       kept.push(file);
+    } else {
+      findings.push(problem);
     }
   }
   return kept;
 }
 
-/** The earlier spelling that `path` or one of its folders clashes with, if any. */
-function clashingSpelling(path: string, taken: ReadonlyMap<string, string>): string | undefined {
-  for (const prefix of pathAndFolders(path)) {
+// Why a curated file can't go into the bundle (an L1 finding), or undefined when it can.
+function layoutProblem(path: string, taken: TakenPaths): Finding | undefined {
+  const firstSegment = path.split("/")[0]!;
+  if (fold(firstSegment) === fold(MODEL_FOLDER)) return inModelFolder(path, firstSegment);
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const reserved = RESERVED_FILE_NAMES.find((each) => fold(name) === each && name !== each);
+  if (reserved !== undefined) return reservedNameSpelling(path, reserved);
+  const clash = clashWith(path, taken);
+  return clash === undefined ? undefined : pathClash(path, clash);
+}
+
+/** The earlier path that `path`, or a folder on its way, would be the same file or folder as. */
+function clashWith(path: string, taken: TakenPaths): string | undefined {
+  const prefixes = pathPrefixes(path);
+  for (const [index, prefix] of prefixes.entries()) {
+    const kind: Kind = index === prefixes.length - 1 ? "file" : "folder";
     const earlier = taken.get(fold(prefix));
-    if (earlier !== undefined && earlier !== prefix) return earlier;
+    if (earlier === undefined) continue;
+    // Spelt differently (case or Unicode form), or a file where a folder is, or the same file.
+    if (earlier.spelling !== prefix || earlier.kind !== kind || kind === "file") {
+      return earlier.spelling;
+    }
   }
   return undefined;
 }
 
-function rememberPathAndFolders(path: string, taken: Map<string, string>): void {
-  for (const prefix of pathAndFolders(path)) {
-    if (!taken.has(fold(prefix))) taken.set(fold(prefix), prefix);
+function remember(path: string, taken: TakenPaths): void {
+  const prefixes = pathPrefixes(path);
+  for (const [index, prefix] of prefixes.entries()) {
+    const kind: Kind = index === prefixes.length - 1 ? "file" : "folder";
+    if (!taken.has(fold(prefix))) taken.set(fold(prefix), { spelling: prefix, kind });
   }
+}
+
+/**
+ * The curated folders, at any depth, that hold a concept an index lists (a Markdown file other
+ * than index.md and log.md) somewhere below them. Each gets an index.md; other folders don't,
+ * and no index links to them.
+ */
+function listedFolders(curated: readonly CuratedFile[]): string[] {
+  const folders = new Set<string>();
+  for (const file of curated) {
+    const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+    if (!name.endsWith(".md") || RESERVED_FILE_NAMES.includes(fold(name))) continue;
+    for (const folder of pathPrefixes(file.path).slice(0, -1)) folders.add(folder);
+  }
+  return [...folders].sort(compareText);
+}
+
+// "guides" → "guides/index.md"; "" (the bundle root) → "index.md".
+function indexOf(folder: string): string {
+  return folder === "" ? "index.md" : `${folder}/index.md`;
 }
 
 // The curated Markdown files that parse, for the index entries. A file that doesn't parse is
@@ -135,34 +189,16 @@ function parsedConcepts(files: readonly CuratedFile[]): Concept[] {
   return concepts;
 }
 
-/** A generated index.md for each curated folder (at any depth) that has no index.md of its own. */
-function curatedFolderIndexes(
-  curated: readonly CuratedFile[],
-  concepts: readonly Concept[],
-): MergedFile[] {
-  const own = new Set(curated.map((file) => file.path));
-  const folders = new Set<string>();
-  for (const file of curated.filter((each) => each.path.endsWith(".md"))) {
-    for (const folder of pathAndFolders(file.path).slice(0, -1)) folders.add(folder);
-  }
-  return [...folders]
-    .filter((folder) => !own.has(`${folder}/index.md`))
-    .map((folder) => asFile(generateIndex(folder, concepts)));
-}
-
 // Whether the curated root index links to model/ or model/index.md, in any form §6.1 allows.
+// The line numbers don't matter here, so links are read as if the body started on line 1.
 function linksToModel(text: string): boolean {
-  let body: string;
-  let firstLine: number;
+  let body = text;
   try {
-    const parsed = parseConcept("index.md", text);
-    body = parsed.body;
-    firstLine = text.split("\n").length - body.split("\n").length + 1;
+    body = parseConcept("index.md", text).body;
   } catch {
-    body = text;
-    firstLine = 1;
+    // An index without valid frontmatter: read the whole text.
   }
-  return extractLinks(body, firstLine).some((link) => {
+  return extractLinks(body, 1).some((link) => {
     const resolved = resolveLink("index.md", link.target);
     return (
       resolved.kind === "bundle" &&
@@ -181,17 +217,24 @@ function asFile(concept: Concept): MergedFile {
   return { path: concept.path, text: serializeConcept(concept) };
 }
 
-function inModelFolder(path: string): Finding {
+function inModelFolder(path: string, folder: string): Finding {
   return findingAt(path, 1, "L1", {
     message: `${MODEL_FOLDER}/ belongs to the generator; a curated file can't be there`,
-    fix: `Move it out of okf/${MODEL_FOLDER}/, e.g. to okf/notes/${path.slice(path.indexOf("/") + 1)}`,
+    fix: `Move it out of okf/${folder}/, e.g. to okf/notes/${path.slice(folder.length + 1)}`,
   });
 }
 
-function caseClash(path: string, earlier: string): Finding {
+function reservedNameSpelling(path: string, reserved: string): Finding {
   return findingAt(path, 1, "L1", {
-    message: `its path differs from ${earlier} only in letter case or Unicode form`,
-    fix: "Rename the file or folder so that no two paths differ only in letter case",
+    message: `OKF reserves the file name ${reserved} in lower case, and this spelling would clash with it`,
+    fix: `Rename it to ${reserved}, or to a name that isn't reserved`,
+  });
+}
+
+function pathClash(path: string, earlier: string): Finding {
+  return findingAt(path, 1, "L1", {
+    message: `its path is the same file or folder as ${earlier} (letter case and Unicode form aside)`,
+    fix: "Rename the file or folder so that every path in okf/ and model/ is distinct",
   });
 }
 
@@ -200,18 +243,4 @@ function missingModelLink(): Finding {
     message: `the bundle's root index doesn't link to ${MODEL_FOLDER}/, the generated concepts`,
     fix: `Add an entry such as * [Model](${MODEL_FOLDER}/index.md) - Generated from the CDS model`,
   });
-}
-
-function firstSegment(path: string): string {
-  return path.split("/")[0]!;
-}
-
-// "a/b/c.md" → ["a", "a/b", "a/b/c.md"].
-function pathAndFolders(path: string): string[] {
-  const segments = path.split("/");
-  return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
-}
-
-function fold(path: string): string {
-  return path.normalize("NFC").toLowerCase();
 }

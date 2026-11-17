@@ -239,20 +239,24 @@ test("scripts/cds-with-okf.js runs the cds CLI with cap-okf loaded, keeping plug
 });
 
 // Task 3.1: cds compile merges the curated okf/ folder at the project root, as cds build does.
+/** A copy of the bookshop fixture with one curated guide in okf/guides/. */
+function curatedApp(): string {
+  // Inside the repository (gen/ is git-ignored): cds compile reads okf/ at its working
+  // directory, and outside the repository cds-dk would load another @sap/cds than the plugin.
+  fs.mkdirSync(path.join(ROOT, "gen"), { recursive: true });
+  const app = fs.mkdtempSync(path.join(ROOT, "gen", "compile-curated-"));
+  fs.cpSync(FIXTURE, app, { recursive: true });
+  fs.mkdirSync(path.join(app, "okf", "guides"), { recursive: true });
+  fs.writeFileSync(
+    path.join(app, "okf", "guides", "ordering.md"),
+    "---\ntype: Guide\ntitle: Ordering\ndescription: How to order.\n---\n",
+  );
+  return app;
+}
+
 describe("cds compile --to okf with a curated okf/ folder", () => {
   let app: string;
-  beforeEach(() => {
-    // Inside the repository (gen/ is git-ignored): cds compile reads okf/ at its working
-    // directory, and outside the repository cds-dk would load another @sap/cds than the plugin.
-    fs.mkdirSync(path.join(ROOT, "gen"), { recursive: true });
-    app = fs.mkdtempSync(path.join(ROOT, "gen", "compile-curated-"));
-    fs.cpSync(FIXTURE, app, { recursive: true });
-    fs.mkdirSync(path.join(app, "okf", "guides"), { recursive: true });
-    fs.writeFileSync(
-      path.join(app, "okf", "guides", "ordering.md"),
-      "---\ntype: Guide\ntitle: Ordering\ndescription: How to order.\n---\n",
-    );
-  });
+  beforeEach(() => (app = curatedApp()));
   afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
 
   test("prints the curated paths in the tree, with the folder index made for them", () => {
@@ -276,6 +280,26 @@ describe("cds compile --to okf with a curated okf/ folder", () => {
     expect(fs.readFileSync(path.join(out, "guides", "q.sql"), "utf8")).toBe("select 1;\n");
     expect(fs.existsSync(path.join(out, "guides", "logo.png"))).toBe(false);
     expect(result.stderr).toContain("[okf] okf/guides/logo.png — isn't text");
+  });
+});
+
+describe("cds compile --to okf with a curated okf/ folder: exact files and mistakes", () => {
+  let app: string;
+  beforeEach(() => (app = curatedApp()));
+  afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
+
+  test("with -o, writes curated text byte for byte: a BOM and a doubled extension stay", () => {
+    const withBom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("a,b\n")]);
+    fs.writeFileSync(path.join(app, "okf", "guides", "data.csv"), withBom);
+    fs.writeFileSync(
+      path.join(app, "okf", "guides", "notes.md.md"),
+      "---\ntype: Note\ntitle: N\ndescription: N.\n---\n",
+    );
+    const out = path.join(app, "out");
+    const result = cdsWithOkf(["compile", ".", "--to", "okf", "-o", out], {}, { cwd: app });
+    expect(result.status).toBe(0);
+    expect(fs.readFileSync(path.join(out, "guides", "data.csv"))).toEqual(withBom);
+    expect(fs.existsSync(path.join(out, "guides", "notes.md.md"))).toBe(true);
   });
 
   test("a curated file under okf/model/ stops the compile with the [okf] message", () => {

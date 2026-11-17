@@ -147,7 +147,7 @@ describe("mergeBundle: layout errors (L1)", () => {
           rule: "L1",
           severity: "error",
           message: "model/ belongs to the generator; a curated file can't be there",
-          fix: expect.stringMatching(/^Move it out of okf\/model\//),
+          fix: expect.stringMatching(/^Move it out of okf\/model\//i),
         }),
       ]);
       expect(textOf(merged.files, path) ?? "").not.toContain("Notes");
@@ -210,5 +210,107 @@ describe("mergeBundle: other files and the validator", () => {
     const forward = mergeBundle(GENERATED, files, "0.2").files;
     const backward = mergeBundle(GENERATED, [...files].reverse(), "0.2").files;
     expect(backward).toEqual(forward);
+  });
+});
+
+// Review of 3.1: names that differ from a reserved file name only in case, and a path that is a
+// file in one place and a folder in another, would overwrite each other on macOS and Windows.
+describe("mergeBundle: reserved names and file/folder clashes", () => {
+  test.each(["guides/INDEX.md", "guides/Index.md", "guides/LOG.md"])(
+    "a curated %s is an error and left out: OKF reserves the name in lower case",
+    (path) => {
+      const merged = mergeBundle(
+        GENERATED,
+        [curated(path, guide("I")), curated("guides/a.md", guide("A"))],
+        "0.2",
+      );
+      expect(merged.findings).toEqual([
+        expect.objectContaining({ file: path, rule: "L1", severity: "error" }),
+      ]);
+      expect(
+        paths(merged.files).filter((each) => each.toLowerCase() === path.toLowerCase()),
+      ).toEqual(path.toLowerCase().endsWith("index.md") ? [path.toLowerCase()] : []);
+    },
+  );
+
+  test("with Index.md and index.md at the root, index.md is the root index and Index.md is left out", () => {
+    const own = "# Model\n\n* [Model](model/index.md) - Generated.\n";
+    const merged = mergeBundle(
+      GENERATED,
+      [curated("Index.md", guide("I")), curated("index.md", own)],
+      "0.2",
+    );
+    expect(merged.findings.map((each) => [each.file, each.rule])).toEqual([["Index.md", "L1"]]);
+    expect(textOf(merged.files, "index.md")).toBe(own);
+    expect(paths(merged.files)).not.toContain("Index.md");
+  });
+
+  test("a curated folder named like a file the bundle has is an error and left out", () => {
+    const merged = mergeBundle(GENERATED, [curated("index.md/x.md", guide("X"))], "0.2");
+    expect(merged.findings.map((each) => [each.file, each.rule])).toEqual([
+      ["index.md/x.md", "L1"],
+    ]);
+    expect(paths(merged.files)).not.toContain("index.md/x.md");
+  });
+
+  test("a curated folder named like the generated index of its parent is an error and left out", () => {
+    const merged = mergeBundle(
+      GENERATED,
+      [curated("guides/a.md", guide("A")), curated("guides/index.md/x.md", guide("X"))],
+      "0.2",
+    );
+    expect(merged.findings.map((each) => [each.file, each.rule])).toEqual([
+      ["guides/index.md/x.md", "L1"],
+    ]);
+  });
+});
+
+describe("mergeBundle: other clashes, empty folders and order", () => {
+  test("paths that differ only in Unicode form clash", () => {
+    const composed = "café.md";
+    const decomposed = "café.md";
+    const merged = mergeBundle(
+      GENERATED,
+      [curated(decomposed, guide("D")), curated(composed, guide("C"))],
+      "0.2",
+    );
+    expect(merged.findings).toHaveLength(1);
+    expect(merged.findings[0]).toMatchObject({ rule: "L1" });
+  });
+
+  test("the L1 fix names the model folder as the file spells it", () => {
+    const merged = mergeBundle(GENERATED, [curated("MODEL/x.md", guide("X"))], "0.2");
+    expect(merged.findings[0]?.fix).toMatch(/^Move it out of okf\/MODEL\//);
+  });
+
+  test("a folder with only log.md gets no index, and none links to it", () => {
+    const merged = mergeBundle(
+      GENERATED,
+      [curated("notes/log.md", "# 2026-11-17\n\n* x\n")],
+      "0.2",
+    );
+    expect(paths(merged.files)).not.toContain("notes/index.md");
+    expect(textOf(merged.files, "index.md")).not.toContain("notes");
+  });
+
+  test("findings don't depend on the order of the curated files either", () => {
+    const files = [
+      curated("model/a.md", guide("A")),
+      curated("Guides/b.md", guide("B")),
+      curated("guides/c.md", guide("C")),
+    ];
+    const forward = mergeBundle(GENERATED, files, "0.2").findings;
+    expect(mergeBundle(GENERATED, [...files].reverse(), "0.2").findings).toEqual(forward);
+  });
+});
+
+describe("mergeBundle: links to model/ in a curated root index", () => {
+  test.each([
+    ["a reference definition", "* [Model][m]\n\n[m]: model/\n", false],
+    ["a link with a fragment", "* [Model](model/index.md#top) - Generated.\n", false],
+    ["a link only inside a code block", "```\n[Model](model/index.md)\n```\n", true],
+  ])("%s", (_label, body, warns) => {
+    const merged = mergeBundle(GENERATED, [curated("index.md", `# Model\n\n${body}`)], "0.2");
+    expect(merged.findings.some((each) => each.rule === "L2")).toBe(warns);
   });
 });

@@ -61,6 +61,15 @@ export class FileBundleSource implements BundleSource {
   }
 
   async read(path: string): Promise<string | undefined> {
+    const bytes = await this.readBytes(path);
+    return bytes?.toString("utf8");
+  }
+
+  /**
+   * A file's exact bytes, with the same guards as read(): only paths that list() returns, never
+   * through a symbolic link. For files that aren't text, e.g. an image next to a concept.
+   */
+  async readBytes(path: string): Promise<Buffer | undefined> {
     if (!isBundlePath(path)) return undefined;
     const realRoot = await this.realRoot();
     if (realRoot === undefined) return undefined;
@@ -72,7 +81,7 @@ export class FileBundleSource implements BundleSource {
       // The real path differs when a folder on the way is a symbolic link, or, on
       // case-insensitive file systems, when the path is spelt differently from the file.
       const isListed = (await realpath(fullPath).catch(missingAsUndefined)) === fullPath;
-      return isListed && (await file.stat()).isFile() ? await file.readFile("utf8") : undefined;
+      return isListed && (await file.stat()).isFile() ? await file.readFile() : undefined;
     } finally {
       await file.close();
     }

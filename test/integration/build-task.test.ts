@@ -226,19 +226,21 @@ describe("cds build, where the bundle comes from and goes to", () => {
 });
 
 // Task 3.1: the curated okf/ folder merged with the generated model/ (ADR-0007).
+const ordering =
+  "---\ntype: Guide\ntitle: Placing an order\ndescription: How a shopper orders.\n---\n\n" +
+  "Shoppers browse [Books](/model/CatalogService/Books.md) first.\n";
+
 describe("cds build with a curated okf/ folder", () => {
   let app: string;
   afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
-
-  const ordering =
-    "---\ntype: Guide\ntitle: Placing an order\ndescription: How a shopper orders.\n---\n\n" +
-    "Shoppers browse [Books](/model/CatalogService/Books.md) first.\n";
 
   test("merges curated files into gen/okf and the deployed copy, with a root index listing both", () => {
     app = bookshopApp();
     fs.mkdirSync(path.join(app, "okf", "guides"), { recursive: true });
     fs.writeFileSync(path.join(app, "okf", "guides", "ordering.md"), ordering);
     fs.writeFileSync(path.join(app, "okf", "guides", "query.sql"), "select 1;\n");
+    const logo = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0x00, 0x01]);
+    fs.writeFileSync(path.join(app, "okf", "guides", "logo.png"), logo);
     const result = cdsBuild(app);
     expect({ status: result.status, okf: result.stdout.includes("[okf]") }).toEqual({
       status: 0,
@@ -251,7 +253,18 @@ describe("cds build with a curated okf/ folder", () => {
     expect(root).toContain("* [guides](guides/index.md)");
     expect(root).toContain("* [model](model/index.md)");
     expect(readTree(path.join(app, "gen", "srv", "okf-bundle"))).toEqual(written);
+    for (const folder of [
+      ["gen", "okf"],
+      ["gen", "srv", "okf-bundle"],
+    ]) {
+      expect(fs.readFileSync(path.join(app, ...folder, "guides", "logo.png"))).toEqual(logo);
+    }
   });
+});
+
+describe("cds build with a curated okf/ folder: curated mistakes", () => {
+  let app: string;
+  afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
 
   test("a curated file under okf/model/ fails the build, named by its okf/ path", () => {
     app = bookshopApp();

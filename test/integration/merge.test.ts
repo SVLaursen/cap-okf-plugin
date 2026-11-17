@@ -61,3 +61,31 @@ describe("readCuratedFolder", () => {
     ]);
   });
 });
+
+describe("readCuratedFolder, guarded reads", () => {
+  let folder: string;
+  beforeEach(() => {
+    folder = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-curated-"));
+  });
+  afterEach(() => fs.rmSync(folder, { recursive: true, force: true }));
+
+  test("a symbolic link is never followed, also for files that aren't Markdown", async () => {
+    const outside = path.join(folder, "..", `${path.basename(folder)}-secret.txt`);
+    fs.writeFileSync(outside, "secret\n");
+    try {
+      fs.mkdirSync(path.join(folder, "okf"));
+      fs.symlinkSync(outside, path.join(folder, "okf", "linked.txt"));
+      expect(await readCuratedFolder(path.join(folder, "okf"))).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { force: true });
+    }
+  });
+
+  test("okf as a file, not a folder, is an [okf] setup error naming okf", async () => {
+    fs.writeFileSync(path.join(folder, "okf"), "oops\n");
+    await expect(readCuratedFolder(path.join(folder, "okf"))).rejects.toMatchObject({
+      name: "SetupError",
+      message: expect.stringMatching(/^\[okf\] okf — is a file, not a folder\.\n {2}/),
+    });
+  });
+});
