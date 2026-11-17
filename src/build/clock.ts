@@ -6,11 +6,13 @@
  * The export time from the environment: SOURCE_DATE_EPOCH in whole seconds since 1970 when set,
  * else `systemClock()`. Throws an [okf] error for any other value.
  */
+import { setupError } from "./errors";
+
 export function clockFrom(env: NodeJS.ProcessEnv, systemClock: () => Date): Date {
   const epoch = env["SOURCE_DATE_EPOCH"];
   if (epoch === undefined) return systemClock();
   if (!/^\d+$/.test(epoch)) {
-    throw new Error(
+    throw setupError(
       `[okf] SOURCE_DATE_EPOCH — ${JSON.stringify(epoch)} is not a whole number of seconds since 1970.\n` +
         "  Set it to e.g. the time of the last commit: git log -1 --format=%ct",
     );

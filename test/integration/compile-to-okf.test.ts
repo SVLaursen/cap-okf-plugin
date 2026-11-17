@@ -132,17 +132,11 @@ describe("cds compile --to okf refuses options that would mislead", () => {
     expect(result.stderr).toMatch(message);
     expect(result.stdout).not.toContain("{}");
   });
-
-  test("a model piped in on stdin", () => {
-    const result = cdsWithOkf(
-      ["compile", "--to", "okf"],
-      {},
-      { input: "entity A { key ID : Integer; }" },
-    );
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/\[okf\] model — wasn't compiled from CDS files on disk/);
-  });
 });
+
+/** The registered "okf" compile target, as CAP's compile command calls it. */
+type Target = (csn: unknown, options?: Record<string, unknown>) => Promise<unknown>;
+const target = () => (cds.compile.to as unknown as Record<string, Target>)["okf"]!;
 
 describe("the compile target in-process", () => {
   let model: Csn;
@@ -162,9 +156,6 @@ describe("the compile target in-process", () => {
     (cds.env as unknown as Record<string, unknown>)["okf"] = configured;
   });
 
-  type Target = (csn: unknown, options?: Record<string, unknown>) => Promise<unknown>;
-  const target = () => (cds.compile.to as unknown as Record<string, Target>)["okf"]!;
-
   test("is registered by the plugin", () => {
     expect(typeof target()).toBe("function");
   });
@@ -178,6 +169,32 @@ describe("the compile target in-process", () => {
     const tree = ((await target()(model)) as string).split("\n");
     expect(files.map(([, place]) => `${place.file}${place.suffix}`)).toEqual(tree);
     expect(files[0]![0]).toMatch(/^---\nokf_version: "0\.2"\n---\n/);
+  });
+});
+
+describe("the compile target in-process, refused input", () => {
+  let model: Csn;
+
+  beforeAll(async () => {
+    model = (await cds.load(FIXTURE)) as unknown as Csn;
+  });
+
+  // cds-dk reads a model from stdin only when started as the cds binary itself; such a model's
+  // only source is "<stdin>.cds", as with any model compiled from a string.
+  test("a model piped in on stdin is refused: there is no file to load again", async () => {
+    const piped = cds.compile("entity A { key ID : Integer; }");
+    await expect(target()(piped)).rejects.toThrow(
+      /\[okf\] model — wasn't compiled from CDS files on disk/,
+    );
+  });
+
+  test("-s with one service is refused at once; -s all, which -o sets, is fine", async () => {
+    expect(() => target()(model, { service: "CatalogService" })).toThrow(/\[okf\] -s — /);
+    await expect(target()(model, { service: "all" })).resolves.toEqual(expect.any(String));
+  });
+
+  test("-l is refused at once, before any promise exists", () => {
+    expect(() => target()(model, { lang: "de" })).toThrow(/\[okf\] -l — /);
   });
 
   test("cds.okf.include chooses what is exported", async () => {
@@ -196,7 +213,7 @@ describe("the compile target in-process", () => {
 
   test("a model without $sources is refused, since it can't be reloaded with doc comments", async () => {
     await expect(target()(JSON.parse(JSON.stringify(model)))).rejects.toThrow(
-      /\[okf\] .*\$sources/,
+      /\[okf\] model — wasn't compiled from CDS files on disk/,
     );
   });
 });

@@ -15,7 +15,10 @@ import { serviceMembers } from "./mappers/service";
 import { sourceOf } from "./mappers/sources";
 import { isLeftOut, linkedDefinitions } from "./mappers/visibility";
 
-export type Include = "services" | "all";
+/** The values cds.okf.include may have; "services" is the default. */
+export const INCLUDE_VALUES = ["services", "all"] as const;
+
+export type Include = (typeof INCLUDE_VALUES)[number];
 
 /** The names of the definitions to export, for `include`. */
 export function selectExported(model: Csn, include: Include): ReadonlySet<string> {
