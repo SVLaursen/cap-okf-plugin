@@ -4,6 +4,7 @@ Newest first. One line per finished task or event: `YYYY-MM-DD · <task id> · <
 
 ## In flight
 
+- 2026-11-17 · pilot · Parked by the maintainer: G4 was signed off without a pilot run. The harness is ready (`test/pilot/`, task 3.6); the maintainer runs it later with a real domain and questions.
 - 2026-11-17 · ADR-0010 · Proposed, waiting for the maintainer: accept it (with the `bundleHash` placement and the `(tenant, locale)` scope, or changes), mark ADR-0006 Superseded, add the amendment note to ADR-0004, and confirm Contract A as built to the `@gavdi/cap-mcp` maintainers. Phase 4 waits for it; 2.10 does not.
 
 ## Blocked
