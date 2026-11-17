@@ -17,6 +17,7 @@ import type { McpChoice } from "../../src/serve/mcp/select";
 const SECRET = "Only for signed-in readers.";
 const BUNDLE = {
   "index.md": `# Knowledge\n\nIntro.\n\n${AUTH_START}\n${SECRET}\n${AUTH_END}\n`,
+  "guides/index.md": "# Guides\n",
   "guides/ordering.md": `---\ntype: Guide\n---\n# Ordering\n\n${AUTH_START}\n${SECRET}\n${AUTH_END}\n`,
   "guides/two words.md": "---\ntype: Guide\n---\n# Two words\n",
   "guides/50%25 off.md": "---\ntype: Guide\n---\n# Half price\n",
@@ -163,6 +164,10 @@ describe("okf:// resources: the concept template's read", () => {
     expect(text).not.toContain(SECRET);
   });
 
+  test("reads a folder's index.md, as index.md links folders (model/)", async () => {
+    expect(await readConcept(SIGNED_IN, "guides/")).toBe(BUNDLE["guides/index.md"]);
+  });
+
   test("decodes params.path once: a space, and a file whose name holds a % escape", async () => {
     expect(await readConcept(SIGNED_IN, "guides/two%20words.md")).toContain("# Two words");
     expect(await readConcept(SIGNED_IN, "guides/50%2525%20off.md")).toContain("# Half price");
@@ -189,6 +194,7 @@ describe("okf:// resources: the concept template's complete", () => {
   test("offers raw bundle paths that start with the typed value, sorted", async () => {
     expect(await concepts().complete?.(SIGNED_IN, "path", "guides/")).toEqual([
       "guides/50%25 off.md",
+      "guides/index.md",
       "guides/ordering.md",
       "guides/two words.md",
     ]);

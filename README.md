@@ -294,14 +294,32 @@ Then `cds watch` serves the bundle at `/okf/`:
 
 ## Serving over MCP
 
-With [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) v2 installed, turn on the tools
-channel:
+With [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) v2 installed, cap-okf serves the
+bundle over MCP on two channels: `okf://` resources, and tools.
 
 ```json
-"cds": { "okf": { "serve": { "mcp": { "as": ["tools"] } } } }
+"cds": { "okf": { "serve": { "mcp": { "as": ["resources", "tools"] } } } }
 ```
 
-cap-okf then adds a read-only `OkfService` to the app, which the MCP plugin offers as five tools:
+`true` alone picks the plugin's own default channel, which for `@gavdi/cap-mcp` is resources.
+
+### Resources
+
+cap-okf registers two resources through the plugin's `mcp:resources` event:
+
+| Resource | What an agent gets |
+| --- | --- |
+| `okf://<namespace>/index.md` | The bundle's root index: where to start. |
+| `okf://<namespace>/{+path}` | Any concept by its bundle path, e.g. `okf://acme-orders/model/CatalogService/Books.md`; a folder (`…/model/`) reads its `index.md`. Completion offers the paths. |
+
+The concepts aren't listed one by one: agents find them through the index, or through completion of
+`path`. Each segment of a path is percent-encoded in the URI (`two%20words.md`). This needs a
+`@gavdi/cap-mcp` release with `mcp:resources` (contract version 1); with an older one cap-okf warns once at
+startup and serves no resources.
+
+### Tools
+
+With `as` including `"tools"`, cap-okf adds a read-only `OkfService` to the app, which the MCP plugin offers as five tools:
 
 | Tool | What an agent gets |
 | --- | --- |
@@ -310,17 +328,18 @@ cap-okf then adds a read-only `OkfService` to the app, which the MCP plugin offe
 | `OkfService_getConcept` | One concept's full Markdown, by path. |
 | `OkfService_bundleInfo` | The OKF version, a hash of the bundle (to tell whether a stored copy is stale) and the namespace. |
 
-- `true` alone picks the plugin's own default channel, which for `@gavdi/cap-mcp` is resources (planned), so
-  write `as: ["tools"]` for the tools.
+### On both channels
+
 - `requires` (default `"authenticated-user"`) is the role or roles a caller needs; one is enough. Callers
-  without it don't see the tools; calling one anyway is answered like an unknown tool.
+  without it don't see the tools or the index resource; calling a tool anyway is answered like an unknown
+  tool, and reading a resource like an unknown resource.
 - Authorization sections are removed for callers who aren't authenticated, as on the static route; the
-  index lists links only to concepts the caller can open.
+  `Index` tool lists links only to concepts the caller can open.
 - `OkfService` has no OData endpoint: only the MCP plugin reaches it. It is never part of the bundle.
 - If the app lists its own `cds.build.tasks`, include `{ "for": "okf" }`, or the deployed app has no
   `OkfService` (cap-okf warns at startup).
-- The namespace (for `okf://` resources, planned) defaults to the `package.json` name, lower case, with `@`
-  dropped and `/` as `-`.
+- The namespace of the `okf://` resources (`cds.okf.serve.mcp.namespace`) defaults to the `package.json`
+  name, lower case, with `@` dropped and `/` as `-`.
 
 ## Building and deploying
 

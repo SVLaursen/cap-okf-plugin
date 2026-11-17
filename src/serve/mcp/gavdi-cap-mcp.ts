@@ -156,14 +156,16 @@ async function textFor(ctx: ResourceContext, source: BundleSource, path: string)
 }
 
 // params arrive still percent-encoded; decoded exactly once. A malformed escape is "not there".
+// A folder ("model/", as index.md links it) reads its index.md, as on the static route.
 function decodedPath(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
-  let path: string;
+  let decoded: string;
   try {
-    path = decodeURIComponent(raw);
+    decoded = decodeURIComponent(raw);
   } catch {
     return undefined;
   }
+  const path = decoded.endsWith("/") ? `${decoded}${INDEX}` : decoded;
   return isBundlePath(path) ? path : undefined;
 }
 
