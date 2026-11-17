@@ -78,7 +78,7 @@ function markerOf(content: string): "start" | "end" | undefined {
   const cleaned = content
     .replace(FORMAT_CHARACTERS, "")
     .trim()
-    .replace(/^(>\s*)+/, "");
+    .replace(/^[>\s]*/, ""); // no repeated group: a huge line of ">" can't overflow the stack
   const match = MARKER.exec(cleaned);
   return match === null ? undefined : (match[1]!.toLowerCase() as "start" | "end");
 }
