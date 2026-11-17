@@ -15,18 +15,22 @@ import { staticRouteOf } from "./static-config";
 
 /** Serves the bundle at cds.okf.serve.static, when that is on. */
 export function registerStaticRoute(cds: Cds): void {
-  let bundle: Promise<BundleSource> | undefined;
   const log = cds.log("okf");
 
   cds.on("bootstrap", (app: Application) => {
     // Read here, not at plugin load, so a wrong value stops a server, never cds build.
     const route = staticRouteOf((cds.env as unknown as { okf?: unknown }).okf);
     if (route === undefined) return;
+    // One bundle per server: a process may boot more than one app.
+    let bundle: Promise<BundleSource> | undefined;
     const source = () => (bundle ??= startupBundleSource(cds, log, process.env));
-    // Built before served completes (ADR-0007): a slow model load doesn't slow the first reader.
-    cds.on("served", () => {
-      source().catch((error: Error) => log.error(error.message));
-    });
+    // Built before served completes (ADR-0007): CAP waits for the returned promise, so later
+    // served listeners (MCP, task 4.6) find it. A setup error, such as okf being a file, stops
+    // startup; curated files with errors don't (they are left out, see source.ts).
+    // CAP waits for a promise a served listener returns (@sap/cds lib/index.js), though its
+    // types declare the listener as returning nothing.
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    cds.on("served", () => source().then(() => undefined));
     const serve = (req: Request, res: Response, next: NextFunction) => {
       serveFile(cds, route, source, req, res).catch(next);
     };
@@ -48,13 +52,14 @@ async function serveFile(
     res.set("Allow", "GET, HEAD").status(405).end();
     return;
   }
-  // /okf → /okf/, so the root index's relative links resolve inside the route.
+  // /okf → okf/, so the root index's relative links resolve inside the route. Relative, so a
+  // proxy that changes the prefix still works; temporary (302), so browsers don't keep it.
   if (req.path === "/" && !req.originalUrl.split("?")[0]!.endsWith("/")) {
-    res.redirect(301, `${route}/`);
+    res.redirect(302, `${route.slice(route.lastIndexOf("/") + 1)}/`);
     return;
   }
   const bundlePath = bundlePathOf(req.path);
-  const text = bundlePath === undefined ? undefined : await (await source()).read(bundlePath);
+  const text = bundlePath === undefined ? undefined : await servableText(source, bundlePath);
   if (bundlePath === undefined || text === undefined) {
     res.status(404).end();
     return;
@@ -78,6 +83,18 @@ function bundlePathOf(requestPath: string): string | undefined {
   }
   const path = decoded === "" || decoded.endsWith("/") ? `${decoded}index.md` : decoded;
   return isBundlePath(path) ? path : undefined;
+}
+
+// The file's text, or undefined when it's not in the bundle or isn't UTF-8 text (e.g. an image):
+// generated in memory such a file has no text, and read from disk its bytes come back with
+// replacement characters (U+FFFD).
+async function servableText(
+  source: () => Promise<BundleSource>,
+  bundlePath: string,
+): Promise<string | undefined> {
+  const text = await (await source()).read(bundlePath);
+  if (text === undefined || bundlePath.endsWith(".md")) return text;
+  return text === "" || text.includes("\uFFFD") ? undefined : text;
 }
 
 function contentTypeOf(bundlePath: string): string {

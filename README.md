@@ -267,11 +267,15 @@ Turn on the static route, for example only in development:
 Then `cds watch` serves the bundle at `/okf/`:
 
 - `GET /okf/` or `/okf/index.md` returns the root index; a folder path such as `/okf/model/`
-  returns its `index.md`; every file is served as `text/markdown; charset=utf-8` (other files
-  as `text/plain`).
+  returns its `index.md`. `.md` files are served as `text/markdown; charset=utf-8`, other text
+  files from `okf/` as `text/plain; charset=utf-8`; files that aren't UTF-8 text (e.g. images)
+  aren't served.
 - Requests go through CAP's own authentication. Readers who aren't authenticated get every file
   without its authorization sections; authenticated users get them in full, whatever their
-  roles.
+  roles. With `auth: "dummy"` (or a privileged default user), CAP treats every request as
+  authenticated, so everyone sees the sections.
+- No CORS: the route answers same-origin requests; a browser tool on another origin can't read
+  it, and `OPTIONS` gets 405.
 - Links in concepts are bundle-absolute (`/model/User.md`): resolve them against the route
   (`/okf/model/User.md`), not the server's root.
 - The route isn't listed on CAP's index page.

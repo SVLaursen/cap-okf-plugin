@@ -24,9 +24,10 @@ describe("the static route at /okf", () => {
   test("a folder path serves its index.md; /okf without a slash redirects to /okf/", async () => {
     expect((await GET("/okf/")).data).toBe((await GET("/okf/index.md")).data);
     expect((await GET("/okf/model/")).data).toBe((await GET("/okf/model/index.md")).data);
+    // Relative and temporary, so it also works behind a proxy that changes the prefix.
     const redirect = await GET("/okf", { maxRedirects: 0 });
-    expect(redirect.status).toBe(301);
-    expect(redirect.headers["location"]).toBe("/okf/");
+    expect(redirect.status).toBe(302);
+    expect(redirect.headers["location"]).toBe("okf/");
   });
 
   test("serves generated and curated concepts", async () => {
@@ -84,6 +85,30 @@ describe("the static route and authorization sections (ADR-0003)", () => {
     for (const user of [ALICE, BOB]) {
       expect((await GET(ORDERS, user)).data).toContain("<!-- okf:auth:start -->");
       expect((await GET(GUIDE, user)).data).toContain("<!-- okf:auth:start -->");
+    }
+  });
+});
+
+describe("the static route: more answers", () => {
+  test("HEAD answers like GET, without a body, and decides auth the same way", async () => {
+    const response = await axios.head("/okf/index.md");
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toBe("text/markdown; charset=utf-8");
+    expect(response.data).toBe("");
+  });
+
+  test("a wrong password gets CAP's 401, and no bundle text", async () => {
+    const response = await GET("/okf/model/AdminService/Orders.md", {
+      auth: { username: "alice", password: "wrong" },
+    });
+    expect(response.status).toBe(401);
+    expect(String(response.data)).not.toContain("okf:auth");
+  });
+
+  test("404 and 405 answers are private too", async () => {
+    for (const response of [await GET("/okf/nope.md"), await POST("/okf/index.md", {})]) {
+      expect(response.headers["cache-control"]).toBe("private, no-cache");
+      expect(response.headers["vary"]).toMatch(/Authorization/);
     }
   });
 });
