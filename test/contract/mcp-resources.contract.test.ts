@@ -8,7 +8,8 @@ import { hiddenContract, serverContract } from "./server.contract";
 
 // The server contract (4.1) on the MCP resources channel (4.6), through @gavdi/cap-mcp v2 itself
 // (the neighbouring checkout's lib/), on the demo app with cds.okf.serve.mcp: true, which is
-// that plugin's natural channel, and the default requires (authenticated-user).
+// that plugin's default channels (resources and tools since ADR-0012), and the default requires
+// (authenticated-user).
 
 const NAMESPACE = "cap-okf-demo";
 const INDEX = `okf://${NAMESPACE}/index.md`;
@@ -63,9 +64,14 @@ describeWithGavdi("the MCP resources channel through @gavdi/cap-mcp", () => {
     expect(contents?.[0]?.text).toContain("CatalogService");
   });
 
-  test("true serves resources only: OkfService's tools aren't there", async () => {
+  test("true serves both channels (ADR-0012): OkfService's tools are there too", async () => {
     const answer = await rpc(POST as never, BOB, "tools/list");
     const tools = (answer.message?.result?.["tools"] ?? []) as { name: string }[];
-    expect(tools.filter((tool) => tool.name.startsWith("OkfService_"))).toEqual([]);
+    const names = tools.map((tool) => tool.name).filter((name) => name.startsWith("OkfService_"));
+    expect(names.sort()).toEqual([
+      "OkfService_getConcept",
+      "OkfService_getIndex",
+      "OkfService_searchConcepts",
+    ]);
   });
 });

@@ -11,14 +11,18 @@
 // - A curated folder without its own index.md gets a generated one, so every folder the root
 //   index links to has an index.
 // - log.md and files that aren't Markdown are kept as they are and never listed.
+// - A generated concept that curated notes link to gets a "Business knowledge" section listing
+//   them (ADR-0012, business-knowledge.ts).
 // - A curated Markdown file whose authorization markers are broken (L3, task 4.11) is left out,
 //   so it is never served half cut; markers written slightly wrong are warnings (L4).
 import { parseConcept, serializeConcept, type Concept } from "../core/concept";
 import { authMarkerFindings } from "../core/auth-markers";
 import { findingAt, type Finding } from "../core/finding";
-import { compareText, generateIndex } from "../core/index-md";
+import { compareText } from "../core/index-md";
 import { extractLinks, resolveLink } from "../core/links";
 import { MODEL_FOLDER } from "../export/paths";
+import { withBusinessKnowledge } from "./business-knowledge";
+import { bundleIndex } from "./indexes";
 import { fold, pathPrefixes } from "./paths";
 
 /** OKF's reserved file names (spec §3.1); a curated index.md is a folder's own index. */
@@ -64,20 +68,23 @@ export function mergeBundle(
   okfVersion: string,
 ): MergedBundle {
   const findings: Finding[] = [];
-  const generatedFiles = generated.filter((concept) => concept.path !== "index.md");
-  const kept = keptCuratedFiles(curated, generatedFiles, findings);
-  const allConcepts = [...generatedFiles, ...parsedConcepts(kept)];
+  const withoutRoot = generated.filter((concept) => concept.path !== "index.md");
+  const kept = keptCuratedFiles(curated, withoutRoot, findings);
+  const curatedConcepts = parsedConcepts(kept);
+  // Each generated concept lists the curated notes that link to it (ADR-0012).
+  const generatedFiles = withBusinessKnowledge(withoutRoot, curatedConcepts);
+  const allConcepts = [...generatedFiles, ...curatedConcepts];
   const ownIndexes = new Set(kept.map((file) => file.path));
   const missingIndexes = listedFolders(kept).filter((folder) => !ownIndexes.has(indexOf(folder)));
 
   const files: MergedFile[] = [
     ...generatedFiles.map((concept) => ({ path: concept.path, text: serializeConcept(concept) })),
     ...kept.map(asMergedFile),
-    ...missingIndexes.map((folder) => asFile(generateIndex(folder, allConcepts))),
+    ...missingIndexes.map((folder) => asFile(bundleIndex(folder, allConcepts, okfVersion))),
   ];
   const curatedRoot = kept.find((file) => file.path === "index.md");
   if (curatedRoot === undefined) {
-    files.push(asFile(generateIndex("", allConcepts, { okfVersion })));
+    files.push(asFile(bundleIndex("", allConcepts, okfVersion)));
   } else if (!linksToModel(curatedRoot.text)) {
     findings.push(missingModelLink());
   }

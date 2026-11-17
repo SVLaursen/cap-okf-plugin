@@ -14,7 +14,7 @@ generated:
 
 # Genres
 
-Projection on [Genres](/model/sample/bookshop/Genres.md)
+Projection
 
 A category of books; genres can be nested.
 

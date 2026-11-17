@@ -45,6 +45,22 @@ function firstSentence(text: string): string {
 }
 
 /**
+ * Whether a projection may take texts (descriptions, doc comments) from `name` down its source
+ * chain: anything not left out with @okf: false. The source needn't be exported (ADR-0012: by
+ * default the database entity under a service projection gets no concept of its own); its
+ * texts describe the projection too, and its name isn't mentioned.
+ */
+export function mayInheritFrom(name: string, context: MapperContext): boolean {
+  const definition = context.model.definitions[name];
+  return definition !== undefined && definition["@okf"] !== false;
+}
+
+/** The definition and the definitions down its source chain it may take texts from. */
+export function textSources(definition: CsnDefinition, context: MapperContext): CsnDefinition[] {
+  return sourceChain(definition, context.model, (name) => mayInheritFrom(name, context));
+}
+
+/**
  * The definition's description, else that of the first definition down its source chain that has
  * one: a projection on a projection on Books gets Books' description.
  */
@@ -52,7 +68,7 @@ export function inheritedDescription(
   definition: CsnDefinition,
   context: MapperContext,
 ): string | undefined {
-  for (const each of sourceChain(definition, context.model, context.isExported)) {
+  for (const each of textSources(definition, context)) {
     const description = descriptionOf(each, context);
     if (description !== undefined) return description;
   }
@@ -96,9 +112,7 @@ export function inheritedDoc(
   definition: CsnDefinition,
   context: MapperContext,
 ): string | undefined {
-  return sourceChain(definition, context.model, context.isExported).find(
-    (each) => each.doc !== undefined,
-  )?.doc;
+  return textSources(definition, context).find((each) => each.doc !== undefined)?.doc;
 }
 
 /** A Markdown link to a definition's concept, with its title as the text. */

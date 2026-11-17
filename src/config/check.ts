@@ -13,9 +13,17 @@ import { staticRouteOf } from "../serve/static-config";
 
 /** The keys each block may have, in the order the fix line names them. */
 const KEYS = {
-  "cds.okf": ["include", "serve"],
+  "cds.okf": ["include", "projectionSources", "serve"],
   "cds.okf.serve": ["static", "mcp"],
-  "cds.okf.serve.mcp": ["plugin", "as", "namespace", "requires"],
+  "cds.okf.serve.mcp": [
+    "plugin",
+    "as",
+    "namespace",
+    "requires",
+    "related",
+    "instructions",
+    "pointers",
+  ],
 };
 
 const EXAMPLES = {

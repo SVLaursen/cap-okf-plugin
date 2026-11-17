@@ -17,6 +17,8 @@ export const OKF_VERSION = "0.2";
 export interface ExportOptions {
   /** Which definitions to export (task 2.6); "services" unless the app says otherwise. */
   include: Include;
+  /** With "services": also export what service projections are built on (ADR-0012). */
+  projectionSources?: boolean;
   /** When the bundle is generated: written to each concept's generated.at. */
   now: Date;
   /** cap-okf's own version: written to each concept's generated.by. */
@@ -42,7 +44,9 @@ export interface ExportOptions {
 export function exportModel(model: Csn, options: ExportOptions): Concept[] {
   const at = timestampOf(options.now);
   const by = producerOf(options.version);
-  const exported = selectExported(model, options.include);
+  const exported = selectExported(model, options.include, {
+    projectionSources: options.projectionSources ?? false,
+  });
   const context = defaultMapperContext(model, options.texts, (name) => exported.has(name));
   const concepts = [...exported].map((name) => {
     const definition = model.definitions[name]!;

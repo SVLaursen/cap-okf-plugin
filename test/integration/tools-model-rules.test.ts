@@ -35,9 +35,9 @@ describe("wantsToolsModel and addToolsModel", () => {
     ["mcp off", { okf: { serve: { mcp: false } }, ...GAVDI }, false],
     ["mcp on, no plugin installed", { okf: { serve: { mcp: true } } }, false],
     [
-      "mcp on with @gavdi/cap-mcp: its natural channel is resources",
+      "mcp on with @gavdi/cap-mcp: both channels (ADR-0012)",
       { okf: { serve: { mcp: true } }, ...GAVDI },
-      false,
+      true,
     ],
     ["as: [tools]", { okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI }, true],
     [
@@ -119,6 +119,8 @@ describe("annotateToolsModel", () => {
 
   test("a model built with tools, served with them off: @mcp false, so no broken tools", () => {
     expect(loaded({ okf: { serve: { mcp: false } }, ...GAVDI })["@mcp"]).toBe(false);
-    expect(loaded({ okf: { serve: { mcp: true } }, ...GAVDI })["@mcp"]).toBe(false);
+    expect(loaded({ okf: { serve: { mcp: { as: ["resources"] } } }, ...GAVDI })["@mcp"]).toBe(
+      false,
+    );
   });
 });

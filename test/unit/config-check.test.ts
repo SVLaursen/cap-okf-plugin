@@ -33,11 +33,11 @@ describe("configWarnings: unknown keys", () => {
     };
     expect(configWarnings(okf, SERVE)).toEqual([
       "[okf] cds.okf.inculde — isn't a setting of cap-okf, so it is ignored.\n" +
-        "  Use one of: include, serve.",
+        "  Use one of: include, projectionSources, serve.",
       "[okf] cds.okf.serve.statik — isn't a setting of cap-okf, so it is ignored.\n" +
         "  Use one of: static, mcp.",
       "[okf] cds.okf.serve.mcp.requries — isn't a setting of cap-okf, so it is ignored.\n" +
-        "  Use one of: plugin, as, namespace, requires.",
+        "  Use one of: plugin, as, namespace, requires, related, instructions, pointers.",
     ]);
   });
 

@@ -2,7 +2,8 @@
 import { inlineCode, tableCell } from "../../core/markdown";
 import type { CsnDefinition, CsnEnum, CsnElement, CsnTyped } from "../csn";
 import type { MapperContext } from "./context";
-import { linkTo } from "./shared";
+import { linkTo, textSources } from "./shared";
+import { oneLine } from "../../core/markdown";
 import { elementOfRef, relationTarget, shownEntries } from "./visibility";
 
 /**
@@ -10,18 +11,22 @@ import { elementOfRef, relationTarget, shownEntries } from "./visibility";
  * column is headed `firstColumn` ("Element", "Parameter", "Returned element").
  * With `withoutAssociations`, associations are left out because a list of them follows (entities,
  * aspects, events); everywhere else they stay in the table, e.g. "Association to [Countries](…)".
+ * `sources` are the definitions a projection is built on: an element without a description of
+ * its own takes the one of the element with its name there (ADR-0012).
  */
 export function elementsTable(
   firstColumn: string,
   elements: Record<string, CsnElement>,
   context: MapperContext,
   withoutAssociations = false,
+  sources: readonly CsnDefinition[] = [],
 ): string | undefined {
   // Left out: rows marked @okf: false or referring to a definition that isn't exported (2.6).
   const rows = shownEntries(elements, context)
     .filter(([, element]) => !(withoutAssociations && isAssociation(element)))
     .map(([name, element]) => {
-      const cells = [inlineCode(name), typeCell(element, context), notesOf(element)];
+      const description = descriptionOf(name, element, context, sources);
+      const cells = [inlineCode(name), typeCell(element, context), notesOf(element, description)];
       return `| ${cells.map(tableCell).join(" | ")} |`;
     });
   if (rows.length === 0) return undefined;
@@ -34,7 +39,9 @@ export function elementsSection(
   context: MapperContext,
   withoutAssociations = false,
 ): string[] {
-  const table = elementsTable("Element", definition.elements ?? {}, context, withoutAssociations);
+  const sources = textSources(definition, context).slice(1);
+  const elements = definition.elements ?? {};
+  const table = elementsTable("Element", elements, context, withoutAssociations, sources);
   return table === undefined ? [] : [`## Elements\n\n${table}`];
 }
 
@@ -140,9 +147,30 @@ export function enumValues(values: CsnEnum): string[] {
   );
 }
 
-// "key", "mandatory", "default: 0", "localized", "virtual", "values: …", then the doc comment.
+/**
+ * An element's or parameter's description: its @description, else its doc comment, else (for a
+ * projection) those of the element with the same name down the source chain.
+ */
+export function descriptionOf(
+  name: string,
+  element: CsnElement,
+  context: MapperContext,
+  sources: readonly CsnDefinition[] = [],
+): string | undefined {
+  for (const each of [element, ...sources.map((source) => source.elements?.[name])]) {
+    if (each === undefined) continue;
+    const description = each["@description"];
+    if (typeof description === "string" && description.trim() !== "") {
+      return oneLine(context.text(description));
+    }
+    if (each.doc !== undefined && each.doc !== null) return each.doc;
+  }
+  return undefined;
+}
+
+// "key", "mandatory", "default: 0", "localized", "virtual", "values: …", then the description.
 // A default that is an expression (e.g. $user, $now) is left out: only plain values are shown.
-function notesOf(element: CsnElement): string {
+function notesOf(element: CsnElement, description: string | undefined): string {
   const notes: string[] = [];
   if (element.key) notes.push("key");
   if (element["@mandatory"] === true || element.notNull) notes.push("mandatory");
@@ -152,6 +180,6 @@ function notesOf(element: CsnElement): string {
   if (element.localized) notes.push("localized");
   if (element.virtual) notes.push("virtual");
   if (element.enum !== undefined) notes.push(`values: ${enumValues(element.enum).join(", ")}`);
-  if (element.doc !== undefined) notes.push(element.doc);
+  if (description !== undefined) notes.push(description);
   return notes.join("; ");
 }

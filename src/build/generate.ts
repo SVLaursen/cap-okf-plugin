@@ -16,11 +16,13 @@ import { setupError } from "./errors";
 
 /**
  * The bundle's concepts for `model`, which must be inferred and loaded with doc comments.
- * Reads cds.okf.include, the clock (SOURCE_DATE_EPOCH when set) and cap-okf's own version.
+ * Reads cds.okf.include and cds.okf.projectionSources, the clock (SOURCE_DATE_EPOCH when set)
+ * and cap-okf's own version.
  */
 export function generateConcepts(cds: Cds, model: Csn): Concept[] {
   return exportModel(model, {
     include: includeFrom(cds),
+    projectionSources: projectionSourcesFrom(cds),
     now: clockFrom(process.env, () => new Date()),
     version: ownVersion(),
     texts: defaultLanguageTexts(cds, model),
@@ -66,6 +68,19 @@ function includeFrom(cds: Cds): Include {
     );
   }
   return include as Include;
+}
+
+// cds.okf.projectionSources: false (default) or true (ADR-0012).
+function projectionSourcesFrom(cds: Cds): boolean {
+  const okf = (cds.env as unknown as { okf?: { projectionSources?: unknown } }).okf;
+  const value = okf?.projectionSources ?? false;
+  if (typeof value !== "boolean") {
+    throw setupError(
+      `[okf] cds.okf.projectionSources — ${JSON.stringify(value)} isn't true or false.\n` +
+        "  Use false (the default: one concept per entity as the service exposes it) or true.",
+    );
+  }
+  return value;
 }
 
 // cap-okf's own version, for generated.by. This file is src/build/generate.ts or, built,

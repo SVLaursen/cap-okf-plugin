@@ -25,9 +25,11 @@ describe("OkfService with the tools channel on", () => {
     );
     expect(names.sort()).toEqual([
       "OkfService",
+      "OkfService.ConceptSummary",
       "OkfService.Index",
       "OkfService.bundleInfo",
       "OkfService.getConcept",
+      "OkfService.getIndex",
       "OkfService.searchConcepts",
     ]);
   });

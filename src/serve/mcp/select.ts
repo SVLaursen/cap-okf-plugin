@@ -6,11 +6,14 @@
 // - Opt-in (ADR-0004 §1): off unless cds.okf.serve.mcp is true or an object. Finding an MCP
 //   plugin never turns anything on; it only decides how to serve.
 // - Detection (ADR-0006): by package name in CAP's plugin list, no version check.
-// - true means { plugin: "auto" } on the plugin's natural channel: resources for
-//   @gavdi/cap-mcp, tools for @cap-js/mcp.
+// - true means { plugin: "auto" } on the plugin's default channels: resources and tools for
+//   @gavdi/cap-mcp (ADR-0012), tools for @cap-js/mcp.
 // - namespace (ADR-0010): from cds.okf.serve.mcp.namespace, else the package name, lower case,
 //   leading @ dropped, / → - (@acme/orders → acme-orders); must match the ADR's pattern.
 // - requires (ADR-0010): the roles a caller needs, default authenticated-user.
+// - related (ADR-0012): the related-concepts block after a concept that is read; default true.
+// - instructions and pointers (ADR-0013, Contract C): server instructions and tool notes through
+//   @gavdi/cap-mcp's mcp:hints; default true. instructions may also be the text to use.
 import { setupError } from "../../build/errors";
 
 export const GAVDI_CAP_MCP = "@gavdi/cap-mcp";
@@ -24,9 +27,9 @@ export type McpChannel = "resources" | "tools";
 
 const PLUGINS: readonly McpPlugin[] = [GAVDI_CAP_MCP, CAP_JS_MCP];
 const CHANNELS: readonly McpChannel[] = ["resources", "tools"];
-const NATURAL_CHANNEL: Record<McpPlugin, McpChannel> = {
-  [GAVDI_CAP_MCP]: "resources",
-  [CAP_JS_MCP]: "tools",
+const DEFAULT_CHANNELS: Record<McpPlugin, readonly McpChannel[]> = {
+  [GAVDI_CAP_MCP]: ["resources", "tools"],
+  [CAP_JS_MCP]: ["tools"],
 };
 const DEFAULT_REQUIRES: readonly string[] = ["authenticated-user"];
 const NAMESPACE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -38,6 +41,12 @@ export interface McpChoice {
   namespace: string;
   /** Roles a caller needs; one of them is enough, as with CAP's @requires. */
   requires: string[];
+  /** Whether a concept that is read is followed by its related-concepts block. */
+  related: boolean;
+  /** Server instructions: the default text (true), none (false), or the app's own text. */
+  instructions: boolean | string;
+  /** Whether tools whose definition a curated note links to get a note pointing at it. */
+  pointers: boolean;
 }
 
 export interface McpSelection {
@@ -65,7 +74,16 @@ export function selectMcp(input: SelectorInput): McpSelection {
   const warnings: string[] = [];
   const as = channelsFor(settings["as"], plugin, warnings);
   const namespace = namespaceFor(settings["namespace"], input.packageName);
-  return { choice: { plugin, as, namespace, requires: rolesFor(settings["requires"]) }, warnings };
+  const choice: McpChoice = {
+    plugin,
+    as,
+    namespace,
+    requires: rolesFor(settings["requires"]),
+    related: switchFor("related", settings["related"]),
+    instructions: instructionsFor(settings["instructions"]),
+    pointers: switchFor("pointers", settings["pointers"]),
+  };
+  return { choice, warnings };
 }
 
 // false, undefined or null (a profile resetting it) → off; true → {}; an object as it is.
@@ -118,9 +136,9 @@ function noPluginWarning(): string {
   );
 }
 
-// Unknown channels are left out with a warning; with none left, the plugin's natural channel.
+// Unknown channels are left out with a warning; with none left, the plugin's default channels.
 function channelsFor(setting: unknown, plugin: McpPlugin, warnings: string[]): McpChannel[] {
-  if (setting === undefined) return [NATURAL_CHANNEL[plugin]];
+  if (setting === undefined) return [...DEFAULT_CHANNELS[plugin]];
   const wanted = Array.isArray(setting) ? setting : [setting];
   const channels: McpChannel[] = [];
   for (const value of wanted) {
@@ -133,7 +151,7 @@ function channelsFor(setting: unknown, plugin: McpPlugin, warnings: string[]): M
       );
     }
   }
-  return channels.length > 0 ? channels : [NATURAL_CHANNEL[plugin]];
+  return channels.length > 0 ? channels : [...DEFAULT_CHANNELS[plugin]];
 }
 
 // Set: it must be valid text. Not set (or null, so a profile can reset it): derived from the
@@ -187,6 +205,27 @@ function rolesFor(setting: unknown): string[] {
     );
   }
   return roles as string[];
+}
+
+// true or false; not set (or null, so a profile can reset it) is true.
+function switchFor(key: string, setting: unknown): boolean {
+  if (setting === undefined || setting === null) return true;
+  if (typeof setting === "boolean") return setting;
+  throw setupError(
+    `[okf] cds.okf.serve.mcp.${key} — ${JSON.stringify(setting)} isn't true or false.\n` +
+      "  Use true (the default) or false.",
+  );
+}
+
+// true, false or the app's own text; not set (or null) is true.
+function instructionsFor(setting: unknown): boolean | string {
+  if (setting === undefined || setting === null) return true;
+  if (typeof setting === "boolean") return setting;
+  if (typeof setting === "string" && setting.trim() !== "") return setting.trim();
+  throw setupError(
+    `[okf] cds.okf.serve.mcp.instructions — ${JSON.stringify(setting)} isn't true, false or a text.\n` +
+      "  Use true (the default text), false (none) or the instructions to give, as a string.",
+  );
 }
 
 /** The package names in CAP's resolved plugin list, cds.env.plugins (ADR-0006: by name only). */

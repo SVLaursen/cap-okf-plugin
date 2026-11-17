@@ -77,7 +77,7 @@ describe("cds compile --to okf", () => {
       expect(result.status).toBe(0);
       const written = readTree(out);
       expect(written).toEqual(await expectedBundle());
-      const authors = written.find((file) => file.path === "model/sample/bookshop/Authors.md")!;
+      const authors = written.find((file) => file.path === "model/CatalogService/Authors.md")!;
       expect(authors.text).toContain("description: A person who wrote one or more books.");
     } finally {
       fs.rmSync(out, { recursive: true, force: true });

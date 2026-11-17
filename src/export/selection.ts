@@ -2,7 +2,11 @@
 //
 // Maintainer decisions: include "services" (the default) starts at the services and their
 // members and follows every reference a concept would show, transitively; "all" exports every
-// definition there is a mapper for. @okf: false leaves a definition out either way, as CAP copies
+// definition there is a mapper for. Since ADR-0012, "services" doesn't follow a projection to
+// what it is built on: an agent works with the entity as the service exposes it, and a second
+// concept for the database entity only repeated it. projectionSources: true follows them again
+// (cds.okf.projectionSources). A source can still be reached another way, e.g. as an
+// association's target that the service doesn't redirect. @okf: false leaves a definition out either way, as CAP copies
 // it, and nothing is reached through it or through an element, parameter or bound action
 // marked so. A definition under one that isn't exported (a service's member, S.Books.texts) is
 // left out too, because its own name would name its parent.
@@ -20,13 +24,25 @@ export const INCLUDE_VALUES = ["services", "all"] as const;
 
 export type Include = (typeof INCLUDE_VALUES)[number];
 
+export interface SelectionOptions {
+  /** With "services": also export what service projections are built on. Default false. */
+  projectionSources?: boolean;
+}
+
 /** The names of the definitions to export, for `include`. */
-export function selectExported(model: Csn, include: Include): ReadonlySet<string> {
+export function selectExported(
+  model: Csn,
+  include: Include,
+  options: SelectionOptions = {},
+): ReadonlySet<string> {
   const candidates = Object.keys(model.definitions).filter((name) =>
     isCandidate(model.definitions[name]!),
   );
+  const followSources = options.projectionSources === true;
   const selected =
-    include === "all" ? new Set(candidates) : reachableFromServices(model, new Set(candidates));
+    include === "all"
+      ? new Set(candidates)
+      : reachableFromServices(model, new Set(candidates), followSources);
   return withoutUnexportedParents(selected, model);
 }
 
@@ -58,7 +74,11 @@ function isCandidate(definition: CsnDefinition): boolean {
 }
 
 // Breadth first from the services and their members, following references; candidates only.
-function reachableFromServices(model: Csn, candidates: ReadonlySet<string>): ReadonlySet<string> {
+function reachableFromServices(
+  model: Csn,
+  candidates: ReadonlySet<string>,
+  followSources: boolean,
+): ReadonlySet<string> {
   const seeds = [...candidates]
     .filter((name) => model.definitions[name]!.kind === "service")
     .flatMap((service) => [
@@ -71,21 +91,20 @@ function reachableFromServices(model: Csn, candidates: ReadonlySet<string>): Rea
     const name = queue.shift()!;
     if (reached.has(name)) continue;
     reached.add(name);
-    queue.push(
-      ...referencesOf(model.definitions[name]!, model).filter((each) => candidates.has(each)),
-    );
+    const references = referencesOf(model.definitions[name]!, model, followSources);
+    queue.push(...references.filter((each) => candidates.has(each)));
   }
   return reached;
 }
 
 /**
  * The definitions a concept for `definition` would link to, using the same rules as rendering
- * (visibility.ts): its source if it is a projection or view, its own base type, the types and
+ * (visibility.ts): its source if it is a projection or view (when `followSources`), its own base type, the types and
  * targets of its elements, and the parameters and return values of its bound actions and, for an
  * action or function, of itself. Anything left out by @okf: false is skipped.
  */
-function referencesOf(definition: CsnDefinition, model: Csn): string[] {
-  const source = sourceOf(definition, model);
+function referencesOf(definition: CsnDefinition, model: Csn, followSources: boolean): string[] {
+  const source = followSources ? sourceOf(definition, model) : undefined;
   const actions = Object.values(definition.actions ?? {}).filter((each) => !isLeftOut(each, model));
   return [
     ...(source === undefined ? [] : [source]),

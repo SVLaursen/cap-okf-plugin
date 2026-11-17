@@ -2,16 +2,17 @@
 // they are, e.g. GET /okf/model/CatalogService/Books.md, when cds.okf.serve.static is on.
 // - Mounted at bootstrap (serving.ts) behind cds.middlewares.before, CAP's own chain, so CAP's authentication
 //   decides who the user is; anonymous requests are allowed.
-// - Authorization sections are removed for readers who aren't authenticated (ADR-0003). If the
-//   filter fails, the reader gets an error, never the unfiltered text.
+// - Every file is served as the reader sees it (reader-view.ts): authorization sections only
+//   for authenticated readers (ADR-0003), concepts with `requires` only for readers with one of
+//   those roles (ADR-0012). If the filter fails, the reader gets an error, never the unfiltered
+//   text.
 // - Not listed on CAP's index page: the README shows the route (ADR-0005 (d)).
 import type { Application, NextFunction, Request, Response } from "express";
 import type { BundleSource } from "../bundle/source";
 import { isBundlePath } from "../bundle/paths";
-import { forReader } from "../core/filter";
 import type { Cds } from "../index";
 import type { BundleKey, Bundles } from "./bundles";
-import { servableText } from "./text";
+import { readerOf, servableIn, viewOf } from "./views";
 
 /**
  * Mounts the static route at `route`, reading from `bundles` (one set per server, shared with
@@ -58,15 +59,16 @@ async function serveFile(
     return;
   }
   const bundlePath = bundlePathOf(req.path);
-  const text = bundlePath === undefined ? undefined : await servableText(source, bundlePath);
+  // The file as this reader sees it (ADR-0003, ADR-0012): a hidden one is not there at all.
+  const user = (cds.context as { user?: unknown } | undefined)?.user;
+  const view = await viewOf(await source(), readerOf(user));
+  const text = bundlePath === undefined ? undefined : servableIn(view, bundlePath);
   if (bundlePath === undefined || text === undefined) {
     res.status(404).end();
     return;
   }
-  const user = (cds.context as { user?: { is(role: string): boolean } } | undefined)?.user;
-  const isAuthenticated = user?.is("authenticated-user") === true;
   res.set("Content-Type", contentTypeOf(bundlePath));
-  res.send(forReader(text, { isAuthenticated }));
+  res.send(text);
 }
 
 /**

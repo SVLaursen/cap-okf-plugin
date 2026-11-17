@@ -55,13 +55,24 @@ const MODEL: Csn = {
   },
 };
 
-const SERVICES = selectExported(MODEL, "services");
+// The traversal rules below follow projections to their sources (the option of ADR-0012);
+// the default is tested on its own.
+const SERVICES = selectExported(MODEL, "services", { projectionSources: true });
 
 function map(name: string, exported = SERVICES): Concept {
   const definition = MODEL.definitions[name]!;
   const context = defaultMapperContext(MODEL, undefined, (each) => exported.has(each));
   return mapperFor(registryKeyOf(definition))!.map(name, definition, context);
 }
+
+describe("selectExported: projection sources (ADR-0012)", () => {
+  test("by default a projection's source isn't followed, so db.Books gets no concept", () => {
+    const byDefault = selectExported(MODEL, "services");
+    expect(byDefault.has("S.Books")).toBe(true);
+    expect(byDefault.has("db.Books")).toBe(false);
+    expect(SERVICES.has("db.Books")).toBe(true);
+  });
+});
 
 describe("selectExported", () => {
   test('"services" exports the services and everything they link to, transitively', () => {

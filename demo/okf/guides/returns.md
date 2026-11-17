@@ -10,5 +10,5 @@ generated: { by: "human:demo-author", at: 2026-11-13T09:30:00Z }
 
 # Policy
 
-A book can be returned within 30 days of the [order](/model/demo/bookshop/Orders.md), if it is
+A book can be returned within 30 days of the [order](/model/AdminService/Orders.md), if it is
 unread. Not yet agreed with the shop team.

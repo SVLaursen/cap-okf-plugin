@@ -3,18 +3,20 @@
 // cap-okf registers:
 // - okf://<namespace>/index.md, a fixed resource, visible only to callers who meet `requires`;
 // - okf://<namespace>/{+path}, one template for every concept (read and complete, no list).
-// Every answer goes through the ADR-0003 filter for the caller. An unknown path, a caller who
-// doesn't meet `requires` and a malformed escape all throw the same 404, so they look alike.
+// Every answer is the file as the caller sees it (reader-view.ts: ADR-0003 and ADR-0012), and a
+// concept read is followed by its related-concepts block when cds.okf.serve.mcp.related is on.
+// An unknown path, a concept hidden from the caller, a caller who doesn't meet `requires` and a
+// malformed escape all throw the same 404, so they look alike.
 //
 // The plugin is never required (ADR-0004): it is met through its event, and the shapes below are
 // declared here, so the published types never reference @gavdi/cap-mcp.
 import { isBundlePath, sortPaths } from "../../bundle/paths";
-import type { BundleSource } from "../../bundle/source";
 import { setupError } from "../../build/errors";
-import { forReader } from "../../core/filter";
 import type { Bundles } from "../bundles";
-import { servableText } from "../text";
-import { isAuthenticatedUser, meetsRequires } from "./requires";
+import type { ReaderView } from "../reader-view";
+import { withRelated } from "../related";
+import { readerOf, servableIn, viewOf } from "../views";
+import { meetsRequires } from "./requires";
 import type { McpChoice } from "./select";
 
 /** Who is asking: from the request's cds.context. */
@@ -103,64 +105,79 @@ export function gavdiResources(
 // Synchronously, as the contract asks: the registry closes when the emit returns.
 function registerResources(
   registry: ResourceRegistry,
-  { choice, bundles }: ResourcesSetup,
+  setup: ResourcesSetup,
   warn: (message: string) => void,
 ): void {
   if (typeof registry.registerTemplate !== "function") {
     warn(noTemplatesWarning());
     return;
   }
-  const { namespace, requires } = choice;
-  const sourceFor = (ctx: ResourceContext) =>
-    bundles.forKey({ tenant: ctx.tenant, locale: ctx.locale });
+  const reading = readingFor(setup);
+  registry.register(indexResource(setup.choice, reading));
+  registry.registerTemplate(conceptsTemplate(setup.choice, reading));
+}
 
-  registry.register({
+/** How the channel reads for a caller: their view of the bundle, and a file's text in it. */
+interface Reading {
+  viewFor(ctx: ResourceContext): Promise<ReaderView>;
+  textFor(ctx: ResourceContext, path: string): Promise<string>;
+}
+
+function readingFor({ choice, bundles }: ResourcesSetup): Reading {
+  const viewFor = async (ctx: ResourceContext) =>
+    viewOf(await bundles.forKey({ tenant: ctx.tenant, locale: ctx.locale }), readerOf(ctx.user));
+  return {
+    viewFor,
+    async textFor(ctx, path) {
+      const view = await viewFor(ctx);
+      const text = servableIn(view, path);
+      if (text === undefined) throw notFound(path);
+      return choice.related ? withRelated(view, path, text) : text;
+    },
+  };
+}
+
+function indexResource({ namespace, requires }: McpChoice, reading: Reading): FixedResource {
+  return {
     uri: okfUri(namespace, INDEX),
     name: `okf-${namespace}-index`,
-    title: `${namespace} knowledge index`,
+    title: `${namespace} business knowledge`,
     description:
-      `Start here: the app's knowledge as Open Knowledge Format concepts. ` +
-      `Read a concept as okf://${namespace}/<path>.`,
+      "Start here: this app's business knowledge (meanings of terms and codes, KPI and " +
+      "calculation definitions, rules for actions, fields not to use), curated notes first. " +
+      `Read a note as okf://${namespace}/<path>.`,
     mimeType: MIME_TYPE,
     visible: (ctx) => meetsRequires(ctx.user, requires),
     read: async (ctx) => {
       if (!meetsRequires(ctx.user, requires)) throw notFound(INDEX);
-      return textFor(ctx, await sourceFor(ctx), INDEX);
+      return reading.textFor(ctx, INDEX);
     },
-  });
+  };
+}
 
-  registry.registerTemplate({
+function conceptsTemplate({ namespace, requires }: McpChoice, reading: Reading): TemplateResource {
+  return {
     uriTemplate: templateUri(namespace),
     name: `okf-${namespace}-concepts`,
     title: `${namespace} concepts`,
-    description: `One concept as Markdown with frontmatter. Find paths in okf://${namespace}/index.md.`,
+    description: `One knowledge note or model concept as Markdown. Find paths in okf://${namespace}/index.md.`,
     mimeType: MIME_TYPE,
     read: async (ctx) => {
       if (!meetsRequires(ctx.user, requires)) throw notFound(ctx.uri);
       const path = decodedPath(ctx.params[PATH_VARIABLE]);
       if (path === undefined) throw notFound(ctx.uri);
-      return textFor(ctx, await sourceFor(ctx), path);
+      return reading.textFor(ctx, path);
     },
     complete: async (ctx, param, value) => {
       if (param !== PATH_VARIABLE || !meetsRequires(ctx.user, requires)) return [];
-      const source = await sourceFor(ctx);
-      const matching = (await source.list()).filter((path) => path.startsWith(value));
-      // Only paths read can answer: files that aren't text (e.g. images) are left out.
-      const readable: string[] = [];
-      for (const path of matching) {
-        if ((await servableText(async () => source, path)) !== undefined) readable.push(path);
-      }
+      const view = await reading.viewFor(ctx);
+      // Only paths read can answer: hidden files and files that aren't text are left out.
+      const readable = view.paths.filter(
+        (path) => path.startsWith(value) && servableIn(view, path) !== undefined,
+      );
       return sortPaths(readable);
     },
-  });
-}
-
-// The file's text for the caller: only paths the bundle lists, through the ADR-0003 filter.
-async function textFor(ctx: ResourceContext, source: BundleSource, path: string): Promise<string> {
-  const listed = (await source.list()).includes(path);
-  const text = listed ? await servableText(async () => source, path) : undefined;
-  if (text === undefined) throw notFound(path);
-  return forReader(text, { isAuthenticated: isAuthenticatedUser(ctx.user) });
+  };
 }
 
 // params arrive still percent-encoded; decoded exactly once. A malformed escape is "not there".

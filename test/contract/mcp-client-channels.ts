@@ -1,6 +1,6 @@
 // The two MCP channels (tasks 4.5, 4.6) as channels for the server contract (4.1), read through a
 // real MCP client (task 4.8) instead of hand-written JSON-RPC.
-// - Tools: getConcept reads; the Index query tool lists, page by page.
+// - Tools: getConcept reads; searchConcepts without words lists (at most 100 concepts).
 // - Resources: resources/read reads okf://<namespace>/<path>; completion of the template lists.
 // A thrown MCP error or a tool error is "not found", with the requested path or URI replaced by
 // <path>, so the answers for two paths can be compared (hiddenContract).
@@ -33,20 +33,14 @@ export function toolsChannel(clientFor: Clients): Channel {
     },
     async list(reader) {
       const client = await clientFor(reader);
-      const paths: string[] = [];
-      let cursor: string | undefined;
-      do {
-        const result = await client.callTool({
-          name: "OkfService_Index_query",
-          arguments: { top: 100, ...(cursor && { cursor }) },
-        });
-        // Listing is the setup of most contract checks: a failure must say why.
-        if (result.isError === true) throw new Error(`Index query failed: ${toolText(result)}`);
-        const page = result.structuredContent as { rows: { path: string }[]; nextCursor?: string };
-        paths.push(...page.rows.map((row) => row.path));
-        cursor = page.nextCursor;
-      } while (cursor !== undefined);
-      return paths.sort();
+      const result = await client.callTool({
+        name: "OkfService_searchConcepts",
+        arguments: { top: 100 },
+      });
+      // Listing is the setup of most contract checks: a failure must say why.
+      if (result.isError === true) throw new Error(`searchConcepts failed: ${toolText(result)}`);
+      const rows = (result.structuredContent as { value: { path: string }[] }).value;
+      return rows.map((row) => row.path).sort();
     },
   };
 }

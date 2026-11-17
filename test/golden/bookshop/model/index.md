@@ -11,4 +11,3 @@
 
 * [AdminService](AdminService/index.md) - 3 concepts: Projection
 * [CatalogService](CatalogService/index.md) - 4 concepts: Event, Projection
-* [sample](sample/index.md) - 3 concepts: Entity

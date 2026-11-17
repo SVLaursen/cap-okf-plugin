@@ -14,7 +14,7 @@ generated:
 
 # Books
 
-Projection on [Books](/model/sample/bookshop/Books.md)
+Projection
 
 A book that the shop can sell.
 
@@ -24,11 +24,11 @@ A book that the shop can sell.
 | --- | --- | --- |
 | `ID` | `UUID` | key |
 | `createdAt` | `Timestamp` |  |
-| `createdBy` | [User ID](/model/User.md) |  |
+| `createdBy` | [User ID](/model/User.md) | User's unique ID |
 | `modifiedAt` | `Timestamp` |  |
-| `modifiedBy` | [User ID](/model/User.md) |  |
+| `modifiedBy` | [User ID](/model/User.md) | User's unique ID |
 | `title` | `String(150)` | mandatory |
-| `summary` | `String(2000)` |  |
+| `summary` | `String(2000)` | Short text shown on the book's detail page. |
 | `publishedYear` | `Integer` |  |
 | `pages` | `Integer` |  |
 | `copies` | `Integer` | default: 0 |

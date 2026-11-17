@@ -31,11 +31,19 @@ describe("selectMcp: on, off and which plugin", () => {
   });
 
   test.each([
-    [GAVDI, "resources"],
-    [CAPJS, "tools"],
-  ])("on with only %s: that plugin, on its natural channel", (plugin, channel) => {
+    [GAVDI, ["resources", "tools"]],
+    [CAPJS, ["tools"]],
+  ])("on with only %s: that plugin, on its default channels", (plugin, channels) => {
     expect(select(true, [plugin, "@cap-js/sqlite"])).toEqual({
-      choice: { plugin, as: [channel], namespace: "acme-orders", requires: ["authenticated-user"] },
+      choice: {
+        plugin,
+        as: channels,
+        namespace: "acme-orders",
+        requires: ["authenticated-user"],
+        related: true,
+        instructions: true,
+        pointers: true,
+      },
       warnings: [],
     });
   });
@@ -81,7 +89,7 @@ describe("selectMcp: channels (as)", () => {
     ]);
   });
 
-  test("nothing usable left in as: the plugin's natural channel, with the warning", () => {
+  test("nothing usable left in as: the plugin's default channels, with the warning", () => {
     const result = select({ as: ["prompts"] }, [CAPJS]);
     expect(result.choice?.as).toEqual(["tools"]);
     expect(result.warnings).toHaveLength(1);
@@ -172,7 +180,7 @@ describe("installedPlugins", () => {
 describe("selectMcp: edge cases", () => {
   test("as: [] and duplicate channels fall back or collapse without a warning", () => {
     expect(select({ as: [] }, [GAVDI])).toMatchObject({
-      choice: { as: ["resources"] },
+      choice: { as: ["resources", "tools"] },
       warnings: [],
     });
     expect(select({ as: ["tools", "tools"] }, [GAVDI]).choice?.as).toEqual(["tools"]);
@@ -214,5 +222,33 @@ describe("selectMcp: edge cases", () => {
   test("changing one choice's requires doesn't change the default for the next", () => {
     select(true, [GAVDI]).choice!.requires.push("changed");
     expect(select(true, [GAVDI]).choice?.requires).toEqual(["authenticated-user"]);
+  });
+});
+
+describe("selectMcp: related, instructions and pointers (ADR-0012, ADR-0013)", () => {
+  test("default true; false switches each off; null is the default", () => {
+    expect(
+      select({ related: false, instructions: false, pointers: false }, [GAVDI]).choice,
+    ).toMatchObject({ related: false, instructions: false, pointers: false });
+    expect(
+      select({ related: null, instructions: null, pointers: null }, [GAVDI]).choice,
+    ).toMatchObject({ related: true, instructions: true, pointers: true });
+  });
+
+  test("instructions may be the app's own text, trimmed", () => {
+    expect(
+      select({ instructions: "  Read the index first.  " }, [GAVDI]).choice?.instructions,
+    ).toBe("Read the index first.");
+  });
+
+  test.each([
+    ["related", "yes"],
+    ["pointers", 1],
+    ["instructions", ""],
+    ["instructions", 3],
+  ])("%s: %j is an [okf] setup error", (key, value) => {
+    expect(() => select({ [key]: value }, [GAVDI])).toThrow(
+      new RegExp(`^\\[okf\\] cds\\.okf\\.serve\\.mcp\\.${key} — `),
+    );
   });
 });

@@ -1,20 +1,21 @@
-// OkfService's handlers (task 4.5, ADR-0010 Contract B, ADR-0011): the MCP tools channel over
-// the server's bundles. Every answer is for the caller: the files they get are filtered for
-// them (ADR-0003), and the Index rows are built from those files, so `links` never names a
-// concept linked only from inside an authorization section.
+// OkfService's handlers (ADR-0010 Contract B, revised by ADR-0012; ADR-0011): the MCP tools
+// channel over the server's bundles. Every answer is for the caller: it comes from the bundle
+// as they see it (reader-view.ts), so a concept hidden from them by `requires` is not listed,
+// found, linked or readable, and an authorization section reaches authenticated callers only.
 import type { Bundles } from "../bundles";
-import type { BundleSource } from "../../bundle/source";
 import { isBundlePath } from "../../bundle/paths";
-import { forReader } from "../../core/filter";
 import { OKF_VERSION } from "../../export/exporter";
 import type { Cds } from "../../index";
-import { servableText } from "../text";
+import type { ReaderView } from "../reader-view";
+import { withRelated } from "../related";
+import { readerOf, servableIn, viewOf } from "../views";
 import { bundleHash } from "./bundle-hash";
 import { indexRows, type IndexRow } from "./index-rows";
 import { IndexQueryError, runIndexQuery, type IndexQuery } from "./index-query";
 import { isAuthenticatedUser, meetsRequires } from "./requires";
 import { searchConcepts } from "./search";
 import type { McpChoice } from "./select";
+import type { BundleSource } from "../../bundle/source";
 
 /** The parts of a CAP request the handlers read. */
 interface Request {
@@ -33,20 +34,15 @@ interface Service {
   before(event: string, handler: (req: Request) => void): void;
 }
 
-/** What one kind of reader (anonymous or authenticated) sees of one bundle: its Index rows. */
-interface ReaderView {
-  rows: IndexRow[];
-}
+const INDEX = "index.md";
 
 /** Attaches the handlers to cds.services.OkfService (added with the tools channel, ADR-0005). */
 export function attachOkfService(cds: Cds, bundles: Bundles, choice: McpChoice): void {
   const service = (cds.services as unknown as Record<string, Service | undefined>)["OkfService"];
   // Missing OkfService has its own warning at served (tools-model.ts).
   if (service === undefined) return;
-  const views = new WeakMap<BundleSource, Map<boolean, Promise<ReaderView>>>();
   const sourceFor = (req: Request) => bundles.forKey({ tenant: req.tenant, locale: req.locale });
-  const viewFor = async (req: Request) =>
-    readerView(views, await sourceFor(req), isAuthenticated(req));
+  const viewFor = async (req: Request) => viewOf(await sourceFor(req), readerOf(req.user));
 
   // Before CAP's generic handlers, which would answer READ on an entity without persistence
   // with an error: handlers run in the order they are registered.
@@ -55,17 +51,17 @@ export function attachOkfService(cds: Cds, bundles: Bundles, choice: McpChoice):
     // for "internal-user", and apps can switch it off (cds.features.service_level_restrictions).
     service.before("*", (req) => checkRequires(req, choice.requires));
     service.on("READ", "Index", async (req) => {
-      const { rows } = await viewFor(req);
       try {
-        return runIndexQuery(rows, req.query);
+        return runIndexQuery(rowsOf(await viewFor(req)), req.query);
       } catch (error) {
         if (error instanceof IndexQueryError) return req.reject(400, error.message);
         throw error;
       }
     });
-    service.on("getConcept", (req) => conceptFor(req, () => sourceFor(req)));
+    service.on("getIndex", async (req) => indexFor(req, await viewFor(req)));
+    service.on("getConcept", async (req) => conceptFor(req, await viewFor(req), choice.related));
     service.on("searchConcepts", async (req) =>
-      searchConcepts((await viewFor(req)).rows, req.data),
+      searchConcepts((await viewFor(req)).concepts, req.data),
     );
     service.on("bundleInfo", async (req) => ({
       okfVersion: OKF_VERSION,
@@ -79,55 +75,49 @@ export function attachOkfService(cds: Cds, bundles: Bundles, choice: McpChoice):
 // others 403.
 function checkRequires(req: Request, roles: readonly string[]): void {
   if (meetsRequires(req.user, roles)) return;
-  if (isAuthenticated(req)) req.reject(403, "Forbidden");
+  if (isAuthenticatedUser(req.user)) req.reject(403, "Forbidden");
   req.reject(401, "Unauthorized");
 }
 
-function isAuthenticated(req: Request): boolean {
-  return isAuthenticatedUser(req.user);
+// The index the caller would get from okf://<namespace>/index.md, or a folder's own index.
+function indexFor(req: Request, view: ReaderView): string {
+  const folder = req.data["folder"];
+  const cleaned = typeof folder === "string" ? folder.trim().replace(/^\/+|\/+$/g, "") : "";
+  const path = cleaned === "" ? INDEX : `${cleaned}/${INDEX}`;
+  const text = isBundlePath(path) ? view.read(path) : undefined;
+  if (text === undefined) {
+    return req.reject(
+      404,
+      `[okf] ${cleaned} — isn't a folder of the bundle with an index.\n` +
+        "  Call getIndex without a folder, and take folder paths from it.",
+    );
+  }
+  return text;
 }
 
-// The concept's text as the caller gets it; unknown and unreadable paths alike are a 404.
-async function conceptFor(req: Request, source: () => Promise<BundleSource>): Promise<string> {
+// The concept's text as the caller gets it; unknown, hidden and unreadable paths alike are a 404.
+function conceptFor(req: Request, view: ReaderView, related: boolean): string {
   const path = req.data["path"];
-  const text =
-    typeof path === "string" && isBundlePath(path) ? await servableText(source, path) : undefined;
+  const text = typeof path === "string" && isBundlePath(path) ? servableIn(view, path) : undefined;
   if (text === undefined) {
     return req.reject(
       404,
       `[okf] ${String(path)} — isn't a file of the bundle.\n` +
-        "  Take the path from OkfService.Index or searchConcepts.",
+        "  Take the path from getIndex or searchConcepts.",
     );
   }
-  return forReader(text, { isAuthenticated: isAuthenticated(req) });
+  return related ? withRelated(view, path as string, text) : text;
 }
 
-// One view per bundle and kind of reader, built on first use and kept with the bundle.
-function readerView(
-  views: WeakMap<BundleSource, Map<boolean, Promise<ReaderView>>>,
-  source: BundleSource,
-  authenticated: boolean,
-): Promise<ReaderView> {
-  let byReader = views.get(source);
-  if (byReader === undefined) {
-    byReader = new Map();
-    views.set(source, byReader);
+// The Index rows of one view, built once.
+const rows = new WeakMap<ReaderView, IndexRow[]>();
+function rowsOf(view: ReaderView): IndexRow[] {
+  let viewRows = rows.get(view);
+  if (viewRows === undefined) {
+    viewRows = indexRows(view.paths.map((path) => ({ path, text: view.read(path)! })));
+    rows.set(view, viewRows);
   }
-  let view = byReader.get(authenticated);
-  if (view === undefined) {
-    view = buildView(source, authenticated);
-    byReader.set(authenticated, view);
-  }
-  return view;
-}
-
-async function buildView(source: BundleSource, authenticated: boolean): Promise<ReaderView> {
-  const files = await allFiles(source);
-  const filtered = files.map((file) => ({
-    path: file.path,
-    text: forReader(file.text, { isAuthenticated: authenticated }),
-  }));
-  return { rows: indexRows(filtered) };
+  return viewRows;
 }
 
 // The hash is over the bundle as stored, before filtering (ADR-0010), so every reader gets the

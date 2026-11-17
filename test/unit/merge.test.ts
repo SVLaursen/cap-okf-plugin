@@ -68,7 +68,7 @@ describe("mergeBundle: files", () => {
     expect(merged.findings).toEqual([]);
     expect([...merged.curatedPaths]).toEqual(["guides/ordering.md"]);
   });
-  test("without a curated index.md, the root index declares okf_version and lists model/ and the curated folders", () => {
+  test("without a curated index.md, the root index is an outline: every curated concept, then model/ folded", () => {
     const merged = mergeBundle(
       GENERATED,
       [curated("guides/ordering.md", guide("Ordering")), curated("faq.md", guide("FAQ"))],
@@ -77,8 +77,10 @@ describe("mergeBundle: files", () => {
     const root = parseConcept("index.md", textOf(merged.files, "index.md")!);
     expect(root.frontmatter).toEqual({ okf_version: "0.2" });
     expect(root.body).toContain("* [FAQ](faq.md) - FAQ.");
-    expect(root.body).toContain("* [guides](guides/index.md)");
+    expect(root.body).toContain("* [Ordering](guides/ordering.md) - Ordering.");
+    expect(root.body).not.toContain("(guides/index.md)");
     expect(root.body).toContain("* [model](model/index.md)");
+    expect(root.body.indexOf("guides/ordering.md")).toBeLessThan(root.body.indexOf("model/"));
   });
 
   test("a curated folder without an index.md gets a generated one; a curated index.md is kept", () => {

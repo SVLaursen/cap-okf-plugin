@@ -14,7 +14,7 @@ generated:
 
 # Authors
 
-Projection on [Authors](/model/sample/bookshop/Authors.md)
+Projection
 
 A person who wrote one or more books.
 
@@ -24,9 +24,9 @@ A person who wrote one or more books.
 | --- | --- | --- |
 | `ID` | `UUID` | key |
 | `createdAt` | `Timestamp` |  |
-| `createdBy` | [User ID](/model/User.md) |  |
+| `createdBy` | [User ID](/model/User.md) | User's unique ID |
 | `modifiedAt` | `Timestamp` |  |
-| `modifiedBy` | [User ID](/model/User.md) |  |
+| `modifiedBy` | [User ID](/model/User.md) | User's unique ID |
 | `name` | `String(150)` | mandatory |
 | `country` | `String(2)` |  |
 

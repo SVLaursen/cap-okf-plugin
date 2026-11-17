@@ -9,6 +9,14 @@ import { isNonEmptyString } from "./values";
 export interface IndexOptions {
   /** Written as okf_version in the bundle-root index.md only (§12), e.g. "0.2". */
   okfVersion?: string;
+  /**
+   * Outline layout: every concept below the folder is listed with its title, path and
+   * description, however deep it is, except the concepts in these subfolders, which are folded
+   * into one line per subfolder ("model" → "* [model](model/index.md) - 28 concepts: …").
+   * Other subfolders get no line of their own: their concepts are already listed. Used for the
+   * bundle-root index, so a reader sees the curated notes first and the generated ones folded.
+   */
+  foldFolders?: readonly string[];
 }
 
 /**
@@ -40,7 +48,10 @@ export function generateIndex(
 ): Concept {
   const cleanFolder = withoutOuterSlashes(folder);
   const entries = entriesBelow(cleanFolder, concepts);
-  const sections = [...typeSections(entries), ...subfolderSection(entries)];
+  const sections =
+    options.foldFolders === undefined
+      ? [...typeSections(entries), ...subfolderSection(entries)]
+      : outlineSections(entries, options.foldFolders);
   const path = cleanFolder === "" ? "index.md" : `${cleanFolder}/index.md`;
   const okfVersion = cleanFolder === "" ? options.okfVersion : undefined;
   return {
@@ -119,15 +130,26 @@ function toEntry(concept: Concept, relativePath: string): Entry {
   };
 }
 
-// "# Entity" with the entries directly in the folder, one section per type.
-function typeSections(entries: readonly Entry[]): string[] {
-  const direct = entries.filter((entry) => !entry.relativePath.includes("/"));
+// "# Entity" with the entries directly in the folder (or, with `deep`, at any depth), one
+// section per type.
+function typeSections(entries: readonly Entry[], deep = false): string[] {
+  const direct = deep ? entries : entries.filter((entry) => !entry.relativePath.includes("/"));
   return sectionTypes(direct).map((type) => {
     const lines = direct
       .filter((entry) => entry.type === type)
       .map((entry) => entryLine(entry.title, entry.relativePath, entry.description));
     return [`# ${type}`, "", ...lines].join("\n");
   });
+}
+
+// The outline layout (IndexOptions.foldFolders): every entry outside the folded subfolders by
+// type, then one line per folded subfolder that holds concepts.
+function outlineSections(entries: readonly Entry[], foldFolders: readonly string[]): string[] {
+  const isFolded = (entry: Entry) =>
+    foldFolders.some((folder) => entry.relativePath.startsWith(`${folder}/`));
+  const listed = entries.filter((entry) => !isFolded(entry));
+  const folded = entries.filter(isFolded);
+  return [...typeSections(listed, true), ...subfolderSection(folded)];
 }
 
 // Types sorted by name, with the untyped section last.

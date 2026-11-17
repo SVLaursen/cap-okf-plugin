@@ -1,7 +1,7 @@
 // The MCP tools channel (task 4.5) as a channel for the server contract (task 4.1): calls
 // OkfService's tools through @gavdi/cap-mcp's /mcp endpoint, as an MCP client does.
 // - read: OkfService_getConcept; a JSON-RPC error or a tool error is "not found", with its text.
-// - list: OkfService_Index_query, page by page along nextCursor.
+// - list: OkfService_searchConcepts without words (at most 100 concepts).
 // Readers: bob is authenticated without roles; with the default requires (authenticated-user)
 // an anonymous caller is the one who doesn't meet it.
 import { rpc, type RpcAnswer } from "../helpers/mcp-rpc";
@@ -26,20 +26,9 @@ export function mcpToolsChannel(post: Post): Channel {
       return answerOf(await call(reader, "OkfService_getConcept", { path }));
     },
     async list(reader): Promise<string[]> {
-      const paths: string[] = [];
-      let cursor: string | undefined;
-      do {
-        const answer = await call(reader, "OkfService_Index_query", {
-          top: 100,
-          ...(cursor && { cursor }),
-        });
-        const page = structuredOf(answer) as
-          { rows?: { path: string }[]; nextCursor?: string } | undefined;
-        if (page?.rows === undefined) return paths;
-        paths.push(...page.rows.map((row) => row.path));
-        cursor = page.nextCursor;
-      } while (cursor !== undefined);
-      return paths.sort();
+      const answer = await call(reader, "OkfService_searchConcepts", { top: 100 });
+      const rows = (structuredOf(answer) as { value?: { path: string }[] } | undefined)?.value;
+      return (rows ?? []).map((row) => row.path).sort();
     },
   };
 }

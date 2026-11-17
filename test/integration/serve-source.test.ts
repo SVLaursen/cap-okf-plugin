@@ -42,9 +42,9 @@ describe("startupBundleSource", () => {
     );
     const source = await startupBundleSource(await appCds(root), log, {});
     expect(await source.list()).toEqual(
-      expect.arrayContaining(["index.md", "notes.md", "model/sample/bookshop/Authors.md"]),
+      expect.arrayContaining(["index.md", "notes.md", "model/CatalogService/Authors.md"]),
     );
-    expect(await source.read("model/sample/bookshop/Authors.md")).toContain(
+    expect(await source.read("model/CatalogService/Authors.md")).toContain(
       "description: A person who wrote one or more books.",
     );
     expect(warnings).toEqual([]);

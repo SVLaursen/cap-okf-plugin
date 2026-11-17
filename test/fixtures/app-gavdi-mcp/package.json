@@ -9,12 +9,14 @@
         "kind": "mocked",
         "users": {
           "reader": { "password": "reader", "roles": ["okf-reader"] },
-          "outsider": { "password": "outsider", "roles": [] }
+          "outsider": { "password": "outsider", "roles": [] },
+          "controller": { "password": "controller", "roles": ["okf-reader", "okf-finance"] }
         }
       }
     },
     "okf": {
       "serve": {
+        "static": true,
         "mcp": { "plugin": "@gavdi/cap-mcp", "as": ["resources", "tools"], "namespace": "okf-fixture", "requires": "okf-reader" }
       }
     }

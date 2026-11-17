@@ -29,16 +29,14 @@ describeWithGavdi("the MCP tools channel through @gavdi/cap-mcp", () => {
 
   hiddenContract("MCP tools", channel, "guides/ordering.md");
 
-  test("the plugin offers exactly OkfService's five tools", async () => {
+  test("the plugin offers exactly OkfService's three agent-facing tools", async () => {
     const answer = await rpc(POST as never, BOB, "tools/list");
     const names = (answer.message?.result?.["tools"] as { name: string }[]).map(
       (tool) => tool.name,
     );
     expect(names.filter((name) => name.startsWith("OkfService_")).sort()).toEqual([
-      "OkfService_Index_get",
-      "OkfService_Index_query",
-      "OkfService_bundleInfo",
       "OkfService_getConcept",
+      "OkfService_getIndex",
       "OkfService_searchConcepts",
     ]);
   });
@@ -48,12 +46,12 @@ describeWithGavdi("the MCP tools channel through @gavdi/cap-mcp", () => {
     expect((await GET("/odata/v4/okf-service/Index", { validateStatus: () => true })).status).toBe(
       404,
     );
-    const info = await rpc(POST as never, BOB, "tools/call", {
-      name: "OkfService_bundleInfo",
+    const index = await rpc(POST as never, BOB, "tools/call", {
+      name: "OkfService_getIndex",
       arguments: {},
     });
-    expect(info.message?.result?.["structuredContent"]).toMatchObject({
-      value: { okfVersion: "0.2", namespace: "cap-okf-demo" },
+    expect(index.message?.result?.["structuredContent"]).toMatchObject({
+      value: expect.stringMatching(/^---\nokf_version: "0.2"\n---\n/),
     });
   });
 });

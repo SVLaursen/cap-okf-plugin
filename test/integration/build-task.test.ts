@@ -91,7 +91,7 @@ describe("cds build, staging (the default build.target: gen)", () => {
   test("writes exactly the exporter's bundle to gen/okf, doc comments and texts included", async () => {
     const written = readTree(path.join(app, "gen", "okf"));
     expect(written).toEqual(await expectedBundle());
-    const authors = written.find((file) => file.path === "model/sample/bookshop/Authors.md")!;
+    const authors = written.find((file) => file.path === "model/CatalogService/Authors.md")!;
     expect(authors.text).toContain("description: A person who wrote one or more books.");
   });
 
@@ -251,7 +251,7 @@ describe("cds build with a curated okf/ folder", () => {
     expect(written.find((file) => file.path === "guides/ordering.md")?.text).toBe(ordering);
     expect(written.find((file) => file.path === "guides/query.sql")?.text).toBe("select 1;\n");
     const root = written.find((file) => file.path === "index.md")!.text;
-    expect(root).toContain("* [guides](guides/index.md)");
+    expect(root).toContain("](guides/ordering.md)");
     expect(root).toContain("* [model](model/index.md)");
     expect(readTree(path.join(app, "gen", "srv", "okf-bundle"))).toEqual(written);
     for (const folder of [

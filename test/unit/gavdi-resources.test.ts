@@ -31,6 +31,9 @@ const CHOICE: McpChoice = {
   as: ["resources"],
   namespace: "acme-orders",
   requires: ["authenticated-user"],
+  related: false,
+  instructions: true,
+  pointers: true,
 };
 
 /** A cds.User-like caller with the given roles. */

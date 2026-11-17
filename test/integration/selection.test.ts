@@ -31,7 +31,7 @@ describe("the bookshop fixture with the default include: services", () => {
     concepts = mapSelected(model, exported);
   });
 
-  test("exports the services, what they expose, their sources and the types they use", () => {
+  test("exports the services, what they expose and the types they use, not the projections' sources", () => {
     expect([...exported].sort()).toEqual([
       "AdminService",
       "AdminService.Authors",
@@ -43,9 +43,6 @@ describe("the bookshop fixture with the default include: services", () => {
       "CatalogService.Books",
       "CatalogService.Genres",
       "User",
-      "sample.bookshop.Authors",
-      "sample.bookshop.Books",
-      "sample.bookshop.Genres",
     ]);
   });
 
@@ -72,6 +69,18 @@ describe("the bookshop fixture with the default include: services", () => {
   });
 });
 
+describe("the bookshop fixture with projectionSources (ADR-0012)", () => {
+  test("also exports the entities the projections are built on", async () => {
+    const model = (await cds.load(FIXTURE, { docs: true })) as unknown as Csn;
+    const withSources = selectExported(model, "services", { projectionSources: true });
+    expect([...withSources].filter((name) => name.startsWith("sample.")).sort()).toEqual([
+      "sample.bookshop.Authors",
+      "sample.bookshop.Books",
+      "sample.bookshop.Genres",
+    ]);
+  });
+});
+
 describe("@okf: false and @okf.tags on CSN compiled by CAP", () => {
   const SHAPES = `
     namespace x;
@@ -88,7 +97,7 @@ describe("@okf: false and @okf.tags on CSN compiled by CAP", () => {
 
   beforeAll(() => {
     const model = cds.compile(SHAPES) as unknown as Csn;
-    exported = selectExported(model, "services");
+    exported = selectExported(model, "services", { projectionSources: true });
     concepts = mapSelected(model, exported);
   });
 
@@ -200,8 +209,11 @@ describe("excluded definitions on CSN compiled by CAP: what stays visible", () =
   });
 
   test("a named aspect composition reaches its generated target, not the aspect", () => {
-    const exported = selectExported(model, "services");
+    const exported = selectExported(model, "services", { projectionSources: true });
     expect(exported.has("z.Orders.lines")).toBe(true);
     expect(exported.has("z.Line")).toBe(false);
+    const byDefault = selectExported(model, "services");
+    expect([...byDefault].some((name) => name.endsWith("Orders.lines"))).toBe(true);
+    expect(byDefault.has("z.Line")).toBe(false);
   });
 });

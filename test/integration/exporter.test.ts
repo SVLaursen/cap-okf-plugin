@@ -90,12 +90,18 @@ describe("exportModel contents", () => {
       "model/CatalogService/index.md",
       "model/User.md",
       "model/index.md",
-      "model/sample/bookshop/Authors.md",
-      "model/sample/bookshop/Books.md",
-      "model/sample/bookshop/Genres.md",
-      "model/sample/bookshop/index.md",
-      "model/sample/index.md",
     ]);
+  });
+
+  // ADR-0012: the database entities under the services' projections only with the option.
+  test("with projectionSources, also the entities the projections are built on", () => {
+    expect(run({ projectionSources: true }).map((concept) => concept.path)).toEqual(
+      expect.arrayContaining([
+        "model/sample/bookshop/Authors.md",
+        "model/sample/bookshop/Books.md",
+        "model/sample/bookshop/Genres.md",
+      ]),
+    );
   });
 
   test("every generated concept records who generated it and when, to the second", () => {
@@ -112,14 +118,14 @@ describe("exportModel output details", () => {
   // Spec §8: index files carry no frontmatter, except okf_version in the root one.
   test("index files below the root have no frontmatter, so no generated stamp", () => {
     const indexes = run().filter((each) => isIndex(each.path) && each.path !== "index.md");
-    expect(indexes.length).toBeGreaterThan(3);
+    expect(indexes.length).toBeGreaterThanOrEqual(3);
     for (const index of indexes) expect(index.frontmatter).toBeNull();
   });
 
   test("the root index declares the OKF version and lists model/", () => {
     const root = run().find((concept) => concept.path === "index.md")!;
     expect(root.frontmatter).toEqual({ okf_version: "0.2" });
-    expect(root.body).toContain("* [model](model/index.md) - 13 concepts:");
+    expect(root.body).toContain("* [model](model/index.md) - 10 concepts:");
   });
 
   test("the whole bundle validates without a single finding", () => {
@@ -144,7 +150,7 @@ describe("exportModel output details", () => {
 
   test("without texts, i18n placeholders fall back to their keys", () => {
     const books = run({ texts: undefined }).find(
-      (concept) => concept.path === "model/sample/bookshop/Books.md",
+      (concept) => concept.path === "model/CatalogService/Books.md",
     )!;
     expect(books.frontmatter?.["description"]).toBe("BooksDescription");
   });

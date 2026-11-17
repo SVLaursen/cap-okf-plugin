@@ -1,7 +1,6 @@
 import { bundleHash } from "../../src/serve/mcp/bundle-hash";
 import { indexRows, type IndexRow } from "../../src/serve/mcp/index-rows";
 import { runIndexQuery } from "../../src/serve/mcp/index-query";
-import { searchConcepts } from "../../src/serve/mcp/search";
 
 // Task 4.5 step 2a (ADR-0010 Contract B): the pure parts of OkfService. The Index rows come from
 // the files a reader may see (already filtered); the query runner answers exactly the queries
@@ -202,76 +201,6 @@ describe("runIndexQuery: anything else is refused with a clear message", () => {
   });
 });
 
-const SEARCH_ROWS: IndexRow[] = [
-  {
-    path: "a.md",
-    type: "Guide",
-    title: "Shipping",
-    description: "Order delivery.",
-    tags: "",
-    links: "",
-  },
-  {
-    path: "b.md",
-    type: "Entity",
-    title: "Orders",
-    description: "Placed orders.",
-    tags: "sales",
-    links: "",
-  },
-  {
-    path: "c.md",
-    type: "Entity",
-    title: "Lines",
-    description: "Items.",
-    tags: "order",
-    links: "",
-  },
-  {
-    path: "order/d.md",
-    type: "Guide",
-    title: "Returns",
-    description: "Taking books back.",
-    tags: "",
-    links: "",
-  },
-];
-
-describe("searchConcepts", () => {
-  const rows = SEARCH_ROWS;
-
-  test("matches title, tags, description and path, ranked in that order, case-insensitive", () => {
-    expect(paths(searchConcepts(rows, { text: "ORDER" }))).toEqual([
-      "b.md",
-      "c.md",
-      "a.md",
-      "order/d.md",
-    ]);
-  });
-
-  test("narrows by type and by tag", () => {
-    expect(paths(searchConcepts(rows, { text: "order", type: "Entity" }))).toEqual([
-      "b.md",
-      "c.md",
-    ]);
-    expect(paths(searchConcepts(rows, { text: "order", tag: "sales" }))).toEqual(["b.md"]);
-  });
-
-  test("returns 20 rows by default and at most 100", () => {
-    const many = Array.from({ length: 150 }, (_, i) => ({
-      ...rows[0]!,
-      path: `p${String(i).padStart(3, "0")}.md`,
-    }));
-    expect(searchConcepts(many, { text: "shipping" })).toHaveLength(20);
-    expect(searchConcepts(many, { text: "shipping", top: 500 })).toHaveLength(100);
-    expect(searchConcepts(many, { text: "shipping", top: 5 })).toHaveLength(5);
-  });
-
-  test("without text, the rows of the type or tag, by path", () => {
-    expect(paths(searchConcepts(rows, { type: "Guide" }))).toEqual(["a.md", "order/d.md"]);
-  });
-});
-
 describe("bundleHash", () => {
   const files = [
     { path: "a.md", text: "A" },
@@ -292,7 +221,7 @@ describe("bundleHash", () => {
 });
 
 // Review of 4.5 step 2a.
-describe("runIndexQuery and searchConcepts: review cases", () => {
+describe("runIndexQuery: review cases", () => {
   const withNullType: IndexRow[] = [
     ...ROWS,
     { path: "untyped.md", type: null, title: null, description: null, tags: "solo", links: null },
@@ -337,24 +266,7 @@ describe("runIndexQuery and searchConcepts: review cases", () => {
   });
 });
 
-describe("searchConcepts and indexRows: review cases", () => {
-  const withNullType: IndexRow[] = [
-    ...ROWS,
-    { path: "untyped.md", type: null, title: null, description: null, tags: "solo", links: null },
-  ];
-
-  test("searchConcepts needs every word, wherever each is", () => {
-    expect(paths(searchConcepts(ROWS, { text: "books order" }))).toEqual(["guides/ordering.md"]);
-    expect(searchConcepts(ROWS, { text: "books nowhere" })).toEqual([]);
-  });
-
-  test("a tag written as a single string counts; top 0, negative or fractional is handled", () => {
-    expect(paths(searchConcepts(withNullType, { tag: "solo" }))).toEqual(["untyped.md"]);
-    expect(searchConcepts(withNullType, { top: 0 })).toHaveLength(4);
-    expect(searchConcepts(withNullType, { top: -3 })).toHaveLength(4);
-    expect(searchConcepts(withNullType, { top: 1.9 })).toHaveLength(1);
-  });
-
+describe("indexRows: review cases", () => {
   test("an empty frontmatter gives a row with null values; a YAML list as frontmatter gives none", () => {
     const rows = indexRows([
       { path: "empty.md", text: "---\n---\nBody.\n" },

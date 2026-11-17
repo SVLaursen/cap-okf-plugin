@@ -74,14 +74,12 @@ function readerClients(serverUrl: () => string): (reader: Reader) => Promise<Mcp
 
 // What an agent finds beyond the contract: the tools and the resources.
 function pluginOffers(clientFor: (reader: Reader) => Promise<McpClient>): void {
-  test("offers OkfService's five tools", async () => {
+  test("offers OkfService's three agent-facing tools", async () => {
     const { tools } = await (await clientFor("authenticated")).listTools();
     const names = tools.map((tool) => tool.name).filter((name) => name.startsWith("OkfService_"));
     expect(names.sort()).toEqual([
-      "OkfService_Index_get",
-      "OkfService_Index_query",
-      "OkfService_bundleInfo",
       "OkfService_getConcept",
+      "OkfService_getIndex",
       "OkfService_searchConcepts",
     ]);
   });
@@ -99,37 +97,24 @@ function pluginOffers(clientFor: (reader: Reader) => Promise<McpClient>): void {
     );
   });
 
-  test("Index_get reads one row by its path", async () => {
+  test("getIndex returns the outline, curated notes first", async () => {
     const result = await (
       await clientFor("authenticated")
-    ).callTool({
-      name: "OkfService_Index_get",
-      arguments: { path: EXPECTED.curated },
-    });
-    expect(result.structuredContent).toMatchObject({
-      path: EXPECTED.curated,
-      type: "Guide",
-      title: "Shipping books",
-    });
+    ).callTool({ name: "OkfService_getIndex", arguments: {} });
+    const text = (result.structuredContent as { value: string }).value;
+    expect(text).toContain("[Shipping books](guides/shipping.md)");
+    expect(text.indexOf("guides/shipping.md")).toBeLessThan(text.indexOf("(model/index.md)"));
   });
 }
 
 // Answers that tie the two channels together.
 function pluginAnswers(clientFor: (reader: Reader) => Promise<McpClient>): void {
-  test("bundleInfo names the namespace the resources use", async () => {
-    const result = await (
-      await clientFor("authenticated")
-    ).callTool({
-      name: "OkfService_bundleInfo",
-      arguments: {},
-    });
-    expect(result.structuredContent).toMatchObject({
-      value: {
-        okfVersion: "0.2",
-        namespace: NAMESPACE,
-        bundleHash: expect.stringMatching(/^sha256:/),
-      },
-    });
+  test("getIndex returns the same text as the index resource, for the same reader", async () => {
+    const client = await clientFor("authenticated");
+    const tool = await client.callTool({ name: "OkfService_getIndex", arguments: {} });
+    const resource = await client.readResource({ uri: `okf://${NAMESPACE}/index.md` });
+    const toolText = (tool.structuredContent as { value?: string } | undefined)?.value;
+    expect(toolText).toEqual(resource.contents[0]?.text);
   });
 
   test("searchConcepts finds the curated guide", async () => {

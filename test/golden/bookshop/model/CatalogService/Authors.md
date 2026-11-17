@@ -14,7 +14,7 @@ generated:
 
 # Authors
 
-Projection on [Authors](/model/sample/bookshop/Authors.md)
+Projection
 
 A person who wrote one or more books.
 
