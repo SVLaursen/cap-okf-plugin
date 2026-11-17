@@ -1,0 +1,21 @@
+{
+  "name": "okf-fixture-gavdi-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fixture app for task 4.8: cap-okf served through @gavdi/cap-mcp on both MCP channels, read by a real MCP client.",
+  "cds": {
+    "requires": {
+      "auth": {
+        "kind": "mocked",
+        "users": {
+          "reader": { "password": "reader", "roles": [] }
+        }
+      }
+    },
+    "okf": {
+      "serve": {
+        "mcp": { "plugin": "@gavdi/cap-mcp", "as": ["resources", "tools"], "namespace": "okf-fixture" }
+      }
+    }
+  }
+}

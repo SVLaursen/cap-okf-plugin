@@ -41,6 +41,34 @@ jobs:
           name: okf-bundle-preview
           path: bundle-preview
 
+  # Task 4.8: the contract suite through @gavdi/cap-mcp v2 and a real MCP client. Until the plugin
+  # is released, it is checked out and built here; set the repository variables
+  # CAP_MCP_V2_REPOSITORY (owner/name) and CAP_MCP_V2_REF, and the secret CAP_MCP_V2_TOKEN if that
+  # repository is private. Without the variable the job is skipped.
+  integrations:
+    if: vars.CAP_MCP_V2_REPOSITORY != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.CAP_MCP_V2_REPOSITORY }}
+          ref: ${{ vars.CAP_MCP_V2_REF }}
+          token: ${{ secrets.CAP_MCP_V2_TOKEN || github.token }}
+          path: cap-mcp-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build @gavdi/cap-mcp v2
+        working-directory: cap-mcp-v2
+        run: npm ci && npm run build
+      - run: npm run test:integrations
+        env:
+          CAP_MCP_V2: ${{ github.workspace }}/cap-mcp-v2
+          REQUIRE_CAP_MCP_V2: "1"
+
   audit:
     runs-on: ubuntu-latest
     steps:

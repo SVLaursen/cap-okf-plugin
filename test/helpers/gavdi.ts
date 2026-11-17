@@ -16,8 +16,16 @@ export const GAVDI_PLUGIN = path.join(__dirname, "..", "gavdi-cap-mcp-plugin.js"
 
 export const hasGavdi = fs.existsSync(path.join(GAVDI_ROOT, "lib", "index.js"));
 
-/** describe, or describe.skip with the reason in its name when the checkout is missing. */
+/**
+ * describe, or describe.skip with the reason in its name when the checkout is missing. With
+ * REQUIRE_CAP_MCP_V2=1 (CI's integrations job) a missing checkout fails instead of skipping.
+ */
 export function describeWithGavdi(name: string, body: () => void): void {
+  if (!hasGavdi && process.env["REQUIRE_CAP_MCP_V2"] === "1") {
+    throw new Error(
+      `REQUIRE_CAP_MCP_V2 is set, but there is no @gavdi/cap-mcp v2 build at ${GAVDI_ROOT}`,
+    );
+  }
   if (hasGavdi) describe(name, body);
   else describe.skip(`${name} (skipped: no @gavdi/cap-mcp v2 build at ${GAVDI_ROOT})`, body);
 }

@@ -33,6 +33,7 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:timing": "jest --testNamePattern \"\\(timing\\)\"",
+    "test:integrations": "jest test/contract",
     "test:update-golden": "UPDATE_GOLDEN=1 jest test/golden",
     "pilot:score": "node test/pilot/score.js",
     "check": "npm run format && npm run typecheck && npm run lint && npm test",

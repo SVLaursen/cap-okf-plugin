@@ -1,0 +1,90 @@
+// The two MCP channels (tasks 4.5, 4.6) as channels for the server contract (4.1), read through a
+// real MCP client (task 4.8) instead of hand-written JSON-RPC.
+// - Tools: getConcept reads; the Index query tool lists, page by page.
+// - Resources: resources/read reads okf://<namespace>/<path>; completion of the template lists.
+// A thrown MCP error or a tool error is "not found", with the requested path or URI replaced by
+// <path>, so the answers for two paths can be compared (hiddenContract).
+import type { Login, McpClient, ToolResult } from "../helpers/mcp-client";
+import type { Answer, Channel, Reader } from "./server.contract";
+
+/** A client per reader: one signed in, one anonymous. */
+export type Clients = (reader: Reader) => Promise<McpClient>;
+
+/** The login used for "authenticated" readers; every other reader is anonymous. */
+export function loginOf(reader: Reader, login: Login): Login | undefined {
+  return reader === "authenticated" ? login : undefined;
+}
+
+export function toolsChannel(clientFor: Clients): Channel {
+  return {
+    async read(path, reader) {
+      const client = await clientFor(reader);
+      const result = await notFoundOnError(path, () =>
+        client.callTool({ name: "OkfService_getConcept", arguments: { path } }),
+      );
+      if ("notFound" in result) return result;
+      return toolAnswer(result.value, path);
+    },
+    async list(reader) {
+      const client = await clientFor(reader);
+      const paths: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await client.callTool({
+          name: "OkfService_Index_query",
+          arguments: { top: 100, ...(cursor && { cursor }) },
+        });
+        if (result.isError === true) return [];
+        const page = result.structuredContent as { rows: { path: string }[]; nextCursor?: string };
+        paths.push(...page.rows.map((row) => row.path));
+        cursor = page.nextCursor;
+      } while (cursor !== undefined);
+      return paths.sort();
+    },
+  };
+}
+
+export function resourcesChannel(clientFor: Clients, namespace: string): Channel {
+  return {
+    async read(path, reader) {
+      const client = await clientFor(reader);
+      const uri = `okf://${namespace}/${path.split("/").map(encodeURIComponent).join("/")}`;
+      const result = await notFoundOnError(uri, () => client.readResource({ uri }));
+      if ("notFound" in result) return result;
+      const text = result.value.contents[0]?.text;
+      return typeof text === "string" ? { text } : { notFound: "no text" };
+    },
+    async list(reader) {
+      const client = await clientFor(reader);
+      const { completion } = await client.complete({
+        ref: { type: "ref/resource", uri: `okf://${namespace}/{+path}` },
+        argument: { name: "path", value: "" },
+      });
+      // Completion passes on at most 100 values; more would hide paths from the contract.
+      if (completion.hasMore === true) throw new Error("completion has more than 100 paths");
+      return [...completion.values].sort();
+    },
+  };
+}
+
+// An MCP error (thrown by the client) is the channel's not-found answer.
+async function notFoundOnError<T>(
+  asked: string,
+  call: () => Promise<T>,
+): Promise<{ value: T } | { notFound: string }> {
+  try {
+    return { value: await call() };
+  } catch (error) {
+    const { code, message } = error as { code?: unknown; message?: string };
+    return { notFound: `${String(code)} ${String(message).replaceAll(asked, "<path>")}` };
+  }
+}
+
+function toolAnswer(result: ToolResult, path: string): Answer {
+  if (result.isError === true) {
+    const text = result.content?.[0]?.text ?? "tool error";
+    return { notFound: text.replaceAll(path, "<path>") };
+  }
+  const value = (result.structuredContent as { value?: unknown } | undefined)?.value;
+  return typeof value === "string" ? { text: value } : { notFound: "no text" };
+}
