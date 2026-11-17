@@ -1,6 +1,6 @@
 # 0006. MCP integration contracts
 
-- Status: Accepted (2026-11-13, Simon Vestergaard Laursen)
+- Status: Superseded by ADR-0010 (2026-11-17, Simon Vestergaard Laursen)
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude (pre-drafted from a read of `@gavdi/cap-mcp` v2; completed in Phase 0 task 0.5)

@@ -65,3 +65,20 @@ one of them, not both.
 - A third MCP plugin is one new module, with no change to the others (open/closed).
 - The contract suite runs each channel against a fixture app per plugin, since the two plugins
   do not share an app.
+
+## Amendment note for ADR-0004 (for the maintainer to add; ADR-0004 can't be edited by agents)
+
+> ### Amendment 2026-11-17
+>
+> ADR-0010 (revision 2 of the MCP integration contracts, superseding ADR-0006) refines the
+> channel shapes in point 3. The decision itself (opt-in, two channels, one interface, one
+> authorization rule) is unchanged.
+>
+> - Resource URIs carry a namespace: `okf://<namespace>/index.md` as a fixed resource, and every
+>   concept through one template `okf://<namespace>/{+path}`.
+> - The tools channel is index-first: `OkfService.Index` (no body) plus the functions
+>   `getConcept(path)`, `searchConcepts(...)` and `bundleInfo()`, instead of one `Concepts`
+>   entity with `body`.
+> - The object form of `cds.okf.serve.mcp` gains two optional keys: `namespace` and `requires`.
+>
+> The context table keeps `call` as the name of `@cap-js/mcp`'s third tool (not `call_action`).
