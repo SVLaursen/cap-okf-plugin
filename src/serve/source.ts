@@ -12,7 +12,10 @@ import path from "node:path";
 import { MemoryBundleSource, FileBundleSource, type BundleSource } from "../bundle/source";
 import type { MergedBundle } from "../bundle/merge";
 import { formatFinding } from "../core/finding";
+import { bundleIndex } from "../bundle/indexes";
+import { parseConcept, serializeConcept, type Concept } from "../core/concept";
 import { lintBundle } from "../core/lint";
+import { OKF_VERSION } from "../export/exporter";
 import { validateBundle } from "../core/validate";
 import type { Csn } from "../export/csn";
 import type { Cds } from "../index";
@@ -21,6 +24,8 @@ import { generateBundle } from "../build/generate";
 
 /** The folder a deployed app holds the built bundle in (ADR-0007). */
 export const BUILT_BUNDLE_FOLDER = "okf-bundle";
+
+const INDEX = "index.md";
 
 /** Where warnings go: cds.log("okf") in the app. */
 export interface Log {
@@ -74,5 +79,54 @@ function servableFiles(bundle: MergedBundle, log: Log): Map<string, string> {
     if (isCurated && leftOut.has(`okf/${file.path}`)) continue;
     files.set(file.path, file.text);
   }
-  return files;
+  return leftOut.size === 0 ? files : withIndexesRebuilt(files, bundle.curatedPaths);
+}
+
+/**
+ * The generated index.md files built again from the files that are served, after curated files
+ * with errors were left out: otherwise they would still list them, and a server couldn't tell
+ * them from hand-written indexes (reader-view.ts rebuilds only indexes it recognises). A folder
+ * left without concepts loses its generated index.
+ */
+function withIndexesRebuilt(
+  files: Map<string, string>,
+  curatedPaths: ReadonlySet<string>,
+): Map<string, string> {
+  const concepts = conceptsIn(files);
+  const rebuilt = new Map<string, string>();
+  for (const [path, text] of files) {
+    if (!isIndex(path) || curatedPaths.has(path)) {
+      rebuilt.set(path, text);
+      continue;
+    }
+    const folder = path === INDEX ? "" : path.slice(0, -`/${INDEX}`.length);
+    const hasConcepts = concepts.some((concept) => concept.path.startsWith(`${folder}/`));
+    if (folder !== "" && !hasConcepts) continue;
+    rebuilt.set(path, serializeConcept(bundleIndex(folder, concepts, OKF_VERSION)));
+  }
+  return rebuilt;
+}
+
+// The concepts an index lists: Markdown files other than index.md and log.md that parse, as the
+// merge reads them.
+function conceptsIn(files: ReadonlyMap<string, string>): Concept[] {
+  const concepts: Concept[] = [];
+  for (const [path, text] of files) {
+    if (isIndexOrLog(path) || !path.endsWith(".md")) continue;
+    try {
+      concepts.push(parseConcept(path, text));
+    } catch {
+      // Left out of the indexes, as the merge leaves it out.
+    }
+  }
+  return concepts;
+}
+
+function isIndex(path: string): boolean {
+  return path === INDEX || path.endsWith(`/${INDEX}`);
+}
+
+function isIndexOrLog(path: string): boolean {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name === INDEX || name === "log.md";
 }

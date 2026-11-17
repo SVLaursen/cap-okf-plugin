@@ -4,9 +4,11 @@
 // - A list item whose first link points at a hidden concept goes as a whole line: index
 //   entries, "Business knowledge" entries and "see also" lists name nothing else.
 // - Any other link to a hidden concept loses its target; its text stays, as the author wrote it.
+// - The lines that continue a list item that goes (indented further) go with it.
+// - An autolink to a hidden concept (<finance/margins.md>) goes.
 // - A reference definition ("[label]: hidden.md") goes as a whole line.
 // - A heading whose section loses every line this way goes too.
-// Code blocks are left alone: links there are examples.
+// Links in code blocks lose their target too: an example mustn't name a hidden path either.
 import { resolveLink } from "./links";
 
 // [text](target "title"), as links.ts reads them, with the parts this module needs.
@@ -15,6 +17,7 @@ const REFERENCE_DEFINITION = /^ {0,3}\[(?!\^)[^\]]+\]:\s*(<[^>]*>|\S+)/;
 const LIST_ITEM = /^\s*([*+-]|\d+[.)])\s/;
 const HEADING = /^#{1,6}\s/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const AUTOLINK = /<([^<>\s]+)>/g;
 
 /**
  * `text` (the file at bundle path `path`) without links to concepts for which `isHidden` says
@@ -25,18 +28,23 @@ export function withoutLinksTo(
   text: string,
   isHidden: (bundlePath: string) => boolean,
 ): string {
-  const lines = text.split("\n");
   const kept: (string | undefined)[] = [];
   const emptiedHeadings = new Set<number>();
   let heading = -1;
   let inFence = false;
-  for (const line of lines) {
+  // The indentation of the list item that went, while its continuation lines follow.
+  let droppedItem: number | undefined;
+  for (const line of text.split("\n")) {
     if (FENCE.test(line)) inFence = !inFence;
     if (!inFence && HEADING.test(line)) heading = kept.length;
-    const changed = inFence ? line : withoutHiddenLinks(path, line, isHidden);
-    if (changed === undefined && heading !== -1) emptiedHeadings.add(heading);
+    const continues = continuesItem(line, droppedItem);
+    const changed = continues ? undefined : withoutHiddenLinks(path, line, isHidden);
+    if (!continues) droppedItem = droppedItemIndent(line, changed);
+    if (changed === undefined) emptiedHeadings.add(heading);
     kept.push(changed);
   }
+  // -1: lines went before the first heading, which has no section to empty.
+  emptiedHeadings.delete(-1);
   for (const index of emptiedHeadings) dropIfEmpty(kept, index);
   return withoutDoubledBlankLines(kept).join("\n");
 }
@@ -72,9 +80,26 @@ function withoutHiddenLinks(
   if (reference !== null && pointsAtHidden(reference[1]!)) return undefined;
   const firstLink = new RegExp(INLINE_LINK.source).exec(line);
   if (LIST_ITEM.test(line) && firstLink !== null && pointsAtHidden(firstLink[3]!)) return undefined;
-  return line.replace(INLINE_LINK, (link: string, _image: string, label: string, target: string) =>
-    pointsAtHidden(target) ? label : link,
-  );
+  return line
+    .replace(INLINE_LINK, (link: string, _image: string, label: string, target: string) =>
+      pointsAtHidden(target) ? label : link,
+    )
+    .replace(AUTOLINK, (link: string, target: string) => (pointsAtHidden(target) ? "" : link));
+}
+
+// The indentation of a list item that went, so its continuation lines can follow it.
+function droppedItemIndent(line: string, changed: string | undefined): number | undefined {
+  return changed === undefined && LIST_ITEM.test(line) ? indentOf(line) : undefined;
+}
+
+// A non-blank line indented further than the list item before it continues that item; its
+// nested items go with it.
+function continuesItem(line: string, itemIndent: number | undefined): boolean {
+  return itemIndent !== undefined && line.trim() !== "" && indentOf(line) > itemIndent;
+}
+
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
 }
 
 // Drops the heading at `index` when nothing but blank lines follows it up to the next heading.

@@ -46,9 +46,10 @@ Option 2.
   `user.is(role)` holds for one of them, CAP's pseudo-roles included. No `requires` means
   ADR-0003 as before. A value that isn't a role or a list hides the concept from everyone.
 - For anyone else the concept doesn't exist: it isn't listed, found, read, completed or counted,
-  other concepts' links to it lose their target (a list item that links to it goes as a whole,
-  and a heading whose section empties with it), and a generated folder index whose concepts are
-  all hidden goes too. Generated `index.md` files are built again from what the reader sees, so
+  other concepts' links to it lose their target, also in code blocks; an autolink to it goes; a
+  list item that links to it goes as a whole, with its continuation lines, and a heading whose
+  section empties with it. A folder index (generated or hand-written) whose concepts are all
+  hidden goes too. Generated `index.md` files are built again from what the reader sees, so
   counts are theirs; a curated `index.md` only loses its entries.
 - A hidden path and an unknown one give the same not-found answer on every channel.
 - The `requires` key itself is authorization detail: only authenticated readers get it.
@@ -85,10 +86,14 @@ Option 2.
   more also matching the start of a longer one (at half weight); stop words left out unless
   nothing else is left.
 - Fields: title; tags and the new optional `aliases:` list; description; then text and path.
-  Ranked by score, then words found, then curated before generated, then path.
+  Ranked by score (each word counted once, where it is found best: title 8, tags and aliases 4,
+  description 2, text and path 1), then words found, then curated before generated, then path.
+  So one word in the title outranks three in the description: the field order comes first.
 - The text searched is the reader's own text (authorization sections only for authenticated
   readers), so ADR-0010's "never the body" rule is no longer needed to stop probing.
-- Never empty for a text: with no match, the curated concepts in index order, `matched = false`.
+- Never empty for a text: with no match, the curated concepts in index order, `matched = false`
+  (every concept when there are no curated ones). The `type` and `tag` filters still apply, so
+  filters that match nothing give an empty answer.
 - `type`, `tag`, `top` (default 20, at most 100) as before.
 
 ### Related concepts
@@ -104,8 +109,9 @@ links to: title, path, description; curated first; at most ten. Config
   the service exposes it. `cds.okf.projectionSources: true` brings the source concepts back. A
   projection still takes its description and doc comment from down its source chain (anything
   not `@okf: false`), without naming the source.
-- Element and parameter tables show each one's `@description` (else its doc comment, else the
-  same element's down the source chain).
+- Element and parameter tables show each one's `@description` (else its doc comment, else that
+  of the element it is selected from, following the projection's columns: `state as status`
+  takes `state`'s; an expression takes none).
 - A "Business knowledge" section lists the curated notes that link to the concept (outside
   their authorization sections), before the Authorization section; servers drop entries the
   reader may not see.

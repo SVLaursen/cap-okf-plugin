@@ -23,7 +23,7 @@ const CODE_NAME = /(type|status|code|kind)$/i;
 const SHORT_STRING = /^`String\((\d+)\)`$/;
 const MAX_CODE_LENGTH = 10;
 // | `status` | `String(1)` | values: … |
-const ELEMENT_ROW = /^\| `([^`]+)` \| (.*?) \| (.*?) \|$/;
+const CELL_SEPARATOR = /(?<!\\)\|/;
 
 /** Everything the lint reports: the knowledge rules plus the validator's W1 and W4. */
 export function lintBundle(files: readonly BundleFile[]): Finding[] {
@@ -76,9 +76,9 @@ function codeFieldFindings(entity: LocatedConcept): Finding[] {
   const lines = entity.concept.body.split("\n");
   const codes: { name: string; line: number }[] = [];
   lines.forEach((text, index) => {
-    const row = ELEMENT_ROW.exec(text);
-    if (row !== null && looksLikeCode(row[1]!, row[2]!, row[3]!)) {
-      codes.push({ name: row[1]!, line: entity.bodyLine + index });
+    const row = elementRow(text);
+    if (row !== undefined && looksLikeCode(row.name, row.type, row.notes)) {
+      codes.push({ name: row.name, line: entity.bodyLine + index });
     }
   });
   if (codes.length === 0) return [];
@@ -91,8 +91,24 @@ function codeFieldFindings(entity: LocatedConcept): Finding[] {
   ];
 }
 
+// "| `status` | `String(1)` | key; values: … |" → its cells; undefined for any other line.
+// Cells are split at pipes that aren't escaped (a description may hold "\|").
+function elementRow(line: string): { name: string; type: string; notes: string } | undefined {
+  if (!line.startsWith("| `") || !line.endsWith("|")) return undefined;
+  const cells = line
+    .slice(1, -1)
+    .split(CELL_SEPARATOR)
+    .map((cell) => cell.trim());
+  const name = /^`([^`]+)`$/.exec(cells[0] ?? "")?.[1];
+  if (cells.length !== 3 || name === undefined) return undefined;
+  return { name, type: cells[1]!, notes: cells[2]! };
+}
+
+// The notes cell is "; "-separated; only its own "values: …" part counts, not a description
+// that happens to say "values:".
 function looksLikeCode(name: string, type: string, notes: string): boolean {
-  if (CODE_NAME.test(name) || notes.includes("values:")) return true;
+  const hasValues = notes.split("; ").some((note) => note.startsWith("values: "));
+  if (CODE_NAME.test(name) || hasValues) return true;
   const short = SHORT_STRING.exec(type);
   return short !== null && Number(short[1]) <= MAX_CODE_LENGTH;
 }

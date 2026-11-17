@@ -134,6 +134,14 @@ describe("searchConcepts: never empty", () => {
   });
 });
 
+describe("searchConcepts: fallback and filters", () => {
+  test("the fallback never widens past the type and tag filters (review)", () => {
+    const hits = searchConcepts(CONCEPTS, { text: "xylophone", type: "Entity" });
+    expect(paths(hits)).toEqual(["model/S/OrderItems.md", "model/S/Orders.md"]);
+    expect(searchConcepts(CONCEPTS, { text: "xylophone", type: "Nothing" })).toEqual([]);
+  });
+});
+
 describe("query words", () => {
   test("stop words go unless nothing else is left; words are folded and unique", () => {
     expect(queryWords("How are the Orders shipped?")).toEqual(["order", "shipped"]);

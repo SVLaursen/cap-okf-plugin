@@ -136,11 +136,26 @@ All of them are checked: an unknown key gets a warning; a wrong value is an `[ok
      gets the notes linking to the action's own concept (for an unbound one), then the notes
      linking to its entity.
    - Notes are joined with `; `.
-8. **Links to hidden concepts.** Inside another concept's text, a link to a hidden concept
-   keeps its text (the author's words) and loses its target. A list item whose first link is
-   hidden goes as a whole line. A heading whose section empties this way goes too.
+8. **Links to hidden concepts keep their text.** Inside another concept's text, a link to a
+   hidden concept loses its target (also in code blocks) but keeps the words the author wrote.
+   - An autolink to a hidden concept goes.
+   - A list item whose first link is hidden goes as a whole, with its continuation lines.
+   - A heading whose section empties this way goes too.
+
+   The link text can repeat the hidden note's title, as in "the [margin rules](…)". Removing
+   the author's prose would garble sentences. Authors should keep a restricted note's name out
+   of open notes; ADR-0012 says so.
 9. **Projections without exported sources** now open with just "Projection" (no source named).
    This follows task 2.6's rule that a concept never names a definition that isn't exported.
+10. **Search ranks by field first.**
+    - "Rank: title, then tags and aliases, then description, then body; more matching words rank
+      higher" is read as: score per word by the best field it is in, summed.
+    - So one word in the title outranks three in the description. More words rank higher within
+      the same fields, and break ties.
+11. **Search fallback keeps the filters.** With no match, the answer is the curated notes within
+    the `type` and `tag` filters (or every concept within them, when none is curated). Filters
+    that match nothing give an empty list: the brief keeps the filters, and an outline of other
+    types would answer a different question.
 
 ## Golden files changed
 
@@ -152,7 +167,29 @@ All of them are checked: an unknown key gets a warning; a wrong value is an `[ok
   comment);
 - the root and `model/` index counts are 10 instead of 13.
 
+## Review
+
+The `reviewer` agent read the whole branch diff. It found no way around the reader view: every
+channel reads through it, and hidden and unknown paths give the same 404 on every channel. It
+reported ten findings; all were fixed (with tests) or recorded as decisions:
+
+1. A projection element took another element's description by name, through an alias. Fixed:
+   the lookup follows the projection's columns.
+2. In `cds watch`, one broken curated note left the generated indexes unrecognised, so hidden
+   notes stayed in their counts. Fixed: the indexes are rebuilt after files with errors are left
+   out.
+3. An unbound action of a namespaced service took the service's notes. Fixed.
+4. The search fallback ignored the `type` and `tag` filters. Fixed (deviation 11).
+5. Links to hidden concepts in code blocks, autolinks, and a removed item's continuation lines
+   stayed. Fixed; the link text stays (deviation 8).
+6. A hand-written folder index whose notes were all hidden was still served. Fixed.
+7. Ranking by field before word count. Kept (deviation 10).
+8. The K3 lint misread descriptions that say "values:", and escaped pipes. Fixed.
+9. The tool-note cut could split a character. Fixed: the cut counts code points.
+10. The bare "Projection" lead line. Kept (deviation 9).
+
 ## Test results
 
-`npm run check` (format, typecheck, lint, all Jest projects, with the cap-mcp-v2 build present):
-see the final report; the last run is recorded in `docs/progress.md`.
+`npm ci`, `npm run build`, then `npm run check` (format, typecheck, lint, every Jest project,
+with the cap-mcp-v2 build at `83e6d69` present, so the MCP contract suites ran and none were
+skipped): 78 suites, 1295 tests, all passed; no lint warnings.

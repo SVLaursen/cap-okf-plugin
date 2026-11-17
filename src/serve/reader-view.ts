@@ -156,8 +156,8 @@ function hiddenConcepts(snapshot: Snapshot, reader: Reader): Set<string> {
   return hidden;
 }
 
-// The generated index.md of each folder that holds concepts, all of them hidden from the reader:
-// its name alone would tell them the folder exists.
+// The index.md of each folder that holds concepts, all of them hidden from the reader, whether
+// generated or written by hand: its name alone would tell them the folder exists.
 function emptiedIndexes(
   snapshot: Snapshot,
   hidden: ReadonlySet<string>,
@@ -165,7 +165,8 @@ function emptiedIndexes(
 ): Set<string> {
   const emptied = new Set<string>();
   if (hidden.size === 0) return emptied;
-  for (const index of snapshot.generatedIndexes) {
+  const indexes = [...snapshot.files.keys()].filter((path) => path.endsWith(`/${INDEX}`));
+  for (const index of indexes) {
     const folder = folderOf(index);
     if (folder === "") continue;
     const isBelow = (path: string) => path.startsWith(`${folder}/`);

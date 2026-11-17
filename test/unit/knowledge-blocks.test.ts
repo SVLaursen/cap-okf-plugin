@@ -107,9 +107,17 @@ describe("withRelated", () => {
 describe("withoutLinksTo", () => {
   const hidden = (path: string) => path === "secret.md";
 
-  test("leaves code blocks alone and drops reference definitions", () => {
-    const text = "```\n[s](secret.md)\n```\n[s][ref]\n\n[ref]: secret.md\n";
-    expect(withoutLinksTo("a.md", text, hidden)).toBe("```\n[s](secret.md)\n```\n[s][ref]\n");
+  test("in code blocks too, autolinks, and a removed item's continuation lines (review)", () => {
+    const text =
+      "Intro <secret.md> and <https://x.org>.\n\n- [S](secret.md) - first line\n  goes on here\n  - nested\n- [Kept](kept.md)\n\n```\nsee [s](secret.md)\n```\n";
+    expect(withoutLinksTo("a.md", text, hidden)).toBe(
+      "Intro  and <https://x.org>.\n\n- [Kept](kept.md)\n\n```\nsee s\n```\n",
+    );
+  });
+
+  test("drops reference definitions", () => {
+    const text = "[s][ref]\n\n[ref]: secret.md\n";
+    expect(withoutLinksTo("a.md", text, hidden)).toBe("[s][ref]\n");
   });
 
   test("an emptied last section goes, and the file keeps one final line ending", () => {

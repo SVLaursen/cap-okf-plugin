@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import cds from "@sap/cds";
+import { readerView, snapshotOf } from "../../src/serve/reader-view";
 import { startupBundleSource } from "../../src/serve/source";
 
 // Task 4.3 / ADR-0007: a deployed app serves its built okf-bundle/; without one (development),
@@ -133,5 +134,36 @@ describe("startupBundleSource: curated files with errors", () => {
       expect.stringMatching(/^\[okf\] okf\/leaky\.md:6 — .*\(L3\)/),
       expect.stringMatching(/^\[okf\] okf\/leaky\.md:8 — .*\(L3\)/),
     ]);
+  });
+});
+
+describe("startupBundleSource: indexes after leaving files out", () => {
+  let root: string;
+  const { log } = collectingLog();
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-serve-"));
+    fs.cpSync(FIXTURE, root, { recursive: true });
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  // Review of ADR-0012: the indexes are rebuilt without the left-out file, so a reader view
+  // still recognises them as generated and keeps hidden concepts out of their counts.
+  test("the generated indexes no longer list a left-out file, and stay recognisable", async () => {
+    fs.mkdirSync(path.join(root, "okf", "finance", "secret"), { recursive: true });
+    fs.writeFileSync(path.join(root, "okf", "finance", "secret", "b.md"), "no frontmatter\n");
+    fs.writeFileSync(
+      path.join(root, "okf", "finance", "secret", "c.md"),
+      "---\ntype: Note\ntitle: C\ndescription: C.\nrequires: boss\n---\n",
+    );
+    const source = await startupBundleSource(await appCds(root), log, {});
+    const files = await Promise.all(
+      (await source.list()).map(async (file) => ({ path: file, text: (await source.read(file))! })),
+    );
+    expect(files.find((file) => file.path === "finance/index.md")?.text).toContain(
+      "1 concept: Note",
+    );
+    const view = readerView(snapshotOf(files), { isAuthenticated: true, is: () => false });
+    expect(view.paths.filter((file) => file.startsWith("finance"))).toEqual([]);
+    expect(view.read("index.md")).not.toContain("finance");
   });
 });

@@ -10,9 +10,10 @@
 //   then the text and the path. Each word counts once, where it is found best.
 // - Ranking: score, then the number of words found, then curated notes before generated
 //   concepts, then path.
-// - Never empty for a text: when no word is found, the answer is the curated notes in the
-//   order the root index lists them, flagged matched = false, so the agent still gets an
-//   outline. The type and tag filters and `top` apply as before.
+// - Never empty for a text: when no word is found, the answer is the curated notes in the order
+//   the root index lists them (every concept, without curated notes), flagged matched = false,
+//   so the agent still gets an outline. The type and tag filters and `top` apply as before; only filters that match
+//   nothing give an empty answer.
 // The text searched is the text the reader gets (reader-view.ts), so nothing they may not read
 // can be probed (ADR-0003).
 import { compareText } from "../../core/index-md";
@@ -81,7 +82,7 @@ export function searchConcepts(
         compareText(a.concept.path, b.concept.path),
     );
   if (found.length > 0) return found.slice(0, top).map(({ concept }) => hitOf(concept, true));
-  return fallback(candidates, concepts)
+  return fallback(candidates)
     .slice(0, top)
     .map((each) => hitOf(each, false));
 }
@@ -150,12 +151,12 @@ function bestWeight(fields: Fields, word: string): number {
   return best;
 }
 
-// Nothing found: the curated notes (with the filters, else without), else every concept.
-function fallback(candidates: readonly Searchable[], all: readonly Searchable[]): Searchable[] {
+// Nothing found: the curated notes the filters allow, in index order; without any, every
+// concept the filters allow. Never wider than the type and tag filters, so empty only when
+// they match nothing.
+function fallback(candidates: readonly Searchable[]): Searchable[] {
   const curated = candidates.filter((concept) => concept.curated);
-  if (curated.length > 0) return outline(curated);
-  const allCurated = all.filter((concept) => concept.curated);
-  return outline(allCurated.length > 0 ? allCurated : candidates);
+  return outline(curated.length > 0 ? curated : candidates);
 }
 
 // The order the root index lists concepts in: curated first, by type (untyped last), then path.

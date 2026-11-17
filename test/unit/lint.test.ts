@@ -54,6 +54,16 @@ describe("lintKnowledge", () => {
   });
 });
 
+describe("lintKnowledge: reading the element table (review)", () => {
+  test("a description saying values: or holding an escaped pipe isn't a code field", () => {
+    const rows =
+      "| `ID` | `UUID` | key |\n" +
+      "| `title` | `String(150)` | Shown values: none |\n" +
+      "| `memo` | `String(500)` | a \\| b; also values: here |\n";
+    expect(lintKnowledge([{ path: "model/S/Orders.md", text: entity(rows) }])).toEqual([]);
+  });
+});
+
 describe("lintBundle", () => {
   test("adds the validator's W1 for curated notes and W4 for broken links", () => {
     const findings = lintBundle([

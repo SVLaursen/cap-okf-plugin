@@ -141,6 +141,34 @@ describe("gavdiHints: tool notes", () => {
   });
 });
 
+describe("gavdiHints: namespaced services", () => {
+  test("an unbound action of a namespaced service doesn't take the service's notes (review)", async () => {
+    const files = {
+      "model/my/ns/S.md": generated("my.ns.S"),
+      "guides/s.md": "---\ntype: Guide\ntitle: About S\n---\n[service](/model/my/ns/S.md)\n",
+    };
+    const cds = fakeCds();
+    const hints = gavdiHints(cds, () => undefined);
+    hints.use({
+      choice: CHOICE,
+      bundles: oneBundleForEveryKey(async () => new MemoryBundleSource(files)),
+    });
+    const notes: Parameters<HintRegistry["addToolNotes"]>[0][] = [];
+    cds.emit("mcp:hints", {
+      contractVersion: 1,
+      addInstructions: () => undefined,
+      addToolNotes: (provider: (typeof notes)[number]) => void notes.push(provider),
+    });
+    const act: ToolTarget = {
+      tool: "my_ns_S_act",
+      service: "my.ns.S",
+      definition: "my.ns.S.act",
+      kind: "action",
+    };
+    expect(await notes[0]!.note(act, SIGNED_IN)).toBeUndefined();
+  });
+});
+
 describe("gavdiHints: switches and the event", () => {
   test("instructions: false and pointers: false register nothing", () => {
     const { instructions, notes } = served({ ...CHOICE, instructions: false, pointers: false });
@@ -178,6 +206,12 @@ describe("noteText", () => {
     ]);
     expect(text.length).toBeLessThanOrEqual(400);
     expect(text).toBe(`Business knowledge: A (a.md): ${long}; B (b.md): ${long}; C (c.md)`);
+  });
+
+  test("a cut never splits a character", () => {
+    const text = noteText([note("a.md", "😀".repeat(500))]);
+    expect(Array.from(text)).toHaveLength(400);
+    expect(text.endsWith("😀…")).toBe(true);
   });
 
   test("then whole notes go, the most specific stays", () => {

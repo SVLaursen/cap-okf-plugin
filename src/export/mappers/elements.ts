@@ -11,21 +11,21 @@ import { elementOfRef, relationTarget, shownEntries } from "./visibility";
  * column is headed `firstColumn` ("Element", "Parameter", "Returned element").
  * With `withoutAssociations`, associations are left out because a list of them follows (entities,
  * aspects, events); everywhere else they stay in the table, e.g. "Association to [Countries](…)".
- * `sources` are the definitions a projection is built on: an element without a description of
- * its own takes the one of the element with its name there (ADR-0012).
+ * `chain` is the definition and the definitions it is built on (textSources): an element without
+ * a description of its own takes the one of the element it is selected from (ADR-0012).
  */
 export function elementsTable(
   firstColumn: string,
   elements: Record<string, CsnElement>,
   context: MapperContext,
   withoutAssociations = false,
-  sources: readonly CsnDefinition[] = [],
+  chain: readonly CsnDefinition[] = [],
 ): string | undefined {
   // Left out: rows marked @okf: false or referring to a definition that isn't exported (2.6).
   const rows = shownEntries(elements, context)
     .filter(([, element]) => !(withoutAssociations && isAssociation(element)))
     .map(([name, element]) => {
-      const description = descriptionOf(name, element, context, sources);
+      const description = descriptionOf(name, element, context, chain);
       const cells = [inlineCode(name), typeCell(element, context), notesOf(element, description)];
       return `| ${cells.map(tableCell).join(" | ")} |`;
     });
@@ -39,9 +39,9 @@ export function elementsSection(
   context: MapperContext,
   withoutAssociations = false,
 ): string[] {
-  const sources = textSources(definition, context).slice(1);
+  const chain = textSources(definition, context);
   const elements = definition.elements ?? {};
-  const table = elementsTable("Element", elements, context, withoutAssociations, sources);
+  const table = elementsTable("Element", elements, context, withoutAssociations, chain);
   return table === undefined ? [] : [`## Elements\n\n${table}`];
 }
 
@@ -149,23 +149,66 @@ export function enumValues(values: CsnEnum): string[] {
 
 /**
  * An element's or parameter's description: its @description, else its doc comment, else (for a
- * projection) those of the element with the same name down the source chain.
+ * projection, `chain` from textSources) that of the element it is selected from, down the chain.
+ * Columns are followed by name: "state as status" takes state's description; a column that
+ * isn't a plain reference (an expression) takes none.
  */
 export function descriptionOf(
   name: string,
   element: CsnElement,
   context: MapperContext,
-  sources: readonly CsnDefinition[] = [],
+  chain: readonly CsnDefinition[] = [],
 ): string | undefined {
-  for (const each of [element, ...sources.map((source) => source.elements?.[name])]) {
-    if (each === undefined) continue;
-    const description = each["@description"];
-    if (typeof description === "string" && description.trim() !== "") {
-      return oneLine(context.text(description));
-    }
-    if (each.doc !== undefined && each.doc !== null) return each.doc;
+  let current: CsnElement | undefined = element;
+  let currentName: string | undefined = name;
+  for (let index = 0; current !== undefined; index += 1) {
+    const own = ownDescription(current, context);
+    if (own !== undefined) return own;
+    const definition = chain[index];
+    const source = chain[index + 1];
+    if (definition === undefined || source === undefined || currentName === undefined) break;
+    currentName = sourceElementName(definition, currentName);
+    current = currentName === undefined ? undefined : source.elements?.[currentName];
   }
   return undefined;
+}
+
+function ownDescription(element: CsnElement, context: MapperContext): string | undefined {
+  const description = element["@description"];
+  if (typeof description === "string" && description.trim() !== "") {
+    return oneLine(context.text(description));
+  }
+  return element.doc ?? undefined;
+}
+
+/** A projection or view column, as far as the description lookup needs it. */
+interface Column {
+  ref?: unknown[];
+  as?: string;
+}
+
+// The name of the source element that `name` of a projection or view is selected from, or
+// undefined when it isn't a plain reference (an expression, a path, or not selected).
+function sourceElementName(definition: CsnDefinition, name: string): string | undefined {
+  const query = definition as {
+    projection?: { columns?: (Column | string)[] };
+    query?: { SELECT?: { columns?: (Column | string)[] } };
+  };
+  const columns = query.projection?.columns ?? query.query?.SELECT?.columns;
+  if (columns === undefined) return name;
+  const objects = columns.filter((column): column is Column => typeof column === "object");
+  const aliased = objects.find((column) => column.as === name);
+  if (aliased !== undefined) return plainReference(aliased);
+  const plain = objects.find(
+    (column) => column.as === undefined && plainReference(column) === name,
+  );
+  if (plain !== undefined) return name;
+  return columns.includes("*") ? name : undefined;
+}
+
+function plainReference(column: Column): string | undefined {
+  const ref = column.ref;
+  return ref?.length === 1 && typeof ref[0] === "string" ? ref[0] : undefined;
 }
 
 // "key", "mandatory", "default: 0", "localized", "virtual", "values: …", then the description.

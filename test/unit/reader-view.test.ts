@@ -171,6 +171,19 @@ describe("readerView: counts and keys", () => {
   });
 });
 
+describe("readerView: a hand-written folder index (review)", () => {
+  test("whose concepts are all hidden is gone, as an unknown folder", () => {
+    const snapshot = snapshotOf([
+      { path: "hr/index.md", text: "# Notes\n\n* [D](d.md) - D.\n" },
+      { path: "hr/d.md", text: note("D", "requires: boss\n", "") },
+    ]);
+    const view = readerView(snapshot, reader(true));
+    expect(view.paths).toEqual([]);
+    expect(view.read("hr/index.md")).toBeUndefined();
+    expect(readerView(snapshot, reader(true, "boss")).paths).toEqual(["hr/d.md", "hr/index.md"]);
+  });
+});
+
 describe("readerOf", () => {
   test("asks the CAP user; no user is an anonymous reader without roles", () => {
     const user = { is: (role: string) => role === "authenticated-user" || role === "finance" };

@@ -144,7 +144,12 @@ async function noteFor(
 // function (Service.Entity.op), notes linking to its entity, where it is described.
 function notesFor(byDefinition: Map<string, ViewConcept[]>, target: ToolTarget): ViewConcept[] {
   const own = byDefinition.get(target.definition) ?? [];
-  const isBound = target.kind !== "entity" && target.definition.split(".").length > 2;
+  // Bound: Service.Entity.op. An unbound one (Service.op) has no "." after the service name,
+  // however many dots the service name itself has (my.ns.Service.op).
+  const inService = target.definition.startsWith(`${target.service}.`)
+    ? target.definition.slice(target.service.length + 1)
+    : "";
+  const isBound = target.kind !== "entity" && inService.includes(".");
   const parent = target.definition.slice(0, target.definition.lastIndexOf("."));
   const inherited = isBound ? (byDefinition.get(parent) ?? []) : [];
   return [...own, ...inherited.filter((note) => !own.includes(note))];
@@ -201,12 +206,19 @@ export function noteText(notes: readonly ViewConcept[]): string {
         description === undefined ? `${title} (${path})` : `${title} (${path}): ${description}`,
       )
       .join("; ");
-  for (let index = entries.length - 1; index >= 0 && render().length > MAX_NOTE; index -= 1) {
+  for (
+    let index = entries.length - 1;
+    index >= 0 && Array.from(render()).length > MAX_NOTE;
+    index -= 1
+  ) {
     entries[index]!.description = undefined;
   }
-  while (entries.length > 1 && render().length > MAX_NOTE) entries.pop();
-  const text = render();
-  return text.length > MAX_NOTE ? `${text.slice(0, MAX_NOTE - 1)}…` : text;
+  while (entries.length > 1 && Array.from(render()).length > MAX_NOTE) entries.pop();
+  // Counted in code points, as @gavdi/cap-mcp counts them, so a cut never splits a character.
+  const characters = Array.from(render());
+  return characters.length > MAX_NOTE
+    ? `${characters.slice(0, MAX_NOTE - 1).join("")}…`
+    : characters.join("");
 }
 
 function titleOf(note: ViewConcept): string {
