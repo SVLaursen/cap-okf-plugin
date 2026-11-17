@@ -68,17 +68,17 @@ describe("parseQuestions", () => {
     ["domain: X\nquestions: []", /^\[okf\] questions\.yaml — has no questions/],
     [
       "domain: X\nquestions:\n  - id: a\n    question: Q?\n",
-      /^\[okf\] questions\.yaml — question a has no expect list/,
+      /^\[okf\] questions\.yaml:\d+ — question a has no expect list/,
     ],
     [
       "domain: X\nquestions:\n  - { id: a, question: Q?, expect: [x] }\n  - { id: a, question: R?, expect: [y] }\n",
-      /^\[okf\] questions\.yaml — the id a is used twice/,
+      /^\[okf\] questions\.yaml:\d+ — the id a is used twice/,
     ],
     [
       "domain: X\nquestions:\n  - { question: Q?, expect: [x] }\n",
-      /^\[okf\] questions\.yaml — question 1 has no id/,
+      /^\[okf\] questions\.yaml:\d+ — question 1 has no id/,
     ],
-    ["domain: [", /^\[okf\] questions\.yaml — isn't valid YAML/],
+    ["domain: [", /^\[okf\] questions\.yaml:\d+ — isn't valid YAML/],
   ])("refuses %j with an [okf] message and a fix", (text, message) => {
     expect(() => pilot.parseQuestions(text, "questions.yaml")).toThrow(message);
   });
@@ -140,7 +140,7 @@ describe("checkAnswer", () => {
 });
 
 describe("report", () => {
-  test("a Markdown table per question and a summary per run, without and with the bundle", () => {
+  test("a summary table per run, then every question with each run's answer", () => {
     const set = pilot.parseQuestions(QUESTIONS, "q.yaml");
     const runs: Run[] = [
       {
@@ -175,5 +175,121 @@ describe("the example set in test/pilot/example", () => {
     for (const run of set.runs) {
       expect(Object.keys(run.answers).sort()).toEqual(set.questions.map((q) => q.id).sort());
     }
+  });
+});
+
+// Review of 3.6: matching whole words, empty answers, unknown ids, and stricter question files.
+describe("checkAnswer matches whole words and phrases only", () => {
+  const question = {
+    id: "q",
+    question: "Q?",
+    expect: [["reserve"], ["parent"], ["reserve("]],
+    avoid: ["anyone can"],
+  };
+
+  test("a word inside a longer word doesn't count", () => {
+    expect(
+      pilot.checkAnswer(question, "The event BookReserved fires. Apparently, reserved."),
+    ).toMatchObject({
+      expectFound: [],
+      expectMissing: ["reserve", "parent", "reserve("],
+    });
+  });
+
+  test("a word next to punctuation counts, and so does a wording with punctuation", () => {
+    expect(pilot.checkAnswer(question, "Call reserve(copies); the parent, too.")).toMatchObject({
+      expectFound: ["reserve", "parent", "reserve("],
+    });
+  });
+});
+
+describe("answers: placeholders, wrong types and unknown ids", () => {
+  test("an empty placeholder counts as not answered", () => {
+    const run = pilot.parseRun("bundle: false\nanswers:\n  q:\n", "answers/x.yaml");
+    expect(run.answers).toEqual({});
+  });
+
+  test("an answer that isn't text is refused", () => {
+    expect(() =>
+      pilot.parseRun("bundle: false\nanswers:\n  q: [a, b]\n", "answers/x.yaml"),
+    ).toThrow(/^\[okf\] answers\/x\.yaml:3 — the answer to q isn't text/);
+  });
+
+  test("answers that aren't a map are refused", () => {
+    expect(() => pilot.parseRun("bundle: true\nanswers: [a]\n", "answers/x.yaml")).toThrow(
+      /^\[okf\] answers\/x\.yaml — has answers that aren't a map/,
+    );
+  });
+});
+
+describe("parseQuestions: stricter entries, with line numbers", () => {
+  test("a single avoid claim may be written without a list; a number is a valid id", () => {
+    const set = pilot.parseQuestions(
+      "domain: X\nquestions:\n  - { id: 5, question: Q?, expect: [x], avoid: anyone can }\n",
+      "q.yaml",
+    );
+    expect(set.questions[0]).toMatchObject({ id: "5", avoid: ["anyone can"] });
+  });
+
+  test.each([
+    ['[""]', /^\[okf\] q\.yaml:3 — question a has an empty or non-text expected fact/],
+    ["[[]]", /^\[okf\] q\.yaml:3 — question a has an empty or non-text expected fact/],
+    ["[{ a: 1 }]", /^\[okf\] q\.yaml:3 — question a has an empty or non-text expected fact/],
+  ])("expect: %s is refused", (expectList, message) => {
+    const text = `domain: X\nquestions:\n  - { id: a, question: Q?, expect: ${expectList} }\n`;
+    expect(() => pilot.parseQuestions(text, "q.yaml")).toThrow(message);
+  });
+
+  test("a question without question text is refused at its line", () => {
+    const text = "domain: X\nquestions:\n  - id: a\n    expect: [x]\n";
+    expect(() => pilot.parseQuestions(text, "q.yaml")).toThrow(
+      /^\[okf\] q\.yaml:3 — question a has no question text/,
+    );
+  });
+
+  test("a YAML syntax error names the line where the parser found it", () => {
+    expect(() => pilot.parseQuestions('domain: X\nquestions:\n  - "open\n', "q.yaml")).toThrow(
+      /^\[okf\] q\.yaml:\d+ — isn't valid YAML \(MISSING_CHAR\)/,
+    );
+  });
+});
+
+describe("readSet", () => {
+  const fs = jest.requireActual<typeof import("node:fs")>("node:fs");
+  const os = jest.requireActual<typeof import("node:os")>("node:os");
+  let folder: string;
+  beforeEach(() => {
+    folder = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-pilot-"));
+    fs.writeFileSync(
+      path.join(folder, "questions.yaml"),
+      "domain: X\nquestions:\n  - { id: a, question: Q?, expect: [x] }\n",
+    );
+  });
+  afterEach(() => fs.rmSync(folder, { recursive: true, force: true }));
+
+  test("a set without answers has no runs", () => {
+    expect(pilot.readSet(folder).runs).toEqual([]);
+  });
+
+  test("an answer to an id that isn't a question is refused, e.g. a typo", () => {
+    fs.mkdirSync(path.join(folder, "answers"));
+    fs.writeFileSync(path.join(folder, "answers", "r.yml"), "bundle: true\nanswers:\n  b: text\n");
+    expect(() => pilot.readSet(folder)).toThrow(
+      / — answers b, which isn't a question in questions\.yaml\./,
+    );
+  });
+});
+
+describe("report: escaping and quoting", () => {
+  test("a pipe in a run name is escaped, and each line of an answer is quoted", () => {
+    const set = pilot.parseQuestions(
+      "domain: X\nquestions:\n  - { id: a, question: Q?, expect: [x] }\n",
+      "q.yaml",
+    );
+    const text = pilot.report(set, [
+      { name: "a|b", agent: "A", bundle: true, answers: { a: "line 1\nline 2" } },
+    ]);
+    expect(text).toContain("| a\\|b | A | yes |");
+    expect(text).toContain("> line 1\n> line 2");
   });
 });

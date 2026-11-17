@@ -14,7 +14,7 @@ questions:
     expect:
       - reserve
       - [BookReserved, book reserved]
-    avoid: [AdminService]
+    avoid: [shoppers can't reserve]
 
   - id: genres
     question: Can genres be nested?
