@@ -77,6 +77,16 @@ describe("the cds add okf facet: options and folder state", () => {
     }
   });
 
+  test("okf as a file is an [okf] setup error, and nothing is written", async () => {
+    fs.writeFileSync(path.join(root, "package.json"), '{ "name": "shop" }\n');
+    fs.writeFileSync(path.join(root, "okf"), "oops\n");
+    await expect(okfFacet(root).run()).rejects.toMatchObject({
+      name: "SetupError",
+      message: expect.stringMatching(/^\[okf\] okf — is a file, not a folder\./),
+    });
+    expect(fs.readdirSync(root).sort()).toEqual(["okf", "package.json"]);
+  });
+
   test("an okf/ folder holding only dotfiles counts as empty", async () => {
     fs.writeFileSync(path.join(root, "package.json"), '{ "name": "shop" }\n');
     fs.mkdirSync(path.join(root, "okf"));

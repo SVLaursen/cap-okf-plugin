@@ -112,14 +112,23 @@ export function planOkfSetup(state: ProjectState): Plan {
 }
 
 // The folder cds build writes the bundle to (src/build/build-task.ts): <target>/okf, or gen/okf
-// for in-place builds.
-function bundleFolderOf(buildTarget: string): string {
+// for in-place builds. Undefined for a target outside the project, which git can't ignore.
+function bundleFolderOf(buildTarget: string): string | undefined {
   const target = buildTarget.replace(/^\.\//, "").replace(/\/+$/, "");
+  const isOutside = /^([/\\]|[A-Za-z]:|\.\.([/\\]|$))/.test(target);
+  if (isOutside) return undefined;
   return `${target === "." || target === "" ? "gen" : target}/okf`;
 }
 
-/** .gitignore with the bundle folder added, or undefined when a line already decides about it. */
-function withGitignoreEntry(gitignore: string | undefined, folder: string): string | undefined {
+/**
+ * .gitignore with the bundle folder added, or undefined when a line already decides about it or
+ * the folder is outside the project.
+ */
+function withGitignoreEntry(
+  gitignore: string | undefined,
+  folder: string | undefined,
+): string | undefined {
+  if (folder === undefined) return undefined;
   if (gitignore === undefined) return `${folder}\n`;
   const parent = folder.slice(0, folder.lastIndexOf("/"));
   // Git ignores trailing spaces only. "!gen/okf" is a decision too: the developer keeps it.
@@ -136,7 +145,7 @@ function withGitignoreEntry(gitignore: string | undefined, folder: string): stri
 function planOtherConfig(otherConfig: Readonly<Record<string, string>>, plan: Plan): void {
   for (const [name, text] of Object.entries(otherConfig)) {
     if (name.endsWith(".json")) {
-      const updated = updatedJson(text, name, (json) => addOkfTask(json));
+      const updated = updatedJson(text, name, (json) => addOkfTask(cdsConfigOf(json)));
       if (updated !== undefined) plan.changes.push({ path: name, content: updated });
     } else if (/\btasks\b/.test(text) && !/\bokf\b/.test(text)) {
       plan.notes.push(
@@ -172,11 +181,16 @@ function mentionsOkf(name: string, text: string): boolean {
   if (!name.endsWith(".json")) return /\bokf\b/.test(text);
   try {
     const json = objectOrUndefined(JSON.parse(text));
-    return json !== undefined && hasOkfSettings(json);
+    return json !== undefined && hasOkfSettings(cdsConfigOf(json));
   } catch {
     // CAP itself refuses a broken config file before cds add gets here.
     return true;
   }
+}
+
+// CAP reads a .cdsrc.json either flat or wrapped in "cds": { … } (cds-env.js: x.cds || x).
+function cdsConfigOf(json: Record<string, unknown>): Record<string, unknown> {
+  return objectOrUndefined(json["cds"]) ?? json;
 }
 
 // "[production]": { … } and the like.

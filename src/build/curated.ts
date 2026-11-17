@@ -14,7 +14,7 @@ export const CURATED_FOLDER = "okf";
  * and their text is the UTF-8 reading when they are valid UTF-8, else "".
  */
 export async function readCuratedFolder(folder: string): Promise<CuratedFile[]> {
-  await refuseFile(folder);
+  await assertNotAFile(folder);
   const source = new FileBundleSource(folder);
   const files: CuratedFile[] = [];
   for (const bundlePath of await source.list()) {
@@ -30,9 +30,11 @@ export async function readCuratedFolder(folder: string): Promise<CuratedFile[]> 
   return files;
 }
 
-// okf as a file is a setup mistake the developer can fix, so it gets an [okf] message, not a
-// stack trace. A missing folder is fine: the app has no curated files.
-async function refuseFile(folder: string): Promise<void> {
+/**
+ * Throws an [okf] setup error when the curated folder is a file: a mistake the developer can
+ * fix, so a message, not a stack trace. A missing folder is fine: the app has no curated files.
+ */
+export async function assertNotAFile(folder: string): Promise<void> {
   const found = await stat(folder).catch(missingAsUndefined);
   if (found !== undefined && !found.isDirectory()) {
     throw setupError(

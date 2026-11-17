@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { assertNotAFile } from "../build/curated";
 import type { Cds } from "../index";
 import { planOkfSetup, type ProjectState } from "./plan";
 
@@ -76,6 +77,7 @@ async function projectState(cds: Cds): Promise<ProjectState> {
 
 // Dotfiles (e.g. .DS_Store) don't count: the bundle never includes them.
 async function isMissingOrEmpty(folder: string): Promise<boolean> {
+  await assertNotAFile(folder);
   if (!existsSync(folder)) return true;
   const entries = await readdir(folder);
   return entries.every((entry) => entry.startsWith("."));

@@ -95,6 +95,13 @@ describe("planOkfSetup: .gitignore", () => {
     );
   });
 
+  test.each(["/tmp/out", "../dist", "C:\\out"])(
+    "a build target outside the project (%j) gets no entry: git can't ignore it",
+    (buildTarget) => {
+      expect(paths({ ...NEW_APP, buildTarget })).not.toContain(".gitignore");
+    },
+  );
+
   test("follows the build target: dist/okf; in-place builds write gen/okf", () => {
     expect(changeTo({ ...NEW_APP, buildTarget: "dist" }, ".gitignore")).toBe(
       "node_modules/\ndist/okf\n",
@@ -118,6 +125,11 @@ describe("planOkfSetup: cds.okf is never set twice", () => {
       "in .cdsrc.json, in a profile",
       '{ "name": "x" }',
       { ".cdsrc.json": '{ "[production]": { "okf": { "serve": { "static": true } } } }' },
+    ],
+    [
+      "in .cdsrc.json, wrapped in cds as CAP allows",
+      '{ "name": "x" }',
+      { ".cdsrc.json": '{ "cds": { "okf": { "include": "all" } } }' },
     ],
     ["in .cdsrc.yaml", '{ "name": "x" }', { ".cdsrc.yaml": "okf:\n  include: all\n" }],
     ["in .cdsrc.js", '{ "name": "x" }', { ".cdsrc.js": "module.exports = { okf: {} }\n" }],
@@ -151,6 +163,12 @@ describe("planOkfSetup: an app's own build.tasks list (ADR-0005)", () => {
     const updated = changeTo({ ...NEW_APP, otherConfig: { ".cdsrc.json": cdsrc } }, ".cdsrc.json")!;
     expect(JSON.parse(updated).build.tasks).toEqual([{ for: "nodejs" }, { for: "okf" }]);
     expect(updated).toMatch(/^\{\n\t"build"/);
+  });
+
+  test("gets { for: okf } in a .cdsrc.json wrapped in cds", () => {
+    const cdsrc = '{ "cds": { "build": { "tasks": [{ "for": "nodejs" }] } } }';
+    const updated = changeTo({ ...NEW_APP, otherConfig: { ".cdsrc.json": cdsrc } }, ".cdsrc.json")!;
+    expect(JSON.parse(updated).cds.build.tasks).toEqual([{ for: "nodejs" }, { for: "okf" }]);
   });
 
   test("in .cdsrc.yaml, a note asks the developer to add the task", () => {
