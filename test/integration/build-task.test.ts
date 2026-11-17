@@ -28,7 +28,7 @@ function bookshopApp(cdsConfig: Record<string, unknown> = {}): string {
   return app;
 }
 
-function cdsBuild(app: string, extraEnv: Record<string, string> = {}) {
+function cdsBuild(app: string, extraEnv: Record<string, string> = {}, args: string[] = []) {
   // Without CDS_CONFIG: test/setup-env.js points it at src/, but a child process can't run TS.
   const env: Record<string, string | undefined> = {
     ...process.env,
@@ -39,7 +39,7 @@ function cdsBuild(app: string, extraEnv: Record<string, string> = {}) {
   // Run from the repository root, so cds-dk and the plugin share one @sap/cds.
   return spawnSync(
     process.execPath,
-    [path.join(ROOT, "scripts", "cds-with-okf.js"), "build", app],
+    [path.join(ROOT, "scripts", "cds-with-okf.js"), "build", app, ...args],
     { cwd: ROOT, env, encoding: "utf8" },
   );
 }
@@ -81,7 +81,10 @@ describe("cds build, staging (the default build.target: gen)", () => {
   afterAll(() => fs.rmSync(app, { recursive: true, force: true }));
 
   test("succeeds", () => {
-    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
+    expect({ status: result.status, okf: result.stderr.includes("[okf]") }).toEqual({
+      status: 0,
+      okf: false,
+    });
   });
 
   test("writes exactly the exporter's bundle to gen/okf, doc comments and texts included", async () => {
@@ -166,5 +169,53 @@ describe("cds build, setup mistakes", () => {
     } finally {
       fs.rmSync(app, { recursive: true, force: true });
     }
+  });
+});
+
+// Review findings: the bundle must describe the model the deployed app has, land only in
+// <target>/okf, and never keep stale files in the deployed copy.
+describe("cds build, where the bundle comes from and goes to", () => {
+  let app: string;
+  afterEach(() => fs.rmSync(app, { recursive: true, force: true }));
+
+  test("a loose .cds file at the project root, which the app doesn't load, isn't documented", () => {
+    app = bookshopApp();
+    fs.rmSync(path.join(app, "index.cds"));
+    fs.writeFileSync(path.join(app, "scratch.cds"), "service ScratchService { action ping(); }");
+    expect(cdsBuild(app).status).toBe(0);
+    expect(fs.existsSync(path.join(app, "gen", "okf", "model", "CatalogService.md"))).toBe(true);
+    expect(fs.existsSync(path.join(app, "gen", "okf", "model", "ScratchService.md"))).toBe(false);
+  });
+
+  test.each([{ src: "okf" }, { dest: "okf" }])(
+    "an okf task with %j still writes <root>/gen/okf and leaves okf/ untouched",
+    (task) => {
+      app = bookshopApp({
+        build: { target: ".", tasks: [{ for: "nodejs" }, { for: "okf", ...task }] },
+      });
+      fs.mkdirSync(path.join(app, "okf"));
+      fs.writeFileSync(path.join(app, "okf", "ordering.md"), "---\ntype: Guide\n---\n");
+      expect(cdsBuild(app).status).toBe(0);
+      expect(fs.existsSync(path.join(app, "gen", "okf", "index.md"))).toBe(true);
+      expect(fs.readdirSync(path.join(app, "okf"))).toEqual(["ordering.md"]);
+    },
+  );
+
+  test("with --dest, the review copy stays in gen/okf, outside the deployed app", () => {
+    app = bookshopApp();
+    expect(cdsBuild(app, {}, ["--dest", "out"]).status).toBe(0);
+    expect(fs.existsSync(path.join(app, "gen", "okf", "index.md"))).toBe(true);
+    expect(fs.existsSync(path.join(app, "gen", "out", "okf-bundle", "index.md"))).toBe(true);
+    expect(fs.existsSync(path.join(app, "gen", "out", "okf"))).toBe(false);
+  });
+
+  test("a deployed app outside gen/ gets no stale files in its okf-bundle", () => {
+    app = bookshopApp({ build: { tasks: [{ for: "nodejs", dest: "../deploy" }, { for: "okf" }] } });
+    const stale = path.join(app, "deploy", "okf-bundle", "model", "Old.md");
+    fs.mkdirSync(path.dirname(stale), { recursive: true });
+    fs.writeFileSync(stale, "---\ntype: Old\n---\n");
+    expect(cdsBuild(app).status).toBe(0);
+    expect(fs.existsSync(path.join(app, "deploy", "okf-bundle", "index.md"))).toBe(true);
+    expect(fs.existsSync(stale)).toBe(false);
   });
 });

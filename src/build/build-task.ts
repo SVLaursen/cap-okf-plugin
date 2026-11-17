@@ -1,19 +1,23 @@
 // The `okf` build task for `cds build` (task 2.9, ADR-0005 (b), ADR-0007).
-// - It writes the bundle to gen/okf, for review and CI. Before each build CAP deletes gen/ in
-//   staging builds, and the base plugin's clean() deletes gen/okf in in-place builds, so no file
-//   from an earlier build survives.
+// - It writes the bundle to <build target>/okf (gen/okf), for review and CI, whatever src or dest
+//   a task list or --dest gives: those are for deployable modules, and could point into the
+//   curated okf/ folder. Both of its folders are emptied first, so no file from an earlier build
+//   survives, also with --clean false or a deployed app outside gen/.
+// - It documents the model the deployed app has: the build's default model paths, without the
+//   project root itself (which would pull in loose .cds files) and without feature toggles.
 // - In staging builds it puts the same files into the Node.js app that is deployed,
 //   <nodejs dest>/okf-bundle/ (gen/srv/okf-bundle/), where the server finds them in production.
 // - It validates the bundle: warnings are reported, errors fail the build before the bundle is
 //   put into the deployed app.
 // - In-place builds (build.target: ".") write <root>/gen/okf only; the curated okf/ folder is
 //   never touched.
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { serializeConcept } from "../core/concept";
 import { validateBundle, type BundleFile } from "../core/validate";
 import type { Csn } from "../export/csn";
 import type { Cds } from "../index";
-import { isSetupError } from "./errors";
+import { SetupError } from "./errors";
 import { buildMessagesOf } from "./findings";
 import { generateConcepts } from "./generate";
 
@@ -32,11 +36,11 @@ interface BuildTask {
 
 /** The parts of CAP's build plugin base class (cds.build.Plugin) this task uses. */
 interface BuildPlugin {
-  readonly task: BuildTask;
+  readonly task: BuildTask & { options: { model?: string[] } };
   readonly context: { tasks: BuildTask[] };
   init(): void;
   options(): Record<string, unknown>;
-  model(): Promise<unknown>;
+  baseModel(): Promise<unknown>;
   write(data: string): { to(file: string): Promise<void> };
   pushMessage(message: string, severity: string): void;
 }
@@ -62,9 +66,8 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
     static taskDefaults = { src: "." };
 
     override init(): void {
-      // The base init() adds gen/ for in-place builds, so the result is never <root>/okf.
-      super.init();
-      this.task.dest = path.join(this.task.dest, BUNDLE_FOLDER);
+      this.task.dest = bundleFolder(cds);
+      this.task.options.model = withoutProjectRoot(cds, this.task.options.model);
     }
 
     // The model with doc comments: they become the concepts' descriptions (ADR-0007).
@@ -73,31 +76,35 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
     }
 
     async build(): Promise<void> {
-      const model = await this.model();
+      // Toggled features aren't part of every tenant's app, so the bundle leaves them out.
+      const model = await this.baseModel();
       // CAP has already logged that the app has no CDS model.
       if (model === undefined || model === null) return;
       const files = bundleFiles(cds, build, model as Csn);
       await this.writeFiles(files, this.task.dest);
-      this.failOnErrors(files);
+      this.reportFindings(files);
       const deployedApp = this.deployedNodejsApp();
       if (deployedApp !== undefined) {
         await this.writeFiles(files, path.join(deployedApp, DEPLOYED_BUNDLE_FOLDER));
       }
     }
 
+    // The folder is cap-okf's alone, so it is emptied first.
     private async writeFiles(files: BundleFile[], folder: string): Promise<void> {
+      await rm(folder, { recursive: true, force: true });
       for (const file of files) {
         await this.write(file.text).to(path.join(folder, ...file.path.split("/")));
       }
     }
 
     // Warnings are logged after the build; errors fail it, listed one per message.
-    private failOnErrors(files: BundleFile[]): void {
+    private reportFindings(files: BundleFile[]): void {
       const { errors, warnings } = buildMessagesOf(validateBundle(files));
       for (const warning of warnings) this.pushMessage(warning, build.Plugin.WARNING);
       if (errors.length > 0) {
         throw new build.BuildError(
-          `[okf] ${this.task.dest} — the bundle breaks OKF v0.2 in ${errors.length} place(s).`,
+          `[okf] ${path.relative(cds.root, this.task.dest)} — the bundle breaks OKF v0.2 in ${errors.length} place(s).\n` +
+            "  Fix the problems listed; the bundle stays there for review, but isn't deployed.",
           errors,
         );
       }
@@ -113,6 +120,19 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
   };
 }
 
+/** <root>/<build target>/okf; for in-place builds (target "."), <root>/gen/okf, as CAP's base. */
+function bundleFolder(cds: Cds): string {
+  const target = (cds.env as unknown as { build?: { target?: string } }).build?.target ?? "gen";
+  const output = target === "." ? "gen" : target;
+  return path.resolve(cds.root, output, BUNDLE_FOLDER);
+}
+
+// CAP adds the task's src (".") to its model paths, and loading the project root would pull in
+// .cds files the app itself never loads.
+function withoutProjectRoot(cds: Cds, model: string[] | undefined): string[] | undefined {
+  return model?.filter((each) => path.resolve(cds.root, each) !== path.resolve(cds.root));
+}
+
 // A setup mistake becomes a BuildError: CAP's CLI prints its message plainly, and any other
 // error with brackets around it.
 function bundleFiles(cds: Cds, build: BuildApi, model: Csn): BundleFile[] {
@@ -122,7 +142,7 @@ function bundleFiles(cds: Cds, build: BuildApi, model: Csn): BundleFile[] {
       text: serializeConcept(concept),
     }));
   } catch (error) {
-    if (isSetupError(error)) throw new build.BuildError(error.message, []);
+    if (error instanceof SetupError) throw new build.BuildError(error.message, []);
     throw error;
   }
 }

@@ -13,6 +13,8 @@ import { registerBuildTask } from "../../src/build/build-task";
 jest.mock("../../src/core/validate", () => ({ validateBundle: jest.fn() }));
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "bookshop");
+// The repository's own gen/, where nothing may land.
+const ROOT_GEN = path.join(__dirname, "..", "..", "gen");
 
 const WARNING: Finding = {
   file: "model/x/A.md",
@@ -38,7 +40,12 @@ function okfPlugin(out: string): PluginUnderTest {
   const dkBuild = jest.requireActual<object>("@sap/cds-dk/lib/build");
   let registered: (new () => PluginUnderTest) | undefined;
   const register = (_id: string, plugin: new () => PluginUnderTest) => (registered = plugin);
-  registerBuildTask(Object.create(cds, { build: { value: { ...dkBuild, register } } }));
+  // The bundle goes to <cds.root>/gen/okf, so cds.root is the test's own folder.
+  const testCds = Object.create(cds, {
+    build: { value: { ...dkBuild, register } },
+    root: { value: out },
+  });
+  registerBuildTask(testCds);
   const plugin = new registered!();
   plugin._task = { for: "okf", src: FIXTURE, dest: out, options: { model: [FIXTURE] } };
   plugin._context = {
@@ -80,7 +87,8 @@ describe("the okf build task and validation findings", () => {
       messages: [expect.stringMatching(/^\[okf\] model\/x\/A\.md:2 — "type" is empty \(R2\)/)],
     });
     // gen/okf stays for review; only the deployed copy is held back.
-    expect(fs.existsSync(path.join(out, "okf", "index.md"))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT_GEN, "okf"))).toBe(false);
+    expect(fs.existsSync(path.join(out, "gen", "okf", "index.md"))).toBe(true);
     expect(fs.existsSync(path.join(out, "srv", "okf-bundle"))).toBe(false);
   });
 });
