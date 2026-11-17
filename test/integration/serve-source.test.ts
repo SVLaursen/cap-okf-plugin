@@ -58,6 +58,18 @@ describe("startupBundleSource", () => {
       ),
     ]);
   });
+});
+
+describe("startupBundleSource: curated files with errors", () => {
+  let root: string;
+  let warnings: string[];
+  const log = { warn: (message: string) => warnings.push(message) };
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-serve-"));
+    fs.cpSync(FIXTURE, root, { recursive: true });
+    warnings = [];
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
   test("a curated file with errors is left out and reported; the rest is served", async () => {
     fs.mkdirSync(path.join(root, "okf", "model"), { recursive: true });
@@ -73,8 +85,9 @@ describe("startupBundleSource", () => {
     expect(files).not.toContain("broken.md");
     expect(files).not.toContain("model/x.md");
     expect(warnings).toEqual([
-      expect.stringMatching(/^\[okf\] okf\/broken\.md:1 — .*\(R1\)/),
+      // Problems with okf/'s layout first, then those the OKF validator finds.
       expect.stringMatching(/^\[okf\] okf\/model\/x\.md:1 — .*\(L1\)/),
+      expect.stringMatching(/^\[okf\] okf\/broken\.md:1 — .*\(R1\)/),
     ]);
   });
 });

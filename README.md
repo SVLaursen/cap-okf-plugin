@@ -6,9 +6,10 @@ A CAP plugin that turns your CDS model, plus any notes you write yourself, into 
 app.
 
 > **Status:** pre-release, not yet on npm. Release 0.1 covers generating the bundle (`cds build`,
-> `cds compile`, `cds add okf`). Serving it from a running app, as a static route or over MCP
-> through [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) or
-> [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp), is planned for 0.2. Targets
+> `cds compile`, `cds add okf`). Serving it from a running app: the static route is in place
+> (see [Serving the bundle](#serving-the-bundle)); MCP through
+> [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) or
+> [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp) is planned for 0.2. Targets
 > OKF v0.2. Roadmap: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## What is OKF?
@@ -200,7 +201,7 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | Setting | Values | Default | What it does |
 | --- | --- | --- | --- |
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
-| `serve.static` | `false`, `true`, `"/path"` | `false` | *Planned for 0.2.* Serves the bundle as Markdown files from a route. |
+| `serve.static` | `false`, `true`, `"/path"` | `false` | Serves the bundle's files from a route: `true` means `/okf`. See [Serving the bundle](#serving-the-bundle). |
 | `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. The object's shape follows [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md), which is still a proposal, so it may change. |
 
 Nothing is ever served unless you turn it on ([ADR-0002](docs/adr/0002-serving-is-opt-in.md)).
@@ -241,7 +242,7 @@ Requires: `authenticated-user`
 ```
 
 It shows the rules as CAP applies them, including those inherited from the service or a
-composition's root. When serving arrives (0.2), cap-okf removes these sections for requests
+composition's root. When it serves the bundle, cap-okf removes these sections for requests
 without an authenticated user ([ADR-0003](docs/adr/0003-authorization-sections.md)).
 
 **Only the section is hidden.** Everything else in a concept is shown to every reader: doc
@@ -255,11 +256,37 @@ app (`gen/srv/okf-bundle/`). If you commit `gen/okf`, publish it, or ship it any
 consider whether your role names and `where` conditions may be seen. `cds add okf` puts
 `gen/okf` in `.gitignore` for this reason.
 
+## Serving the bundle
+
+Turn on the static route, for example only in development:
+
+```json
+"cds": { "okf": { "[development]": { "serve": { "static": true } } } }
+```
+
+Then `cds watch` serves the bundle at `/okf/`:
+
+- `GET /okf/` or `/okf/index.md` returns the root index; a folder path such as `/okf/model/`
+  returns its `index.md`; every file is served as `text/markdown; charset=utf-8` (other files
+  as `text/plain`).
+- Requests go through CAP's own authentication. Readers who aren't authenticated get every file
+  without its authorization sections; authenticated users get them in full, whatever their
+  roles.
+- Links in concepts are bundle-absolute (`/model/User.md`): resolve them against the route
+  (`/okf/model/User.md`), not the server's root.
+- The route isn't listed on CAP's index page.
+- Where the bundle comes from: a deployed app serves its built `okf-bundle/` folder, exactly what
+  `cds build` validated. Without one (`cds watch`, `cds serve`, tests), cap-okf generates the
+  bundle in memory at startup from the app's model and `okf/`; curated files with errors are left
+  out and reported, so startup never fails over them. Under `NODE_ENV=production` that gets a
+  warning, because the app was deployed without the okf build task. Changes to `okf/` show up
+  when the server restarts (`cds watch` restarts on CDS changes).
+
 ## Building and deploying
 
 `cds build` writes the bundle to `gen/okf` (to `gen/okf` also for in-place builds with
 `build.target: "."`), for review and CI. For a Node.js app it also puts the same files into the
-app it deploys: `gen/srv/okf-bundle/`. That copy is what a deployed app will serve in 0.2.
+app it deploys: `gen/srv/okf-bundle/`. That copy is what a deployed app serves.
 
 The build validates the bundle against OKF v0.2. Errors fail the build, and nothing goes into
 the deployed app; warnings are listed and never fail it.

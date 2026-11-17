@@ -70,7 +70,10 @@ describe("the static route and authorization sections (ADR-0003)", () => {
   test("an anonymous reader gets no authorization section, generated or curated", async () => {
     for (const url of [ORDERS, GUIDE]) {
       const { data } = await GET(url);
-      expect({ url, auth: /okf:auth|## Authorization|createdBy/.test(data) }).toEqual({
+      expect({
+        url,
+        auth: /okf:auth|## Authorization|createdBy = \$user|only see/.test(data),
+      }).toEqual({
         url,
         auth: false,
       });
