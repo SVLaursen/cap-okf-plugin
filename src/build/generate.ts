@@ -38,11 +38,12 @@ export async function generateBundle(cds: Cds, model: Csn): Promise<MergedBundle
   return mergeBundle(concepts, curated, OKF_VERSION);
 }
 
-// CAP records $location relative to the working directory; messages name the file from the
-// project root, as the developer sees it (db/schema.cds). Real paths on both sides, because the
-// root may be reached through a link (on macOS, /var is /private/var).
+// CAP records $location relative to cds.root; messages name the file from the project root, as
+// the developer sees it (db/schema.cds), also when cds build runs from another folder. Real paths
+// on both sides, because the root may be reached through a link (on macOS, /var is /private/var).
 function fromProjectRoot(cds: Cds, file: string): string {
-  return path.relative(realPathOrSame(cds.root), realPathOrSame(path.resolve(file)));
+  const root = realPathOrSame(cds.root);
+  return path.relative(root, realPathOrSame(path.resolve(cds.root, file)));
 }
 
 function realPathOrSame(file: string): string {

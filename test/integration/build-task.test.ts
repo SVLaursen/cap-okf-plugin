@@ -290,8 +290,10 @@ describe("cds build with a curated okf/ folder: curated mistakes", () => {
 
 // Task 3.2: a model clash fails the build with the .cds file and line, plainly.
 describe("cds build with definitions whose paths clash", () => {
+  // Built from the repository root, not the app: CAP records $location relative to cds.root.
+  // The app's real path, so no link (on macOS, /var → /private/var) can hide a wrong base.
   test("fails with the [okf] message naming the .cds file and line, and no stack trace", () => {
-    const app = bookshopApp();
+    const app = fs.realpathSync(bookshopApp());
     try {
       fs.writeFileSync(
         path.join(app, "db", "clash.cds"),
@@ -300,7 +302,10 @@ describe("cds build with definitions whose paths clash", () => {
       const result = cdsBuild(app, { CDS_OKF_INCLUDE: "all" });
       const output = result.stdout + result.stderr;
       expect(result.status).not.toBe(0);
-      expect(output).toMatch(/\[okf\] db\/clash\.cds:3 — clash\.books: .* \(M1\)\./);
+      expect(output).toContain(
+        "[okf] db/clash.cds:3 — clash.books: its path model/clash/books.md differs from " +
+          "model/clash/Books.md (clash.Books, db/clash.cds:2) only in letter case or Unicode form (M1).",
+      );
       expect(output).not.toMatch(/\n\s+at /);
     } finally {
       fs.rmSync(app, { recursive: true, force: true });

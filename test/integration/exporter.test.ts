@@ -4,7 +4,7 @@ import path from "node:path";
 import cds from "@sap/cds";
 import { serializeConcept, type Concept } from "../../src/core/concept";
 import { validateBundle } from "../../src/core/validate";
-import type { Csn } from "../../src/export/csn";
+import type { Csn, CsnDefinition } from "../../src/export/csn";
 import { exportModel, type ExportOptions } from "../../src/export/exporter";
 import { defaultLanguageTexts } from "../../src/export/i18n";
 
@@ -179,6 +179,77 @@ describe("exportModel and path collisions", () => {
     ],
   ])("is refused for %s", (_label, definitions, message) => {
     expect(() => exportModel({ definitions }, OPTIONS)).toThrow(message);
+  });
+});
+
+const at = (file: string, line: number) => ({ file, line });
+
+/** Hand-written CSN with a non-enumerable $location, as cds.load records it. */
+function placed(location?: { file: string; line?: number }): CsnDefinition {
+  const definition: CsnDefinition = { kind: "entity", elements: {} };
+  if (location !== undefined) Object.defineProperty(definition, "$location", { value: location });
+  return definition;
+}
+
+/** The message of the clash error exportModel throws for `definitions`. */
+function messageOf(
+  definitions: Record<string, CsnDefinition>,
+  sourceFile?: (f: string) => string,
+): string {
+  const options: ExportOptions = { include: "all", now: NOW, version: VERSION };
+  try {
+    exportModel({ definitions }, { ...options, ...(sourceFile && { sourceFile }) });
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error("no clash");
+}
+
+describe("exportModel and path collisions, messages", () => {
+  test("without $location, names the definitions, the rule and the fix", () => {
+    expect(messageOf({ "my.Books": placed(), "my.books": placed() })).toBe(
+      "[okf] my.books — its path model/my/books.md differs from model/my/Books.md (my.Books) " +
+        "only in letter case or Unicode form (M1).\n" +
+        "  Rename one of the definitions, or leave one out with @okf: false.",
+    );
+  });
+
+  test("the same path names both definitions' files and lines", () => {
+    const message = messageOf({
+      "my.index": placed(at("db/a.cds", 2)),
+      "my.index_": placed(at("db/b.cds", 7)),
+    });
+    expect(message).toMatch(
+      /^\[okf\] db\/b\.cds:7 — my\.index_: its path model\/my\/index_\.md is also the path of my\.index, db\/a\.cds:2 \(M1\)\.\n/,
+    );
+  });
+
+  test("a folder clash names the definition with the new spelling and the one that first used the folder", () => {
+    const message = messageOf({
+      "my.A.x": placed(at("db/a.cds", 1)),
+      "my.a.y": placed(at("db/b.cds", 4)),
+    });
+    expect(message).toMatch(
+      /^\[okf\] db\/b\.cds:4 — my\.a\.y: the folder model\/my\/a differs from model\/my\/A \(my\.A\.x, db\/a\.cds:1\)/,
+    );
+  });
+
+  test("sourceFile names the files, and Windows separators become /", () => {
+    const message = messageOf(
+      { "my.Books": placed(at("db\\a.cds", 2)), "my.books": placed(at("db\\a.cds", 3)) },
+      (file) => `app\\${file}`,
+    );
+    expect(message).toMatch(
+      /^\[okf\] app\/db\/a\.cds:3 — my\.books: .*\(my\.Books, app\/db\/a\.cds:2\)/,
+    );
+  });
+
+  test("a $location without a line names the file alone", () => {
+    const message = messageOf({
+      "my.Books": placed({ file: "db/a.cds" }),
+      "my.books": placed({ file: "db/a.cds" }),
+    });
+    expect(message).toMatch(/^\[okf\] db\/a\.cds — my\.books: /);
   });
 });
 

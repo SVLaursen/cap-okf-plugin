@@ -24,8 +24,8 @@ export interface ExportOptions {
   /** i18n texts in the default language (task 2.5); without them, placeholders show their keys. */
   texts?: TextLookup;
   /**
-   * How messages name a .cds file from a definition's $location, e.g. relative to the project
-   * root; by default as CAP recorded it (relative to the working directory).
+   * How messages name a .cds file from a definition's $location; by default as CAP recorded it
+   * (relative to cds.root, the project root).
    */
   sourceFile?: (file: string) => string;
 }
@@ -51,7 +51,7 @@ export function exportModel(model: Csn, options: ExportOptions): Concept[] {
     // A stamp of its own per concept, so changing one later can't change the others.
     return {
       name,
-      where: whereDefined(name, definition, options.sourceFile ?? ((file) => file)),
+      where: whereDefined(definition, options.sourceFile ?? ((file) => file)),
       concept: { ...concept, frontmatter: { ...concept.frontmatter, generated: { by, at } } },
     };
   });
@@ -92,20 +92,21 @@ export class ModelClashError extends Error {
   }
 }
 
-/** A definition and where it is written: "srv/cat.cds:3", or its name when CSN has no location. */
+/** A definition and where it is written, e.g. "srv/cat.cds:3"; undefined without $location. */
 interface Placed {
   name: string;
-  where: string;
+  where: string | undefined;
 }
 
 function whereDefined(
-  name: string,
   definition: CsnDefinition,
   sourceFile: (file: string) => string,
-): string {
+): string | undefined {
   const location = definition.$location;
-  if (location === undefined) return name;
-  return `${sourceFile(location.file).split("\\").join("/")}:${location.line}`;
+  if (location === undefined) return undefined;
+  const file = sourceFile(location.file).split("\\").join("/");
+  // CSN from other tools may record a file without a line.
+  return typeof location.line === "number" ? `${file}:${location.line}` : file;
 }
 
 /**
@@ -136,14 +137,14 @@ function clashError(
 ): ModelClashError {
   const what = isFolder ? `the folder ${path}` : `its path ${path}`;
   const earlierOne =
-    earlier.where === earlier.name ? earlier.name : `${earlier.name}, ${earlier.where}`;
+    earlier.where === undefined ? earlier.name : `${earlier.name}, ${earlier.where}`;
   const problem =
     earlier.path === path
       ? `${what} is also the path of ${earlierOne}`
       : `${what} differs from ${earlier.path} (${earlierOne}) only in letter case or Unicode form`;
   // With a location: "srv/cat.cds:3 — my.books: …"; without one: "my.books — …".
-  const isLocated = clashing.where !== clashing.name;
-  const start = isLocated ? `${clashing.where} — ${clashing.name}:` : `${clashing.name} —`;
+  const start =
+    clashing.where === undefined ? `${clashing.name} —` : `${clashing.where} — ${clashing.name}:`;
   return new ModelClashError(
     `[okf] ${start} ${problem} (M1).\n` +
       "  Rename one of the definitions, or leave one out with @okf: false.",

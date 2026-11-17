@@ -39,9 +39,10 @@ export interface CsnDefinition extends CsnTyped {
   kind?: string;
   /**
    * Where the definition is written, as cds.load records it (not enumerable): the .cds file,
-   * relative to the working directory, and its line. Missing in hand-written CSN.
+   * relative to cds.root, and its line. Missing in hand-written CSN; other tools may leave out
+   * the line.
    */
-  $location?: { file: string; line: number };
+  $location?: { file: string; line?: number };
   /** Aspects and entities it includes, e.g. ["cuid", "managed"]. */
   includes?: string[];
   /** Set on projections ("as projection on …"); from.ref[0] names the source. */
