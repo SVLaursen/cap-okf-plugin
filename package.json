@@ -7,6 +7,7 @@
   "files": [
     "cds-plugin.js",
     "lib/",
+    "srv/",
     "README.md",
     "LICENSE"
   ],

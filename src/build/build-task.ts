@@ -21,6 +21,7 @@ import { ModelClashError } from "../export/exporter";
 import type { Cds } from "../index";
 import { SetupError } from "./errors";
 import { buildMessagesOf, namedFindings } from "./findings";
+import { addToolsModel } from "../serve/mcp/tools-model";
 import { generateBundle } from "./generate";
 
 /** The bundle's folder inside the build output: gen/okf. */
@@ -67,6 +68,17 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
     // The project root: the task loads the same model paths CAP gives every build task.
     static taskDefaults = { src: "." };
 
+    // cds build rebuilds cds.env before it asks hasTask() (no task list) or constructs the
+    // listed plugins, so OkfService's model is added again here (ADR-0005 (e)).
+    static hasTask(): boolean {
+      return addToolsModel(cds);
+    }
+
+    constructor() {
+      super();
+      addToolsModel(cds);
+    }
+
     override init(): void {
       this.task.dest = bundleFolder(cds);
       this.task.options.model = withoutProjectRoot(cds, this.task.options.model);
@@ -85,7 +97,7 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
       const bundle = await mergedBundle(cds, build, model as Csn);
       await this.writeFiles(bundle.files, this.task.dest);
       this.reportFindings(bundle);
-      const deployedApp = this.deployedNodejsApp();
+      const deployedApp = deployedNodejsApp(cds, this.context.tasks);
       if (deployedApp !== undefined) {
         await this.writeFiles(bundle.files, path.join(deployedApp, DEPLOYED_BUNDLE_FOLDER));
       }
@@ -116,15 +128,15 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
         );
       }
     }
-
-    // Only a staging build is deployed as built; an in-place build has no deployed app folder.
-    // The list of tasks is complete only inside build() (ADR-0007).
-    private deployedNodejsApp(): string | undefined {
-      const target = (cds.env as unknown as { build?: { target?: string } }).build?.target;
-      if (target === ".") return undefined;
-      return this.context.tasks.find((task) => task.for === "nodejs")?.dest;
-    }
   };
+}
+
+// Only a staging build is deployed as built; an in-place build has no deployed app folder.
+// The list of tasks is complete only inside build() (ADR-0007).
+function deployedNodejsApp(cds: Cds, tasks: BuildTask[]): string | undefined {
+  const target = (cds.env as unknown as { build?: { target?: string } }).build?.target;
+  if (target === ".") return undefined;
+  return tasks.find((task) => task.for === "nodejs")?.dest;
 }
 
 /** <root>/<build target>/okf; for in-place builds (target "."), <root>/gen/okf, as CAP's base. */
