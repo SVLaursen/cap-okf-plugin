@@ -17,6 +17,7 @@ import path from "node:path";
 import type { MergedBundle, MergedFile } from "../bundle/merge";
 import { validateBundle } from "../core/validate";
 import type { Csn } from "../export/csn";
+import { ModelClashError } from "../export/exporter";
 import type { Cds } from "../index";
 import { SetupError } from "./errors";
 import { buildMessagesOf, namedFindings } from "./findings";
@@ -145,7 +146,10 @@ async function mergedBundle(cds: Cds, build: BuildApi, model: Csn): Promise<Merg
   try {
     return await generateBundle(cds, model);
   } catch (error) {
-    if (error instanceof SetupError) throw new build.BuildError(error.message, []);
+    // Mistakes the developer fixes in the app (config or model) print plainly.
+    if (error instanceof SetupError || error instanceof ModelClashError) {
+      throw new build.BuildError(error.message, []);
+    }
     throw error;
   }
 }

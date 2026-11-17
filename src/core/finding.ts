@@ -17,6 +17,9 @@ import type { KeyPath, LocatedConcept } from "./concept";
  * - L1 (error) a curated file is in model/, which belongs to the generator, or its path differs
  *   from another only in letter case or Unicode form;
  * - L2 (warning) a curated root index.md doesn't link to model/.
+ *
+ * M1 (error, thrown by the exporter as ModelClashError, not a Finding): two CDS definitions
+ * whose concepts would share a path, or paths that differ only in letter case or Unicode form.
  */
 export type Rule = "R1" | "R2" | "R3" | "W1" | "W2" | "W3" | "W4" | "L1" | "L2";
 

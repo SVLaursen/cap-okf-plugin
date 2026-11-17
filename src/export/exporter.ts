@@ -5,7 +5,7 @@
 import { fold, pathPrefixes } from "../bundle/paths";
 import type { Concept } from "../core/concept";
 import { compareText, generateIndex, generateIndexes } from "../core/index-md";
-import type { Csn } from "./csn";
+import type { Csn, CsnDefinition } from "./csn";
 import { defaultMapperContext, type TextLookup } from "./mappers/context";
 import { mapperFor, registryKeyOf } from "./mappers/index";
 import { MODEL_FOLDER } from "./paths";
@@ -23,6 +23,11 @@ export interface ExportOptions {
   version: string;
   /** i18n texts in the default language (task 2.5); without them, placeholders show their keys. */
   texts?: TextLookup;
+  /**
+   * How messages name a .cds file from a definition's $location, e.g. relative to the project
+   * root; by default as CAP recorded it (relative to the working directory).
+   */
+  sourceFile?: (file: string) => string;
 }
 
 /**
@@ -46,6 +51,7 @@ export function exportModel(model: Csn, options: ExportOptions): Concept[] {
     // A stamp of its own per concept, so changing one later can't change the others.
     return {
       name,
+      where: whereDefined(name, definition, options.sourceFile ?? ((file) => file)),
       concept: { ...concept, frontmatter: { ...concept.frontmatter, generated: { by, at } } },
     };
   });
@@ -75,38 +81,71 @@ function producerOf(version: string): string {
 }
 
 /**
+ * Two definitions whose concepts would share a path (rule M1). Its stack is only its message,
+ * so cds compile and cds build show the [okf] message and its fix, not cap-okf's call stack.
+ */
+export class ModelClashError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ModelClashError";
+    this.stack = message;
+  }
+}
+
+/** A definition and where it is written: "srv/cat.cds:3", or its name when CSN has no location. */
+interface Placed {
+  name: string;
+  where: string;
+}
+
+function whereDefined(
+  name: string,
+  definition: CsnDefinition,
+  sourceFile: (file: string) => string,
+): string {
+  const location = definition.$location;
+  if (location === undefined) return name;
+  return `${sourceFile(location.file).split("\\").join("/")}:${location.line}`;
+}
+
+/**
  * Refuses two definitions at the same path, or at paths, or folders on the way, that differ
  * only in letter case or Unicode form: macOS and Windows would treat them as one (ADR-0007).
  */
-function assertNoCollisions(concepts: { name: string; concept: Concept }[]): void {
+function assertNoCollisions(concepts: (Placed & { concept: Concept })[]): void {
   // Folded spelling of a path or folder → where it came from.
-  const seen = new Map<string, { path: string; name: string }>();
-  for (const { name, concept } of concepts) {
+  const seen = new Map<string, Placed & { path: string }>();
+  for (const { name, where, concept } of concepts) {
     for (const path of pathPrefixes(concept.path)) {
       const earlier = seen.get(fold(path));
       if (earlier === undefined) {
-        seen.set(fold(path), { path, name });
-      } else if (earlier.path !== path) {
-        throw collisionError(name, path, earlier, path !== concept.path);
-      } else if (path === concept.path) {
-        throw new Error(
-          `[okf] ${name} — its path ${path} is also the path of ${earlier.name}.\n` +
-            "  Rename one of the definitions, or leave one out with @okf: false.",
-        );
+        seen.set(fold(path), { path, name, where });
+      } else if (earlier.path !== path || path === concept.path) {
+        throw clashError({ name, where }, path, earlier, path !== concept.path);
       }
     }
   }
 }
 
-function collisionError(
-  name: string,
+// "[okf] srv/cat.cds:3 — my.books: its path … (M1)." plus the fix, as every [okf] message.
+function clashError(
+  clashing: Placed,
   path: string,
-  earlier: { path: string; name: string },
+  earlier: Placed & { path: string },
   isFolder: boolean,
-): Error {
+): ModelClashError {
   const what = isFolder ? `the folder ${path}` : `its path ${path}`;
-  return new Error(
-    `[okf] ${name} — ${what} differs from ${earlier.path} (${earlier.name}) only in letter case.\n` +
+  const earlierOne =
+    earlier.where === earlier.name ? earlier.name : `${earlier.name}, ${earlier.where}`;
+  const problem =
+    earlier.path === path
+      ? `${what} is also the path of ${earlierOne}`
+      : `${what} differs from ${earlier.path} (${earlierOne}) only in letter case or Unicode form`;
+  // With a location: "srv/cat.cds:3 — my.books: …"; without one: "my.books — …".
+  const isLocated = clashing.where !== clashing.name;
+  const start = isLocated ? `${clashing.where} — ${clashing.name}:` : `${clashing.name} —`;
+  return new ModelClashError(
+    `[okf] ${start} ${problem} (M1).\n` +
       "  Rename one of the definitions, or leave one out with @okf: false.",
   );
 }

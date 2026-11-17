@@ -1,7 +1,7 @@
 // What `cds compile --to okf` (task 2.8) and `cds build` (task 2.9) share: both turn a model
 // loaded with doc comments into the bundle, with the same settings, so they write the same bytes
 // (ADR-0007, one model for generation and build).
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { mergeBundle, type MergedBundle } from "../bundle/merge";
 import type { Concept } from "../core/concept";
@@ -24,6 +24,7 @@ export function generateConcepts(cds: Cds, model: Csn): Concept[] {
     now: clockFrom(process.env, () => new Date()),
     version: ownVersion(),
     texts: defaultLanguageTexts(cds, model),
+    sourceFile: (file) => fromProjectRoot(cds, file),
   });
 }
 
@@ -35,6 +36,21 @@ export async function generateBundle(cds: Cds, model: Csn): Promise<MergedBundle
   const concepts = generateConcepts(cds, model);
   const curated = await readCuratedFolder(path.join(cds.root, CURATED_FOLDER));
   return mergeBundle(concepts, curated, OKF_VERSION);
+}
+
+// CAP records $location relative to the working directory; messages name the file from the
+// project root, as the developer sees it (db/schema.cds). Real paths on both sides, because the
+// root may be reached through a link (on macOS, /var is /private/var).
+function fromProjectRoot(cds: Cds, file: string): string {
+  return path.relative(realPathOrSame(cds.root), realPathOrSame(path.resolve(file)));
+}
+
+function realPathOrSame(file: string): string {
+  try {
+    return realpathSync(file);
+  } catch {
+    return file;
+  }
 }
 
 // cds.okf.include: "services" (default) or "all" (task 2.6), from cds.env, so profiles and

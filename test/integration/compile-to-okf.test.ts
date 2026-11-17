@@ -302,6 +302,21 @@ describe("cds compile --to okf with a curated okf/ folder: exact files and mista
     expect(fs.existsSync(path.join(out, "guides", "notes.md.md"))).toBe(true);
   });
 
+  test("definitions whose paths clash stop the compile with the .cds file and line, plainly", () => {
+    fs.writeFileSync(
+      path.join(app, "db", "clash.cds"),
+      "namespace clash;\nentity Books { key ID : Integer; }\nentity books { key ID : Integer; }\n",
+    );
+    const result = cdsWithOkf(
+      ["compile", "db", "--to", "okf"],
+      { CDS_OKF_INCLUDE: "all" },
+      { cwd: app },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/\[okf\] db\/clash\.cds:3 — clash\.books: .* \(M1\)\./);
+    expect(result.stderr).not.toMatch(/\n\s+at /);
+  });
+
   test("a curated file under okf/model/ stops the compile with the [okf] message", () => {
     fs.mkdirSync(path.join(app, "okf", "model"));
     fs.writeFileSync(path.join(app, "okf", "model", "notes.md"), "---\ntype: Guide\n---\n");
