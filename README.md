@@ -244,6 +244,11 @@ It shows the rules as CAP applies them, including those inherited from the servi
 composition's root. When serving arrives (0.2), cap-okf removes these sections for requests
 without an authenticated user ([ADR-0003](docs/adr/0003-authorization-sections.md)).
 
+**Only the section is hidden.** Descriptions, doc comments and the rest of a concept are shown to
+every reader, so keep access rules out of them: write `/** Orders placed in the shop. */`, not
+`/** Support staff only see their own orders. */`; the rule itself appears in the section. In
+`okf/` files, put such text between the same two marker lines.
+
 **The files on disk always contain them.** That includes `gen/okf` and the copy in your deployed
 app (`gen/srv/okf-bundle/`). If you commit `gen/okf`, publish it, or ship it anywhere public,
 consider whether your role names and `where` conditions may be seen. `cds add okf` puts
