@@ -6,11 +6,11 @@ A CAP plugin that turns your CDS model, plus any notes you write yourself, into 
 app.
 
 > **Status:** pre-release, not yet on npm. Release 0.1 covers generating the bundle (`cds build`,
-> `cds compile`, `cds add okf`). Serving it from a running app: the static route is in place
-> (see [Serving the bundle](#serving-the-bundle)); MCP through
-> [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) or
-> [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp) is planned for 0.2. Targets
-> OKF v0.2. Roadmap: [`docs/PLAN.md`](docs/PLAN.md).
+> `cds compile`, `cds add okf`). For serving it from a running app, the static route
+> ([Serving the bundle](#serving-the-bundle)) and MCP tools through
+> [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) ([Serving over MCP](#serving-over-mcp))
+> are in place; MCP resources, and [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp)
+> (parked), are planned. Targets OKF v0.2. Roadmap: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## What is OKF?
 
@@ -202,7 +202,7 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | --- | --- | --- | --- |
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
 | `serve.static` | `false`, `true`, `"/path"` | `false` | Serves the bundle's files from a route: `true` means `/okf`. See [Serving the bundle](#serving-the-bundle). |
-| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. The object's shape follows [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md), (Accepted). |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`. `as: ["tools"]` works now; `resources` is planned. See [Serving over MCP](#serving-over-mcp) and [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md). |
 
 Nothing is ever served unless you turn it on ([ADR-0002](docs/adr/0002-serving-is-opt-in.md)).
 Installing an MCP plugin doesn't change that.
@@ -291,6 +291,36 @@ Then `cds watch` serves the bundle at `/okf/`:
   ```sh
   cds watch --ext cds,csn,csv,ts,mjs,cjs,js,json,properties,edmx,xml,env,md
   ```
+
+## Serving over MCP
+
+With [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) v2 installed, turn on the tools
+channel:
+
+```json
+"cds": { "okf": { "serve": { "mcp": { "as": ["tools"] } } } }
+```
+
+cap-okf then adds a read-only `OkfService` to the app, which the MCP plugin offers as five tools:
+
+| Tool | What an agent gets |
+| --- | --- |
+| `OkfService_Index_query`, `OkfService_Index_get` | The index: one row per concept (path, type, title, description, tags, links), never its text. Filters, sorting and paging as the plugin offers them; free text searches the text columns. |
+| `OkfService_searchConcepts` | Index rows whose title, tags, description or path contain every word, best first (20 by default, at most 100). |
+| `OkfService_getConcept` | One concept's full Markdown, by path. |
+| `OkfService_bundleInfo` | The OKF version, a hash of the bundle (to tell whether a stored copy is stale) and the namespace. |
+
+- `true` alone picks the plugin's own default channel, which for `@gavdi/cap-mcp` is resources (planned), so
+  write `as: ["tools"]` for the tools.
+- `requires` (default `"authenticated-user"`) is the role or roles a caller needs; one is enough. Callers
+  without it don't see the tools, and calls get 401 or 403.
+- Authorization sections are removed for callers who aren't authenticated, as on the static route; the
+  index lists links only to concepts the caller can open.
+- `OkfService` has no OData endpoint: only the MCP plugin reaches it. It is never part of the bundle.
+- If the app lists its own `cds.build.tasks`, include `{ "for": "okf" }`, or the deployed app has no
+  `OkfService` (cap-okf warns at startup).
+- The namespace (for `okf://` resources, planned) defaults to the `package.json` name, lower case, with `@`
+  dropped and `/` as `-`.
 
 ## Building and deploying
 
