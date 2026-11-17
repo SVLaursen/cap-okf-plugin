@@ -8,6 +8,7 @@ import { validateBundle } from "../../src/core/validate";
 import type { Csn } from "../../src/export/csn";
 import { exportModel, OKF_VERSION } from "../../src/export/exporter";
 import { defaultLanguageTexts } from "../../src/export/i18n";
+import { outsideAuthSection } from "../helpers/auth";
 
 // Task 3.1 on the demo app: its curated okf/ links into model/, so with the generated concepts
 // merged in, every link resolves (G2 open issue 7). The only findings left are W1 warnings on
@@ -34,6 +35,32 @@ test("the demo app's merged bundle validates without findings", async () => {
     "W1 model/demo/bookshop/Genres/texts.md",
   ]);
   expect(merged.curatedPaths.has("guides/ordering.md")).toBe(true);
+});
+
+// G4 follow-up (ADR-0003): no access rule may show outside the authorization sections, which
+// servers strip for unauthenticated readers. The demo is the example people copy, so its doc
+// comments and curated files must not describe roles or conditions anywhere else.
+test("the demo's merged bundle mentions no role, $user or 'everyone' outside its auth sections", async () => {
+  const model = (await cds.load(path.join(DEMO, "srv"), { docs: true })) as unknown as Csn;
+  const generated = exportModel(model, {
+    include: "services",
+    now: new Date("2026-01-01T00:00:00Z"),
+    version: "0.0.0-test",
+    texts: defaultLanguageTexts(cds, model),
+  });
+  const merged = mergeBundle(
+    generated,
+    await readCuratedFolder(path.join(DEMO, "okf")),
+    OKF_VERSION,
+  );
+  const accessWords = /\b(admin|support|authenticated-user|everyone)\b|\$user/i;
+  // A service's URL path (`/odata/v4/admin`) names no rule.
+  const readable = (text: string) => outsideAuthSection(text).replace(/^Path: `[^`]*`$/gm, "");
+  const leaks = merged.files
+    .filter((file) => file.path.endsWith(".md"))
+    .filter((file) => accessWords.test(readable(file.text)))
+    .map((file) => `${file.path}: ${readable(file.text).match(accessWords)![0]}`);
+  expect(leaks).toEqual([]);
 });
 
 describe("readCuratedFolder", () => {

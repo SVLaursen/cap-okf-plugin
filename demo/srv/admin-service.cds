@@ -15,7 +15,7 @@ service AdminService @(path: '/odata/v4/admin', requires: ['admin', 'support']) 
   @restrict: [{ grant: '*', to: 'admin' }]
   entity Genres as projection on shop.Genres;
 
-  /** Orders placed in the shop, for staff to follow up. */
+  /** Orders placed in the shop. */
   @restrict: [
     { grant: 'READ', to: 'support', where: 'createdBy = $user' },
     { grant: '*', to: 'admin' }

@@ -1,6 +1,6 @@
 using { demo.bookshop as shop } from '../db/schema';
 
-/** Browse the catalog and place orders. Open to everyone. */
+/** Browse the catalog and place orders. */
 service CatalogService @(path: '/odata/v4/catalog') {
 
   /** Books on sale, without internal purchase prices. */
