@@ -8,4 +8,5 @@ requires: okf-finance
 
 # Margin rules
 
-The margin is set per genre. Prices of [books](/model/AdminService/Books.md) include it.
+The margin is set per genre. Prices of [books](/model/AdminService/Books.md) include it, also in the
+[catalog](/model/CatalogService/Books.md).

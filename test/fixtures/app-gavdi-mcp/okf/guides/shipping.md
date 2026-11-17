@@ -9,7 +9,7 @@ aliases: [delivery, dispatch]
 # Shipping
 
 An order ships within two working days, as one parcel. The [catalog](/model/CatalogService.md)
-shows what can be ordered. Prices follow the [margin rules](/finance/margins.md).
+shows what can be ordered, and each [book](/model/CatalogService/Books.md) its stock. Prices follow the [margin rules](/finance/margins.md).
 
 ## See also
 

@@ -7,7 +7,9 @@ import { GAVDI_ROOT } from "./gavdi";
 
 /** The parts of the SDK's Client the tests use. */
 export interface McpClient {
-  listTools(): Promise<{ tools: { name: string }[] }>;
+  listTools(): Promise<{ tools: { name: string; description?: string }[] }>;
+  /** The server's instructions from the initialize handshake. */
+  getInstructions(): string | undefined;
   callTool(params: { name: string; arguments: object }): Promise<ToolResult>;
   listResources(): Promise<{ resources: { uri: string }[] }>;
   listResourceTemplates(): Promise<{ resourceTemplates: { uriTemplate: string; name: string }[] }>;

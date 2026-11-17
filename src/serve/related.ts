@@ -34,6 +34,14 @@ export function withRelated(view: ReaderView, path: string, text: string): strin
 
 /** The visible concepts `concept` links to: curated first, at most ten. */
 export function relatedConcepts(view: ReaderView, concept: ViewConcept): ViewConcept[] {
+  const linked = linkedConcepts(view, concept);
+  const curated = linked.filter((each) => each.curated);
+  const generated = linked.filter((each) => !each.curated);
+  return [...curated, ...generated].slice(0, MAX_RELATED);
+}
+
+/** Every visible concept `concept` links to, each once, in the order the text links to them. */
+export function linkedConcepts(view: ReaderView, concept: ViewConcept): ViewConcept[] {
   const seen = new Set<string>([concept.path]);
   const linked: ViewConcept[] = [];
   for (const link of extractLinks(concept.body, 1)) {
@@ -43,9 +51,7 @@ export function relatedConcepts(view: ReaderView, concept: ViewConcept): ViewCon
     const target = view.concept(resolved.path);
     if (target !== undefined) linked.push(target);
   }
-  const curated = linked.filter((each) => each.curated);
-  const generated = linked.filter((each) => !each.curated);
-  return [...curated, ...generated].slice(0, MAX_RELATED);
+  return linked;
 }
 
 // "- [Title](/path) - description"; the file name when there is no title.
