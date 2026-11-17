@@ -1,0 +1,4 @@
+# Tests compare these files byte for byte, so git must never convert their line endings
+# (e.g. core.autocrlf on Windows).
+test/golden/** -text
+test/fixtures/** -text

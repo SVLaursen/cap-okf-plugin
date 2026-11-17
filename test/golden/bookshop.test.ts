@@ -17,11 +17,17 @@ const FIXTURE = path.join(__dirname, "..", "fixtures", "bookshop");
 const GOLDEN = path.join(__dirname, "bookshop");
 const UPDATE = process.env["UPDATE_GOLDEN"] === "1";
 
-// Fixed inputs, so the golden files don't change with the clock or cap-okf's version.
+// Fixed inputs, so the golden files don't change with the clock, cap-okf's version, or a
+// developer's own CAP config (i18n.default_language in ~/.cdsrc.json or CDS_CONFIG).
 const NOW = new Date("2026-01-01T00:00:00Z");
 const VERSION = "0.0.0-golden";
+// CAP looks a text up in the requested language, then in default_language, then in
+// i18n.properties; the fixture has no i18n_en.properties, so only pinning default_language
+// itself keeps the texts English.
+const LANGUAGE = "en";
 
 async function exportedBundle(): Promise<BundleFile[]> {
+  cds.env.i18n.default_language = LANGUAGE;
   const model = (await cds.load(FIXTURE, { docs: true })) as unknown as Csn;
   return exportModel(model, {
     include: "services",
@@ -35,6 +41,8 @@ function readGolden(): BundleFile[] {
   if (!fs.existsSync(GOLDEN)) return [];
   return fs
     .readdirSync(GOLDEN, { recursive: true, encoding: "utf8" })
+    // Dot-files such as .DS_Store come from the operating system; the exporter never makes them.
+    .filter((file) => !file.split(path.sep).some((part) => part.startsWith(".")))
     .filter((file) => fs.statSync(path.join(GOLDEN, file)).isFile())
     .map((file) => ({
       path: file.split(path.sep).join("/"),
