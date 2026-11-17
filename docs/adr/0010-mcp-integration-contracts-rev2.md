@@ -153,8 +153,10 @@ interface ListedResource { uri: string; name: string; title?: string; descriptio
   that returns something other than a string is an internal error; a `list` that throws adds
   nothing; a `complete` that throws offers nothing.
 - Rejects at registration: a URI that isn't absolute and canonical, a `cap:` or `ui:` URI, a
-  duplicate URI, `uriTemplate` or template `name`, a template the SDK's `UriTemplate` can't parse.
+  duplicate URI, `uriTemplate` or template `name`, a template the SDK's `UriTemplate` can't parse
+  or that isn't canonical once expanded.
 - Exports the contract's types from `@gavdi/cap-mcp` as types only. Never imports cap-okf.
+- Works in both MCP protocol eras it supports.
 
 cap-okf side:
 
@@ -162,27 +164,38 @@ cap-okf side:
   its own `served` listener: cap-mcp emits from within its `served` listener, and plugin load
   order is not fixed (task 0.5; their answer says the same). It registers synchronously; the
   callbacks may await the bundle, which is ready before `served` completes (ADR-0007).
-- **One fixed resource:** `okf://<namespace>/index.md`, without `visible` (its text goes through
-  the ADR-0003 filter in `read`, so every caller may see the index).
+- **`requires` applies to both channels** (cap-okf's decision, following ADR-0004 point 5: one
+  authorization rule everywhere). `cds.okf.serve.mcp.requires` (default `authenticated-user`)
+  gates the resources as it gates `OkfService`: a caller who doesn't meet it gets
+  resource-not-found for the index and every concept. "Hidden" below means exactly that; ADR-0003
+  hides no single concept, it only strips authorization sections.
+- **One fixed resource:** `okf://<namespace>/index.md`, with a synchronous `visible` that checks
+  `requires` for `ctx.user`; its text goes through the ADR-0003 filter in `read`.
 - **One template for every concept, whatever the bundle size:** `okf://<namespace>/{+path}`,
   named `okf-<namespace>-concepts`, with `read` and `complete`, no `list` (agents find paths in
   the index; a long resource list is what this avoids).
-  - `read` percent-decodes `params.path` once, accepts it only if it is a path the bundle lists
-    (no `..`, no absolute paths: `BundleSource.read` already refuses those), and returns the
-    concept through the ADR-0003 filter for `ctx.user`. An unknown or hidden path throws an
-    error with `status: 404`.
-  - `complete` offers bundle paths the caller may see that start with the typed value, sorted.
+  - `read` checks `requires` for `ctx.user`, percent-decodes `params.path` once, accepts it only if
+    it is a path the bundle lists (no `..`, no absolute paths: `BundleSource.read` already
+    refuses those), and returns the concept through the ADR-0003 filter for `ctx.user`. An
+    unknown path, a caller who doesn't meet `requires`, and a malformed escape that
+    `decodeURIComponent` refuses (`%zz`, a bare `%`) all throw an error with `status: 404`, so
+    they look the same.
+  - `complete` offers raw (not percent-encoded) bundle paths that start with the typed value,
+    sorted, and nothing to a caller who doesn't meet `requires`; with `{+path}` the client does
+    the encoding.
 - **Canonical URIs:** every URI cap-okf builds encodes each path segment as a URI path (ADR-0007,
   path rules) and is checked with `new URL(uri).href === uri` before registering, so a mistake
   fails at startup with an `[okf]` message rather than inside cap-mcp.
 - **Without `registerTemplate`** (a release without it, which the maintainers don't plan): one
-  warning, nothing registered, and the tools channel if `tools` was requested. cap-okf doesn't
-  fall back to one fixed resource per concept, which the maintainers asked us not to do.
+  warning, nothing registered, and the tools channel if `tools` was requested. cap-okf's own
+  decision, following the maintainers' "use the template for concepts, always": it doesn't fall
+  back to one fixed resource per concept.
 - Checks at `listening` whether the event arrived. If not (`@gavdi/cap-mcp` 1.x, or 2.x without
   Contract A): one warning naming the version and event it needs, and the tools channel if
   `tools` was requested.
-- The contract test may import the exported types (`import type`), which adds a dev dependency
-  only (task 4.8), never a runtime one (ADR-0004: never `require` an MCP plugin).
+- Only tests may import the exported types (`import type`), which adds a dev dependency only,
+  never a runtime one (ADR-0004: never `require` an MCP plugin). `src/` declares the shapes it
+  uses itself, so the published declaration files (ADR-0009) never reference `@gavdi/cap-mcp`.
 
 ### Contract B — `OkfService` (both plugins), revision 2
 
@@ -281,7 +294,7 @@ served through the template.)
 - Agents get the index first on both channels; full concepts are pulled one at a time.
 - Several cap-okf apps can sit in one MCP host without URI collisions.
 - The resource list stays short for any bundle size: one index and one template per app.
-- The bundle files stay exactly OKF v0.2: the hash lives in MCP metadata, not in `index.md`.
+- The bundle files stay exactly OKF v0.2: the hash is available from `bundleInfo()`, not in `index.md`.
 - One contract test suite per contract, run in cap-okf against a fake emitter (with and without
   `registerTemplate`, and with non-canonical URIs) and against a real fixture app per plugin
   (task 4.8).

@@ -1,5 +1,9 @@
 # 0013 — Plugins and app code add MCP resources through `mcp:resources`
 
+> **Superseded (2026-11-17).** This describes the first proposal of Contract A. The contract as
+> built is in [`reply-2026-11-17.md`](reply-2026-11-17.md) (their record: `0013-resources-from-code.md`
+> in the `@gavdi/cap-mcp` repository) and cap-okf's ADR-0010. Kept for history.
+
 Status: accepted · 2026-11-13 (agreed by the maintainer as Contract A of cap-okf ADR-0006)
 
 > Ready to copy into `docs/adr/` of `@gavdi/cap-mcp` v2. If 0013 is taken by then, use the next

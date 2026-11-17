@@ -1,5 +1,9 @@
 # Handoff: `mcp:resources` event for `@gavdi/cap-mcp` v2
 
+> **Superseded (2026-11-17).** This describes the first proposal of Contract A. The contract as
+> built is in [`reply-2026-11-17.md`](reply-2026-11-17.md) (their record: `0013-resources-from-code.md`
+> in the `@gavdi/cap-mcp` repository) and cap-okf's ADR-0010. Kept for history.
+
 For the developer working on `@gavdi/cap-mcp` v2 (`cap-mcp-v2`). It's written to that repository's
 rules (its `CLAUDE.md`, ADRs 0003–0007, `docs/testing.md`). It was checked against commit
 `590033c` (2.0.0-alpha.0); line numbers may have moved since.
