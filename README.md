@@ -70,10 +70,7 @@ gen/okf/
 └── model/                      # generated from the CDS model; never edit by hand
     ├── index.md
     ├── CatalogService.md
-    ├── CatalogService/
-    │   ├── index.md
-    │   └── Books.md
-    └── sample/bookshop/
+    └── CatalogService/
         ├── index.md
         └── Books.md
 ```
@@ -87,14 +84,18 @@ gen/okf/
   (`cds:<name>`), `tags` (`cds`, the kind, the parent name — the namespace, or the service for a
   service member — plus your `@okf.tags`) and `generated`
   (`by: cap-okf/<version>`, `at: <time of the build>`).
-- **Body:** elements with their types and notes, associations and compositions as links,
-  actions and functions with parameters and return types, and an authorization section (see
-  below).
+- **Body:** elements with their types and notes (an element's or parameter's `@description` or
+  doc comment, also from the entity a projection is built on), associations and compositions as
+  links, actions and functions with parameters and return types, a **Business knowledge**
+  section that lists the notes in `okf/` that link to the concept, and an authorization section
+  (see below).
 - **Links** between concepts are absolute within the bundle, e.g. `/model/User.md`, so they work
   from any folder.
 
 By default only your **services and what they use** are exported: the services, the entities
-they expose, the entities those are built on, and the types and association targets they use.
+they expose (one concept each, as the service exposes it), and the types and association
+targets they use. The database entities your projections are built on get no concept of their
+own: set `cds.okf.projectionSources` to `true` to export them too.
 An aspect is exported when an element uses it as a type or a composition target; aspects mixed
 in with `:` (such as `cuid` or `managed`) aren't, and their elements appear on the entity.
 Definitions nothing reaches are left out. Set `cds.okf.include` to `"all"` to export everything
@@ -114,6 +115,8 @@ type: Guide
 title: Placing an order
 description: How a shopper orders a book, and what the shop checks first.
 tags: [ordering]
+aliases: [checkout, purchase]   # optional: other words people use, for search
+requires: [sales, support]      # optional: only these roles see this note
 ---
 
 # Placing an order
@@ -121,13 +124,24 @@ tags: [ordering]
 Shoppers browse [Books](/model/CatalogService/Books.md) first. …
 ```
 
+Two optional keys help agents:
+
+- **`aliases`**: words people use for the same thing. `searchConcepts` finds the note by them.
+- **`requires`**: one role or a list of roles. Only users with one of them see the note (CAP's
+  `user.is(role)`, pseudo-roles included); for everyone else it doesn't exist on any channel: it
+  isn't listed, found, linked or counted, and reading it answers "not found". Only authenticated
+  readers see the `requires` key itself.
+
+Link your notes to the generated concepts they explain: the concept then lists the note under
+**Business knowledge**, and its MCP tools point to it (see [Serving over MCP](#serving-over-mcp)).
+
 Rules:
 
 - **`model/` belongs to the generator.** A file in `okf/model/` is an error (L1) and is left
   out. Link to generated concepts instead.
 - **Your `okf/index.md` is the bundle's front page.** Link to `model/index.md` from it, or you
-  get a warning (L2). Without `okf/index.md`, cap-okf writes one that lists your folders and
-  `model/`.
+  get a warning (L2). Without `okf/index.md`, cap-okf writes an outline: every note in `okf/`
+  with title, path and description, by type, then `model/` folded into one line.
 - **Folders get an index.** A folder in `okf/` with concepts but no `index.md` of its own gets a
   generated one. If you write a folder's `index.md` yourself, give it no frontmatter (only the
   bundle's root `index.md` may have it, for `okf_version`) and list entries under headings as
@@ -202,7 +216,8 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | --- | --- | --- | --- |
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
 | `serve.static` | `false`, `true`, `"/path"` | `false` | Serves the bundle's files from a route: `true` means `/okf`. See [Serving the bundle](#serving-the-bundle). |
-| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`, as `okf://` resources, tools or both. See [Serving over MCP](#serving-over-mcp) and [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md). |
+| `projectionSources` | `false`, `true` | `false` | With `"services"`: also export the entities your projections are built on. |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires, related, instructions, pointers }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`, as `okf://` resources, tools or both. See [Serving over MCP](#serving-over-mcp), [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md) and [ADR-0012](docs/adr/0012-agent-facing-knowledge.md). |
 
 cap-okf warns about a key it doesn't know (a typo such as `requries` would otherwise be ignored),
 and about `okf` or `serve` set to something other than an object. During `cds build` and
@@ -311,7 +326,17 @@ bundle over MCP on two channels: `okf://` resources, and tools.
 "cds": { "okf": { "serve": { "mcp": { "as": ["resources", "tools"] } } } }
 ```
 
-`true` alone picks the plugin's own default channel, which for `@gavdi/cap-mcp` is resources.
+`true` alone picks the plugin's default channels, which for `@gavdi/cap-mcp` are both.
+
+| Setting under `serve.mcp` | Default | What it does |
+| --- | --- | --- |
+| `plugin` | `"auto"` | `"auto"`, `"@gavdi/cap-mcp"` or `"@cap-js/mcp"`. |
+| `as` | both (`@gavdi/cap-mcp`) | `["resources"]`, `["tools"]` or both. |
+| `namespace` | from `package.json` | The `okf://<namespace>/` of the resources. |
+| `requires` | `"authenticated-user"` | The role or roles a caller needs. |
+| `related` | `true` | A concept read over MCP ends with its related concepts. |
+| `instructions` | `true` | Server instructions that tell agents the knowledge exists; `false` for none, or your own text. |
+| `pointers` | `true` | Tool notes that point a tool to the notes about its entity or action. |
 
 ### Resources
 
@@ -319,7 +344,7 @@ cap-okf registers two resources through the plugin's `mcp:resources` event:
 
 | Resource | What an agent gets |
 | --- | --- |
-| `okf://<namespace>/index.md` | The bundle's root index: where to start. |
+| `okf://<namespace>/index.md` | The bundle's root index, as the caller sees it: where to start. |
 | `okf://<namespace>/{+path}` | Any concept by its bundle path, e.g. `okf://acme-orders/model/CatalogService/Books.md`; a folder (`…/model/`) reads its `index.md`. Completion offers the paths. |
 
 The concepts aren't listed one by one: agents find them through the index, or through completion of
@@ -329,22 +354,32 @@ startup and serves no resources.
 
 ### Tools
 
-With `as` including `"tools"`, cap-okf adds a read-only `OkfService` to the app, which the MCP plugin offers as five tools:
+With `as` including `"tools"`, cap-okf adds a read-only `OkfService` to the app, which the MCP plugin offers as three tools:
 
 | Tool | What an agent gets |
 | --- | --- |
-| `OkfService_Index_query`, `OkfService_Index_get` | The index: one row per concept (path, type, title, description, tags, links), never its text. Filters, sorting and paging as the plugin offers them; free text searches the text columns. |
-| `OkfService_searchConcepts` | Index rows whose title, tags, description or path contain every word, best first (20 by default, at most 100). |
+| `OkfService_getIndex` | The Markdown index the caller would get from `okf://<namespace>/index.md`: the notes from `okf/` first, `model/` folded. An optional `folder` opens a folder's own index. |
+| `OkfService_searchConcepts` | Concepts that have **any** of the words in their title, tags, `aliases`, description, text or path, best first (20 by default, at most 100), with path, type, title, description and tags. If no word is found, the notes from `okf/` in index order, with `matched: false`. |
 | `OkfService_getConcept` | One concept's full Markdown, by path. |
-| `OkfService_bundleInfo` | The OKF version, a hash of the bundle (to tell whether a stored copy is stale) and the namespace. |
+
+`OkfService.Index` and `OkfService.bundleInfo` (the OKF version, a hash of the bundle and the
+namespace) stay in the service for code in your app, but aren't offered as MCP tools.
 
 ### On both channels
 
 - `requires` (default `"authenticated-user"`) is the role or roles a caller needs; one is enough. Callers
   without it don't see the tools or the index resource; calling a tool anyway is answered like an unknown
   tool, and reading a resource like an unknown resource.
-- Authorization sections are removed for callers who aren't authenticated, as on the static route; the
-  `Index` tool lists links only to concepts the caller can open.
+- Authorization sections are removed for callers who aren't authenticated, as on the static route; notes
+  with `requires` exist only for callers with one of those roles, on every channel.
+- A concept that is read ends with a block of the concepts it links to (title, path, description; notes
+  from `okf/` first; at most ten), between `<!-- okf:related:start -->` and `<!-- okf:related:end -->`.
+  It isn't part of the file. `related: false` turns it off.
+- With a `@gavdi/cap-mcp` that emits `mcp:hints` ([ADR-0013](docs/adr/0013-mcp-hints-contract-c.md)),
+  cap-okf adds server instructions that tell agents the knowledge exists and how to read it, and a note
+  to each tool whose entity or action a note in `okf/` links to, e.g.
+  `Business knowledge: Shipping KPIs (guides/shipping-kpis.md): How on-time delivery is measured.`
+  `instructions` and `pointers` turn them off.
 - `OkfService` has no OData endpoint: only the MCP plugin reaches it. It is never part of the bundle.
 - If the app lists its own `cds.build.tasks`, include `{ "for": "okf" }`, or the deployed app has no
   `OkfService` (cap-okf warns at startup).
@@ -385,7 +420,15 @@ model name the `.cds` file and line.
 | L2 | warning | `okf/index.md` doesn't link to `model/`. |
 | L3 | error | An authorization marker in an `okf/` file is broken (unpaired, in the frontmatter, not alone on its line, or misspelled); the file is left out. |
 | L4 | warning | An authorization marker in an `okf/` file is written slightly differently, or sits in a code block. |
+| K1 | warning | A note in `okf/` has no tags. |
+| K2 | warning | A note in `okf/` links to no generated concept. |
+| K3 | warning | An entity has elements that look like codes (a short string, a list of values, or a name ending in `type`, `status`, `code` or `kind`), and no note in `okf/` links to it. |
 | M1 | error | Two definitions would get the same path, or paths that differ only in letter case. |
+
+K1–K3 are the knowledge lint ([ADR-0012](docs/adr/0012-agent-facing-knowledge.md)): `cds build`
+lists them with its other warnings, and an app that generates its bundle at startup
+(`cds watch`) logs them once. In code, `lintBundle(files)` from `lib/core/lint` returns them
+together with W1 for notes in `okf/` and W4.
 
 Setting mistakes (e.g. `cds.okf.include: "everything"`) name the setting and its allowed values
 instead of a file.

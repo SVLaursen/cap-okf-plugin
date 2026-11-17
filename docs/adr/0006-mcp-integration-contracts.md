@@ -1,6 +1,8 @@
 # 0006. MCP integration contracts
 
 - Status: Superseded by ADR-0010 (2026-11-17, Simon Vestergaard Laursen)
+- Later: ADR-0012 changes Contract B's tool surface and the `true` default; ADR-0013 adds
+  Contract C (`mcp:hints`, client side). This ADR's "no Contract C" was about `@cap-js/mcp`.
 - Date: 2026-11-13
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude (pre-drafted from a read of `@gavdi/cap-mcp` v2; completed in Phase 0 task 0.5)

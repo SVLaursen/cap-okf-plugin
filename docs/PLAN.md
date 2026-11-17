@@ -159,6 +159,22 @@ test/
 - [x] **4.13 Package contents.** The packed package holds what CAP needs (`cds-plugin.js`, `lib/`, `srv/`, `package.json`, licence, README) and nothing else (no tests, fixtures, `src/`, docs).
   - Checked 2026-11-17 with `npm pack --dry-run` (no tarball written): 139 files, 109.3 kB packed, 342.3 kB unpacked; outside `lib/` only `cds-plugin.js`, `srv/okf-service.cds`, `package.json`, `LICENSE`, `README.md`; every `src/` module has its `lib/` `.js` and `.d.ts`, and `prepack` rebuilds `lib/` from a clean folder, so no stale module ships. No change needed. Not pinned by a test: `npm pack` runs `prepack`, which would rebuild `lib/` under a running integration suite. Version is still `0.0.0`: the maintainer sets it.
 
+### Benchmark brief m2 (maintainer brief 2026-11-17, branch `feat/benchmark-m2-improvements`)
+
+Agents read the curated notes only about half the time; these make the knowledge easier to find,
+lighter to enter, and safe per role. Decisions in ADR-0012 and ADR-0013 (both Proposed); what
+changed and every deviation from the brief in `docs/changes/benchmark-m2.md`.
+
+- [x] **m2.1 Per-role visibility.** `requires:` in a concept's frontmatter; one reader view under every channel.
+- [x] **m2.2 Tool descriptions** that say what knowledge is there and when to read it.
+- [x] **m2.3 Outline first.** Generated root index lists curated notes first, `model/` folded; `getIndex`; `Index` and `bundleInfo` off the MCP tool list.
+- [x] **m2.4 Search** on any word, text and `aliases` included, ranked, never empty.
+- [x] **m2.5 Related concepts** after a concept read over MCP (`serve.mcp.related`).
+- [x] **m2.6 Generated concepts:** no projection-source concepts by default (`cds.okf.projectionSources`), element and parameter descriptions, "Business knowledge" backlinks.
+- [x] **m2.7 Knowledge lint** K1–K3 (warnings) at `cds build` and development startup; `lintBundle()`.
+- [x] **m2.8 Contract C** (`mcp:hints`, client side): instructions and tool notes (`serve.mcp.instructions`, `serve.mcp.pointers`).
+- [x] **m2.9 Defaults:** `serve.mcp: true` with `@gavdi/cap-mcp` serves both channels; one index plus one template stays.
+
 **Gate G5:** contract suite green for the static route, the tools channel under both MCP plugins, and `@gavdi/cap-mcp` resources (or 4.6 recorded as blocked upstream), on both runtimes (Node.js only for the first release: Java is out of it, maintainer decision 2026-11-17); nothing served unless configured; auth sections never reach unauthenticated requesters.
 
 ## Phase 5 — Fiori authoring → Gate G6 → release 0.3
