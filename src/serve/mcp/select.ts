@@ -28,7 +28,7 @@ const NATURAL_CHANNEL: Record<McpPlugin, McpChannel> = {
   [GAVDI_CAP_MCP]: "resources",
   [CAP_JS_MCP]: "tools",
 };
-const DEFAULT_REQUIRES = ["authenticated-user"];
+const DEFAULT_REQUIRES: readonly string[] = ["authenticated-user"];
 const NAMESPACE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 /** How cap-okf serves over MCP. */
@@ -136,21 +136,35 @@ function channelsFor(setting: unknown, plugin: McpPlugin, warnings: string[]): M
   return channels.length > 0 ? channels : [NATURAL_CHANNEL[plugin]];
 }
 
+// Set: it must be valid text. Not set (or null, so a profile can reset it): derived from the
+// package name, and an invalid result says where it came from.
 function namespaceFor(setting: unknown, packageName: string | undefined): string {
-  const namespace = typeof setting === "string" ? setting : derivedNamespace(packageName);
-  if (namespace === undefined) {
+  if (setting !== undefined && setting !== null) return checkedNamespace(setting);
+  const derived = derivedNamespace(packageName);
+  if (derived === undefined) {
     throw setupError(
       "[okf] cds.okf.serve.mcp.namespace — is missing, and the app's package.json has no name to derive it from.\n" +
         '  Set cds.okf.serve.mcp.namespace, e.g. "acme-orders".',
     );
   }
-  if (!NAMESPACE.test(namespace)) {
+  if (!NAMESPACE.test(derived)) {
+    const suggestion = derived.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "my-app";
     throw setupError(
-      `[okf] cds.okf.serve.mcp.namespace — "${namespace}" isn't a valid namespace.\n` +
+      `[okf] cds.okf.serve.mcp.namespace — "${derived}", derived from the package.json name "${String(packageName)}", isn't a valid namespace.\n` +
+        `  Set cds.okf.serve.mcp.namespace, e.g. "${suggestion}".`,
+    );
+  }
+  return derived;
+}
+
+function checkedNamespace(setting: unknown): string {
+  if (typeof setting !== "string" || !NAMESPACE.test(setting)) {
+    throw setupError(
+      `[okf] cds.okf.serve.mcp.namespace — ${JSON.stringify(setting)} isn't a valid namespace.\n` +
         "  Use lower-case letters, digits and -, starting and ending with a letter or digit.",
     );
   }
-  return namespace;
+  return setting;
 }
 
 // "@acme/orders" → "acme-orders" (ADR-0010).
@@ -160,7 +174,8 @@ function derivedNamespace(packageName: string | undefined): string | undefined {
 }
 
 function rolesFor(setting: unknown): string[] {
-  if (setting === undefined) return DEFAULT_REQUIRES;
+  // A copy, so a caller that changes its choice can't change the default for later calls.
+  if (setting === undefined) return [...DEFAULT_REQUIRES];
   const roles = Array.isArray(setting) ? setting : [setting];
   if (
     roles.length === 0 ||

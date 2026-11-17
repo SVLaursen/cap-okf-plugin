@@ -161,3 +161,52 @@ describe("installedPlugins", () => {
     expect(installedPlugins(undefined)).toEqual([]);
   });
 });
+
+// Review of 4.4: edge cases pinned.
+describe("selectMcp: edge cases", () => {
+  test("as: [] and duplicate channels fall back or collapse without a warning", () => {
+    expect(select({ as: [] }, [GAVDI])).toMatchObject({
+      choice: { as: ["resources"] },
+      warnings: [],
+    });
+    expect(select({ as: ["tools", "tools"] }, [GAVDI]).choice?.as).toEqual(["tools"]);
+  });
+
+  test.each([null, "auto"])("plugin %j means auto", (plugin) => {
+    expect(select({ plugin }, [CAPJS]).choice?.plugin).toBe(CAPJS);
+  });
+
+  test("an upper-case scope is lowered: @Acme/Orders → acme-orders", () => {
+    expect(select(true, [GAVDI], "@Acme/Orders").choice?.namespace).toBe("acme-orders");
+  });
+
+  test("an invalid derived namespace names the package.json name and suggests one", () => {
+    expect(() => select(true, [GAVDI], "@sap.demo/orders")).toThrow(
+      /"sap\.demo-orders", derived from the package\.json name "@sap\.demo\/orders", isn't a valid namespace\.\n {2}Set cds\.okf\.serve\.mcp\.namespace, e\.g\. "sap-demo-orders"/,
+    );
+  });
+
+  test.each([2024, { a: 1 }])(
+    "a namespace that is set but isn't text (%j) is an error",
+    (namespace) => {
+      expect(() => select({ namespace }, [GAVDI])).toThrow(
+        /^\[okf\] cds\.okf\.serve\.mcp\.namespace — .* isn't a valid namespace/,
+      );
+    },
+  );
+
+  test("namespace: null derives it, so a profile can reset it", () => {
+    expect(select({ namespace: null }, [GAVDI]).choice?.namespace).toBe("acme-orders");
+  });
+
+  test.each([[[]], [""], [["admin", 5]]])("requires %j is an error", (requires) => {
+    expect(() => select({ requires }, [GAVDI])).toThrow(
+      /^\[okf\] cds\.okf\.serve\.mcp\.requires — /,
+    );
+  });
+
+  test("changing one choice's requires doesn't change the default for the next", () => {
+    select(true, [GAVDI]).choice!.requires.push("changed");
+    expect(select(true, [GAVDI]).choice?.requires).toEqual(["authenticated-user"]);
+  });
+});

@@ -202,7 +202,7 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | --- | --- | --- | --- |
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
 | `serve.static` | `false`, `true`, `"/path"` | `false` | Serves the bundle's files from a route: `true` means `/okf`. See [Serving the bundle](#serving-the-bundle). |
-| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. The object's shape follows [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md), which is still a proposal, so it may change. |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. The object's shape follows [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md), (Accepted). |
 
 Nothing is ever served unless you turn it on ([ADR-0002](docs/adr/0002-serving-is-opt-in.md)).
 Installing an MCP plugin doesn't change that.
