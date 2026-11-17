@@ -42,6 +42,7 @@ const FILES = [
   },
   { path: "log.md", text: "# 2026-11-17\n\n* Started.\n" },
   { path: "broken.md", text: "no frontmatter\n" },
+  { path: "bad-yaml.md", text: "---\ntype: [unclosed\n---\n" },
   { path: "refs/q.sql", text: "select 1;\n" },
 ];
 
@@ -67,6 +68,56 @@ describe("indexRows", () => {
   });
 });
 
+// Every where shape the query tool sends, and the rows it should select.
+const WHERE_CASES: [unknown[], string[]][] = [
+  [[{ ref: ["type"] }, "=", { val: "Guide" }], ["guides/ordering.md"]],
+  [
+    [{ ref: ["type"] }, "!=", { val: "Guide" }],
+    ["model/x/Authors.md", "model/x/Books.md"],
+  ],
+  [
+    [{ ref: ["title"] }, ">=", { val: "Books" }],
+    ["guides/ordering.md", "model/x/Books.md"],
+  ],
+  [[{ ref: ["title"] }, "<", { val: "Books" }], ["model/x/Authors.md"]],
+  [
+    [{ ref: ["type"] }, "in", { list: [{ val: "Guide" }, { val: "Nope" }] }],
+    ["guides/ordering.md"],
+  ],
+  [[{ ref: ["links"] }, "is", { val: null }], ["model/x/Authors.md"]],
+  [
+    [{ ref: ["links"] }, "is not", { val: null }],
+    ["guides/ordering.md", "model/x/Books.md"],
+  ],
+  [
+    [{ func: "contains", args: [{ ref: ["description"] }, { val: "BOOKS" }] }],
+    ["model/x/Authors.md", "model/x/Books.md"],
+  ],
+  [
+    [{ func: "startswith", args: [{ ref: ["path"] }, { val: "model/" }] }],
+    ["model/x/Authors.md", "model/x/Books.md"],
+  ],
+  [[{ func: "endswith", args: [{ ref: ["title"] }, { val: "ing" }] }], ["guides/ordering.md"]],
+  [
+    [
+      {
+        func: "search",
+        args: [{ list: [{ ref: ["title"] }, { ref: ["tags"] }] }, { val: "order" }],
+      },
+    ],
+    ["guides/ordering.md"],
+  ],
+  [[{ func: "search", args: [{ ref: ["tags"] }, { val: "books" }] }], ["guides/ordering.md"]],
+  [
+    [
+      { xpr: [{ ref: ["type"] }, "=", { val: "Entity" }] },
+      "and",
+      { xpr: [{ ref: ["title"] }, "=", { val: "Books" }] },
+    ],
+    ["model/x/Books.md"],
+  ],
+];
+
 describe("runIndexQuery: what the query tool sends", () => {
   test("columns, orderBy with the key last, and paging", () => {
     const result = runIndexQuery(ROWS, {
@@ -86,57 +137,12 @@ describe("runIndexQuery: what the query tool sends", () => {
     ]);
   });
 
-  test.each([
-    [[{ ref: ["type"] }, "=", { val: "Guide" }], ["guides/ordering.md"]],
-    [
-      [{ ref: ["type"] }, "!=", { val: "Guide" }],
-      ["model/x/Authors.md", "model/x/Books.md"],
-    ],
-    [
-      [{ ref: ["title"] }, ">=", { val: "Books" }],
-      ["guides/ordering.md", "model/x/Books.md"],
-    ],
-    [[{ ref: ["title"] }, "<", { val: "Books" }], ["model/x/Authors.md"]],
-    [
-      [{ ref: ["type"] }, "in", { list: [{ val: "Guide" }, { val: "Nope" }] }],
-      ["guides/ordering.md"],
-    ],
-    [[{ ref: ["links"] }, "is", { val: null }], ["model/x/Authors.md"]],
-    [
-      [{ ref: ["links"] }, "is not", { val: null }],
-      ["guides/ordering.md", "model/x/Books.md"],
-    ],
-    [
-      [{ func: "contains", args: [{ ref: ["description"] }, { val: "BOOKS" }] }],
-      ["model/x/Authors.md", "model/x/Books.md"],
-    ],
-    [
-      [{ func: "startswith", args: [{ ref: ["path"] }, { val: "model/" }] }],
-      ["model/x/Authors.md", "model/x/Books.md"],
-    ],
-    [[{ func: "endswith", args: [{ ref: ["title"] }, { val: "ing" }] }], ["guides/ordering.md"]],
-    [
-      [
-        {
-          func: "search",
-          args: [{ list: [{ ref: ["title"] }, { ref: ["tags"] }] }, { val: "order" }],
-        },
-      ],
-      ["guides/ordering.md"],
-    ],
-    [[{ func: "search", args: [{ ref: ["tags"] }, { val: "books" }] }], ["guides/ordering.md"]],
-    [
-      [
-        { xpr: [{ ref: ["type"] }, "=", { val: "Entity" }] },
-        "and",
-        { xpr: [{ ref: ["title"] }, "=", { val: "Books" }] },
-      ],
-      ["model/x/Books.md"],
-    ],
-  ])("where %j", (where, expected) => {
+  test.each(WHERE_CASES)("where %j", (where, expected) => {
     expect(paths(runIndexQuery(ROWS, { SELECT: { from: INDEX, where } }))).toEqual(expected);
   });
+});
 
+describe("runIndexQuery: the count query and the get tool", () => {
   test("the count query answers { total }", () => {
     const query = {
       SELECT: {
@@ -184,6 +190,11 @@ describe("runIndexQuery: anything else is refused with a clear message", () => {
       "an unknown function",
       { where: [{ func: "matchesPattern", args: [{ ref: ["path"] }, { val: "x" }] }] },
     ],
+    ["a where that isn't a list", { where: "type = 'A'" }],
+    ["in without a list", { where: [{ ref: ["type"] }, "in", { val: "A" }] }],
+    ["an orderBy that isn't a list", { orderBy: "path" }],
+    ["is with a value", { where: [{ ref: ["type"] }, "is", { val: "A" }] }],
+    ["a value that isn't a literal", { where: [{ ref: ["type"] }, "=", { ref: ["title"] }] }],
   ])("%s", (_label, extra) => {
     expect(() => runIndexQuery(ROWS, { SELECT: { from: INDEX, ...extra } })).toThrow(
       /^\[okf\] OkfService\.Index — .* isn't supported\.\n {2}/,
@@ -191,41 +202,43 @@ describe("runIndexQuery: anything else is refused with a clear message", () => {
   });
 });
 
+const SEARCH_ROWS: IndexRow[] = [
+  {
+    path: "a.md",
+    type: "Guide",
+    title: "Shipping",
+    description: "Order delivery.",
+    tags: "",
+    links: "",
+  },
+  {
+    path: "b.md",
+    type: "Entity",
+    title: "Orders",
+    description: "Placed orders.",
+    tags: "sales",
+    links: "",
+  },
+  {
+    path: "c.md",
+    type: "Entity",
+    title: "Lines",
+    description: "Items.",
+    tags: "order",
+    links: "",
+  },
+  {
+    path: "order/d.md",
+    type: "Guide",
+    title: "Returns",
+    description: "Taking books back.",
+    tags: "",
+    links: "",
+  },
+];
+
 describe("searchConcepts", () => {
-  const rows: IndexRow[] = [
-    {
-      path: "a.md",
-      type: "Guide",
-      title: "Shipping",
-      description: "Order delivery.",
-      tags: "",
-      links: "",
-    },
-    {
-      path: "b.md",
-      type: "Entity",
-      title: "Orders",
-      description: "Placed orders.",
-      tags: "sales",
-      links: "",
-    },
-    {
-      path: "c.md",
-      type: "Entity",
-      title: "Lines",
-      description: "Items.",
-      tags: "order",
-      links: "",
-    },
-    {
-      path: "order/d.md",
-      type: "Guide",
-      title: "Returns",
-      description: "Taking books back.",
-      tags: "",
-      links: "",
-    },
-  ];
+  const rows = SEARCH_ROWS;
 
   test("matches title, tags, description and path, ranked in that order, case-insensitive", () => {
     expect(paths(searchConcepts(rows, { text: "ORDER" }))).toEqual([
