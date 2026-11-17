@@ -10,6 +10,7 @@ import type { BundleSource } from "../bundle/source";
 import { isBundlePath } from "../bundle/paths";
 import { forReader } from "../core/filter";
 import type { Cds } from "../index";
+import { oneBundleForEveryKey, type BundleKey } from "./bundles";
 import { startupBundleSource } from "./source";
 import { staticRouteOf } from "./static-config";
 
@@ -21,21 +22,27 @@ export function registerStaticRoute(cds: Cds): void {
     // Read here, not at plugin load, so a wrong value stops a server, never cds build.
     const route = staticRouteOf((cds.env as unknown as { okf?: unknown }).okf);
     if (route === undefined) return;
-    // One bundle per server: a process may boot more than one app.
-    let bundle: Promise<BundleSource> | undefined;
-    const source = () => (bundle ??= startupBundleSource(cds, log, process.env));
-    // Built before served completes (ADR-0007): CAP waits for the returned promise, so later
-    // served listeners (MCP, task 4.6) find it. A setup error, such as okf being a file, stops
-    // startup; curated files with errors don't (they are left out, see source.ts).
-    // CAP waits for a promise a served listener returns (@sap/cds lib/index.js), though its
-    // types declare the listener as returning nothing.
+    // One set of bundles per server: a process may boot more than one app.
+    const bundles = oneBundleForEveryKey(() => startupBundleSource(cds, log, process.env));
+    // Each request reads the bundle for its tenant and locale (ADR-0010).
+    const source = () => bundles.forKey(requestKey(cds));
+    // Built before served completes (ADR-0007), so later served listeners (MCP, task 4.6) find
+    // it. A setup error, such as okf being a file, stops startup; curated files with errors don't
+    // (they are left out, see source.ts). CAP waits for a promise a served listener returns
+    // (@sap/cds lib/index.js), though its types declare the listener as returning nothing.
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    cds.on("served", () => source().then(() => undefined));
+    cds.on("served", () => bundles.forKey({}).then(() => undefined));
     const serve = (req: Request, res: Response, next: NextFunction) => {
       serveFile(cds, route, source, req, res).catch(next);
     };
     app.use(route, cds.middlewares.before, serve);
   });
+}
+
+// The request's tenant and locale, from CAP's request context.
+function requestKey(cds: Cds): BundleKey {
+  const context = cds.context as { tenant?: string; locale?: string } | undefined;
+  return { tenant: context?.tenant, locale: context?.locale };
 }
 
 async function serveFile(
