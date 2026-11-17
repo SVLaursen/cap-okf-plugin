@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import cds from "@sap/cds";
-import { registerStaticRoute } from "../../src/serve/static-route";
+import { registerServing } from "../../src/serve/serving";
 
 // Task 4.3 review: the bundle is ready before `served` completes (ADR-0007), each server gets its
 // own bundle, a setup error stops startup, and a curated file that isn't text isn't served.
@@ -32,7 +32,7 @@ async function server(root: string): Promise<Served> {
       },
     },
   });
-  registerStaticRoute(fake);
+  registerServing(fake);
   let handler: ((req: unknown, res: unknown, next: (e: unknown) => void) => void) | undefined;
   for (const listener of listeners["bootstrap"] ?? [])
     listener({ use: (_route: string, _before: unknown, h: typeof handler) => (handler = h) });

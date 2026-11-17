@@ -19,7 +19,7 @@ const { GET, axios } = cds.test(DEMO);
 axios.defaults.validateStatus = () => true;
 
 const ANONYMOUS = cds.User.anonymous;
-const BOB = new cds.User({ id: "bob" });
+const BOB = new cds.User("bob");
 
 type Service = {
   tx<T>(
@@ -79,7 +79,9 @@ describe("OkfService.Index", () => {
     });
     expect(one).toMatchObject({ path: "guides/ordering.md", type: "Playbook" });
   });
+});
 
+describe("OkfService.Index: links and refusals", () => {
   // ADR-0003: a link that sits only inside an authorization section isn't listed for readers who
   // don't see that section.
   test("links names only concepts the reader can reach in the text they get", async () => {
@@ -102,7 +104,7 @@ describe("OkfService.Index", () => {
     await expect(
       read(ANONYMOUS, { SELECT: { from: INDEX, groupBy: [{ ref: ["type"] }] } }),
     ).rejects.toMatchObject({
-      code: "400",
+      code: 400,
       message: expect.stringMatching(/^\[okf\] OkfService\.Index — groupBy isn't supported/),
     });
   });
@@ -121,7 +123,7 @@ describe("OkfService functions", () => {
     "getConcept(%j) is a 404",
     async (conceptPath) => {
       await expect(send(BOB, "getConcept", { path: conceptPath })).rejects.toMatchObject({
-        code: "404",
+        code: 404,
       });
     },
   );

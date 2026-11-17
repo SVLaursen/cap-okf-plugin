@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Cds } from "../../index";
 import { SetupError } from "../../build/errors";
-import { installedPlugins, selectMcp } from "./select";
+import { GAVDI_CAP_MCP, installedPlugins, selectMcp } from "./select";
 
 /** The cds.requires key the model is added under. */
 export const TOOLS_MODEL_KEY = "cap-okf/tools";
@@ -74,4 +74,34 @@ export function packageNameOf(root: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Sets OkfService's @requires from cds.okf.serve.mcp.requires (ADR-0010), so CAP enforces it on
+ * every call and the MCP plugin hides tools a caller can't use, and @protocol: 'none' under
+ * @gavdi/cap-mcp, where @mcp is no protocol and OkfService would otherwise also be on OData
+ * (ADR-0006). Runs on every model cds.load loads, so cds build bakes in the build's settings and
+ * a server applies its own when it loads the built model.
+ */
+export function annotateToolsModel(cds: Cds): void {
+  cds.on("loaded", (csn: unknown) => {
+    const service = (csn as { definitions?: Record<string, Record<string, unknown>> })
+      .definitions?.["OkfService"];
+    if (service === undefined) return;
+    let choice;
+    try {
+      choice = selectMcp({
+        okf: (cds.env as unknown as { okf?: unknown }).okf,
+        installed: installedPlugins(cds.env),
+        packageName: packageNameOf(cds.root),
+      }).choice;
+    } catch (error) {
+      // A setup mistake stops the server at bootstrap (serving.ts).
+      if (error instanceof SetupError) return;
+      throw error;
+    }
+    if (choice === undefined) return;
+    service["@requires"] = choice.requires;
+    if (choice.plugin === GAVDI_CAP_MCP) service["@protocol"] = "none";
+  });
 }

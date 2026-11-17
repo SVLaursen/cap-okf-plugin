@@ -1,6 +1,6 @@
 // The static route (task 4.3, ADR-0002, ADR-0005 (d), ADR-0007): serves the bundle's files as
 // they are, e.g. GET /okf/model/CatalogService/Books.md, when cds.okf.serve.static is on.
-// - Mounted at bootstrap behind cds.middlewares.before, CAP's own chain, so CAP's authentication
+// - Mounted at bootstrap (serving.ts) behind cds.middlewares.before, CAP's own chain, so CAP's authentication
 //   decides who the user is; anonymous requests are allowed.
 // - Authorization sections are removed for readers who aren't authenticated (ADR-0003). If the
 //   filter fails, the reader gets an error, never the unfiltered text.
@@ -10,37 +10,29 @@ import type { BundleSource } from "../bundle/source";
 import { isBundlePath } from "../bundle/paths";
 import { forReader } from "../core/filter";
 import type { Cds } from "../index";
-import { oneBundleForEveryKey, type BundleKey } from "./bundles";
-import { startupBundleSource } from "./source";
-import { staticRouteOf } from "./static-config";
+import type { BundleKey, Bundles } from "./bundles";
+import { servableText } from "./text";
 
-/** Serves the bundle at cds.okf.serve.static, when that is on. */
-export function registerStaticRoute(cds: Cds): void {
-  const log = cds.log("okf");
-
-  cds.on("bootstrap", (app: Application) => {
-    // Read here, not at plugin load, so a wrong value stops a server, never cds build.
-    const route = staticRouteOf((cds.env as unknown as { okf?: unknown }).okf);
-    if (route === undefined) return;
-    // One set of bundles per server: a process may boot more than one app.
-    const bundles = oneBundleForEveryKey(() => startupBundleSource(cds, log, process.env));
-    // Each request reads the bundle for its tenant and locale (ADR-0010).
-    const source = () => bundles.forKey(requestKey(cds));
-    // Built before served completes (ADR-0007), so later served listeners (MCP, task 4.6) find
-    // it. A setup error, such as okf being a file, stops startup; curated files with errors don't
-    // (they are left out, see source.ts). CAP waits for a promise a served listener returns
-    // (@sap/cds lib/index.js), though its types declare the listener as returning nothing.
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    cds.on("served", () => bundles.forKey({}).then(() => undefined));
-    const serve = (req: Request, res: Response, next: NextFunction) => {
-      serveFile(cds, route, source, req, res).catch(next);
-    };
-    app.use(route, cds.middlewares.before, serve);
-  });
+/**
+ * Mounts the static route at `route`, reading from `bundles` (one set per server, shared with
+ * the MCP channels; see serving.ts). Called at bootstrap.
+ */
+export function mountStaticRoute(
+  app: Application,
+  cds: Cds,
+  route: string,
+  bundles: Bundles,
+): void {
+  // Each request reads the bundle for its tenant and locale (ADR-0010).
+  const source = () => bundles.forKey(requestKey(cds));
+  const serve = (req: Request, res: Response, next: NextFunction) => {
+    serveFile(cds, route, source, req, res).catch(next);
+  };
+  app.use(route, cds.middlewares.before, serve);
 }
 
-// The request's tenant and locale, from CAP's request context.
-function requestKey(cds: Cds): BundleKey {
+/** The request's tenant and locale, from CAP's request context. */
+export function requestKey(cds: Cds): BundleKey {
   const context = cds.context as { tenant?: string; locale?: string } | undefined;
   return { tenant: context?.tenant, locale: context?.locale };
 }
@@ -90,18 +82,6 @@ function bundlePathOf(requestPath: string): string | undefined {
   }
   const path = decoded === "" || decoded.endsWith("/") ? `${decoded}index.md` : decoded;
   return isBundlePath(path) ? path : undefined;
-}
-
-// The file's text, or undefined when it's not in the bundle or isn't UTF-8 text (e.g. an image):
-// generated in memory such a file has no text, and read from disk its bytes come back with
-// replacement characters (U+FFFD).
-async function servableText(
-  source: () => Promise<BundleSource>,
-  bundlePath: string,
-): Promise<string | undefined> {
-  const text = await (await source()).read(bundlePath);
-  if (text === undefined || bundlePath.endsWith(".md")) return text;
-  return text === "" || text.includes("\uFFFD") ? undefined : text;
 }
 
 function contentTypeOf(bundlePath: string): string {

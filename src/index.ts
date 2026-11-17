@@ -2,8 +2,8 @@ import type cds from "@sap/cds";
 import { registerAddFacet } from "./add/facet";
 import { registerBuildTask } from "./build/build-task";
 import { registerCompileTarget } from "./build/compile";
-import { addToolsModel, warnWithoutToolsModel } from "./serve/mcp/tools-model";
-import { registerStaticRoute } from "./serve/static-route";
+import { addToolsModel, annotateToolsModel, warnWithoutToolsModel } from "./serve/mcp/tools-model";
+import { registerServing } from "./serve/serving";
 
 /** The `cds` facade of the host app, handed in by cds-plugin.js (never read from a global). */
 export type Cds = typeof cds;
@@ -18,8 +18,9 @@ export function plugin(cds: Cds): void {
   registerCompileTarget(cds);
   registerBuildTask(cds);
   registerAddFacet(cds);
-  registerStaticRoute(cds);
+  registerServing(cds);
   // OkfService for the MCP tools channel (ADR-0005 (e)): at load for cds serve, watch, test.
   addToolsModel(cds);
+  annotateToolsModel(cds);
   warnWithoutToolsModel(cds);
 }

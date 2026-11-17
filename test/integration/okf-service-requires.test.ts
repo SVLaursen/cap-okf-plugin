@@ -32,12 +32,14 @@ describe("OkfService and cds.okf.serve.mcp.requires", () => {
   });
 
   test("an anonymous caller is refused with 401, a user without the role with 403", async () => {
-    await expect(info(cds.User.anonymous)).rejects.toMatchObject({ code: "401" });
-    await expect(info(new cds.User({ id: "bob" }))).rejects.toMatchObject({ code: "403" });
+    await expect(info(cds.User.anonymous)).rejects.toMatchObject({ code: 401 });
+    await expect(info(new cds.User("bob"))).rejects.toMatchObject({ code: 403 });
   });
 
   test("a user with the role gets an answer", async () => {
-    await expect(info(new cds.User({ id: "alice", roles: { admin: 1 } }))).resolves.toMatchObject({
+    await expect(
+      info(new cds.User({ id: "alice", roles: ["admin"], attr: {} })),
+    ).resolves.toMatchObject({
       okfVersion: "0.2",
     });
   });
