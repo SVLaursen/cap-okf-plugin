@@ -73,12 +73,13 @@ const PATH_VARIABLE = "path";
 /**
  * Subscribes to mcp:resources and listening; call it at plugin load (ADR-0010: the plugin emits
  * from its own served listener, and plugin load order isn't fixed). `use` hands it what to serve
- * at bootstrap, which CAP runs before served.
+ * at bootstrap, which CAP runs before served: a setup, or undefined when this server serves no
+ * okf:// resources. Every bootstrap calls it, so one server's setup never reaches the next.
  */
 export function gavdiResources(
   cds: Events,
   warn: (message: string) => void,
-): { use(setup: ResourcesSetup): void } {
+): { use(setup: ResourcesSetup | undefined): void } {
   let setup: ResourcesSetup | undefined;
   let arrived = false;
 
@@ -93,7 +94,8 @@ export function gavdiResources(
 
   return {
     use(next) {
-      setup = next.choice.as.includes("resources") ? next : undefined;
+      setup = next;
+      arrived = false;
     },
   };
 }
@@ -141,8 +143,14 @@ function registerResources(
     },
     complete: async (ctx, param, value) => {
       if (param !== PATH_VARIABLE || !meetsRequires(ctx.user, requires)) return [];
-      const paths = await (await sourceFor(ctx)).list();
-      return sortPaths(paths.filter((path) => path.startsWith(value)));
+      const source = await sourceFor(ctx);
+      const matching = (await source.list()).filter((path) => path.startsWith(value));
+      // Only paths read can answer: files that aren't text (e.g. images) are left out.
+      const readable: string[] = [];
+      for (const path of matching) {
+        if ((await servableText(async () => source, path)) !== undefined) readable.push(path);
+      }
+      return sortPaths(readable);
     },
   });
 }
@@ -184,7 +192,7 @@ export function okfUri(namespace: string, path: string): string {
 
 // The template must be canonical once expanded, as @gavdi/cap-mcp checks it.
 function templateUri(namespace: string): string {
-  canonical(`okf://${namespace}/v`);
+  canonical(`okf://${namespace}/v`); // throws when it isn't canonical
   return `okf://${namespace}/{+${PATH_VARIABLE}}`;
 }
 

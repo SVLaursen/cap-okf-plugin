@@ -49,7 +49,8 @@ function answerOf(answer: RpcAnswer, uri: string): Answer {
     return { notFound: `${error.code} ${error.message}`.replaceAll(uri, "<uri>") };
   }
   const contents = answer.message?.result?.["contents"] as { text?: unknown }[] | undefined;
-  if (contents === undefined) return { notFound: `HTTP ${answer.status}` };
+  // Not an MCP answer at all (e.g. HTTP 401): fail, so a check can't pass on two equal failures.
+  if (contents === undefined) throw new Error(`no MCP answer for ${uri}: HTTP ${answer.status}`);
   const text = contents[0]?.text;
   return typeof text === "string" ? { text } : { notFound: "no text" };
 }

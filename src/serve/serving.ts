@@ -28,6 +28,8 @@ export function registerServing(cds: Cds): void {
     const okf = (cds.env as unknown as { okf?: unknown }).okf;
     const route = staticRouteOf(okf);
     const { tools, viaGavdi } = mcpChannels(mcpChoice(cds, okf, warn));
+    // Every server says what it serves, so a previous server's resources are never reused.
+    resources.use(undefined);
     if (route === undefined && tools === undefined && viaGavdi === undefined) return;
 
     // One set of bundles per server: a process may boot more than one app.
@@ -43,8 +45,11 @@ export function registerServing(cds: Cds): void {
   });
 }
 
-// The choice per MCP channel: tools (OkfService), and resources through @gavdi/cap-mcp.
-function mcpChannels(mcp: McpChoice | undefined): { tools?: McpChoice; viaGavdi?: McpChoice } {
+/** The choice per MCP channel: tools (OkfService), and resources through @gavdi/cap-mcp. */
+export function mcpChannels(mcp: McpChoice | undefined): {
+  tools?: McpChoice;
+  viaGavdi?: McpChoice;
+} {
   if (mcp === undefined) return {};
   const viaGavdi = mcp.plugin === GAVDI_CAP_MCP && mcp.as.includes("resources");
   return {
