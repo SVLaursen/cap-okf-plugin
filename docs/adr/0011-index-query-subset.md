@@ -1,6 +1,6 @@
 # 0011. OkfService.Index answers the queries `@gavdi/cap-mcp` sends
 
-- Status: Proposed
+- Status: Accepted (Simon Vestergaard Laursen, 2026-11-17)
 - Date: 2026-11-17
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code (task 4.5, step 2a review)
