@@ -72,15 +72,23 @@ export function describedOf(
   return inheritedDescription(definition, context) ?? textsDescription(name, context);
 }
 
-// "shop.Genres.texts" is generated when shop.Genres has a "texts" composition pointing at it.
+// "shop.Genres.texts" is generated when shop.Genres has localized elements and a "texts"
+// composition pointing at it. Without a localized element it is the app's own entity.
 function textsDescription(name: string, context: MapperContext): string | undefined {
   const suffix = ".texts";
   if (!name.endsWith(suffix)) return undefined;
   const parentName = name.slice(0, -suffix.length);
   const parent = context.model.definitions[parentName];
   const texts = parent?.elements?.["texts"] as { target?: unknown } | undefined;
-  if (parent === undefined || texts?.target !== name) return undefined;
+  if (parent === undefined || texts?.target !== name || !hasLocalizedElement(parent)) {
+    return undefined;
+  }
   return `Translated texts of ${titleOf(parentName, parent, context)}, one row per language.`;
+}
+
+function hasLocalizedElement(definition: CsnDefinition): boolean {
+  const elements = Object.values(definition.elements ?? {}) as { localized?: unknown }[];
+  return elements.some((element) => element.localized === true);
 }
 
 /** The definition's doc comment, else the first one down its source chain. */

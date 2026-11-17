@@ -20,10 +20,15 @@ const MODEL: Csn = {
       kind: "entity",
       elements: { locale: { key: true, type: "cds.String" } },
     },
+    // As CAP compiles a service projection: the title and localized elements are copied.
     "S.Genres": {
       kind: "entity",
+      "@title": "Genres",
       projection: { from: { ref: ["shop.Genres"] } },
-      elements: { texts: { type: "cds.Composition", target: "S.Genres.texts" } },
+      elements: {
+        name: { type: "cds.String", localized: true },
+        texts: { type: "cds.Composition", target: "S.Genres.texts" },
+      },
     },
     "S.Genres.texts": {
       kind: "entity",
@@ -35,8 +40,17 @@ const MODEL: Csn = {
     "shop.Described.texts": { kind: "entity", "@description": "Own words.", elements: {} },
     "shop.Described": {
       kind: "entity",
-      elements: { texts: { type: "cds.Composition", target: "shop.Described.texts" } },
+      elements: {
+        name: { type: "cds.String", localized: true },
+        texts: { type: "cds.Composition", target: "shop.Described.texts" },
+      },
     },
+    // The app's own "texts" composition, without localized elements: not CAP's texts entity.
+    "shop.Custom": {
+      kind: "entity",
+      elements: { texts: { type: "cds.Composition", target: "shop.Custom.texts" } },
+    },
+    "shop.Custom.texts": { kind: "entity", elements: {} },
   },
 };
 
@@ -50,7 +64,7 @@ describe("describedOf: generated .texts entities (task 4.12)", () => {
     );
   });
 
-  test("also as a service's projection, named after the service's entity", () => {
+  test("also as a service's projection, with the title CAP copies onto it", () => {
     expect(describe_("S.Genres.texts")).toBe("Translated texts of Genres, one row per language.");
   });
 
@@ -60,5 +74,9 @@ describe("describedOf: generated .texts entities (task 4.12)", () => {
 
   test("an entity merely named .texts gets none", () => {
     expect(describe_("shop.Notes.texts")).toBeUndefined();
+  });
+
+  test("the app's own .texts entity, whose parent has no localized element, gets none", () => {
+    expect(describe_("shop.Custom.texts")).toBeUndefined();
   });
 });
