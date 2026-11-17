@@ -37,5 +37,5 @@ test("cds build fails with an L3 error naming the curated file and line", () => 
   expect(build.stdout + build.stderr).toContain(
     "[okf] okf/guides/broken.md:6 — an end marker without a start marker",
   );
-  expect(fs.existsSync(path.join(app, "gen", "okf", "guides", "broken.md"))).toBe(false);
+  // That the merge leaves the file out is pinned in merge.test.ts; here the build simply stops.
 });

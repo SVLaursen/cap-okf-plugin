@@ -45,7 +45,10 @@ export interface MergedFile {
 export interface MergedBundle {
   /** Every file of the bundle, sorted by path. */
   files: MergedFile[];
-  /** Layout problems (L1, L2), sorted by file. Files with an L1 error are left out. */
+  /**
+   * Layout and marker problems (L1–L4), sorted by file. Files with an L1 or L3 error are left
+   * out.
+   */
   findings: Finding[];
   /** The bundle paths that came from okf/, so messages can name okf/<path>. */
   curatedPaths: ReadonlySet<string>;

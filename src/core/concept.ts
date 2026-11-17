@@ -177,7 +177,8 @@ export function conceptId(path: string): string {
 }
 
 // Trailing spaces after --- are invisible in editors, so they don't make a line "not a delimiter".
-function isDelimiter(line: string | undefined): boolean {
+// Exported for the marker check (auth-markers.ts), so both find the frontmatter alike.
+export function isDelimiter(line: string | undefined): boolean {
   return line?.trimEnd() === DELIMITER;
 }
 

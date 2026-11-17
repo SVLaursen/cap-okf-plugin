@@ -90,4 +90,19 @@ describe("startupBundleSource: curated files with errors", () => {
       expect.stringMatching(/^\[okf\] okf\/broken\.md:1 — .*\(R1\)/),
     ]);
   });
+
+  // Task 4.11: in development the in-memory bundle leaves such a file out too, and logs why.
+  test("a curated file with a broken authorization marker is left out and reported", async () => {
+    fs.mkdirSync(path.join(root, "okf"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "okf", "leaky.md"),
+      "---\ntype: Note\ntitle: Leaky\ndescription: L.\n---\n- <!-- okf:auth:start -->\nSecret.\n- <!-- okf:auth:end -->\n",
+    );
+    const source = await startupBundleSource(await appCds(root), log, {});
+    expect(await source.list()).not.toContain("leaky.md");
+    expect(warnings).toEqual([
+      expect.stringMatching(/^\[okf\] okf\/leaky\.md:6 — .*\(L3\)/),
+      expect.stringMatching(/^\[okf\] okf\/leaky\.md:8 — .*\(L3\)/),
+    ]);
+  });
 });
