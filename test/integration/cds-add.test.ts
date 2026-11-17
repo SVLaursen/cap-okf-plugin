@@ -9,14 +9,18 @@ const ROOT = path.join(__dirname, "..", "..");
 const FIXTURE = path.join(ROOT, "test", "fixtures", "bookshop");
 
 function cdsAdd(app: string) {
+  return cds(app, ["add", "okf"]);
+}
+
+function cds(app: string, args: string[]) {
   // Without CDS_CONFIG: test/setup-env.js points it at src/, but a child process can't run TS.
   const env: Record<string, string | undefined> = { ...process.env };
   delete env["CDS_CONFIG"];
-  return spawnSync(
-    process.execPath,
-    [path.join(ROOT, "scripts", "cds-with-okf.js"), "add", "okf"],
-    { cwd: app, env, encoding: "utf8" },
-  );
+  return spawnSync(process.execPath, [path.join(ROOT, "scripts", "cds-with-okf.js"), ...args], {
+    cwd: app,
+    env,
+    encoding: "utf8",
+  });
 }
 
 /** Every file below `folder` with its text, except node_modules. */
@@ -64,5 +68,19 @@ describe("cds add okf", () => {
     const once = snapshot(app);
     expect(cdsAdd(app).status).toBe(0);
     expect(snapshot(app)).toEqual(once);
+  });
+
+  // ADR-0005 (b): an app with its own build.tasks gets the okf task only if it lists it.
+  test("then cds build writes the bundle, also for an app that lists its own build tasks", () => {
+    const packageJson = { name: "shop", cds: { build: { tasks: [{ for: "nodejs" }] } } };
+    fs.writeFileSync(path.join(app, "package.json"), JSON.stringify(packageJson, null, 2) + "\n");
+    expect(cdsAdd(app).status).toBe(0);
+    const result = cds(app, ["build"]);
+    expect({ status: result.status, okf: result.stdout.includes("[okf]") }).toEqual({
+      status: 0,
+      okf: false,
+    });
+    expect(fs.existsSync(path.join(app, "gen", "okf", "guides", "getting-started.md"))).toBe(true);
+    expect(fs.existsSync(path.join(app, "gen", "okf", "model", "CatalogService.md"))).toBe(true);
   });
 });
