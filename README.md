@@ -38,11 +38,12 @@ Markdown files in `okf/`.
 
 ## Quick start
 
-In your CAP project:
+In your CAP project (until cap-okf is on npm, install it from a local clone instead:
+`npm add -D <path to cap-okf>`):
 
 ```sh
 npm add -D cap-okf
-cds add okf      # creates okf/ with an index and an example, and the cds.okf settings
+cds add okf      # creates okf/ with an index and an example, the cds.okf settings, and a .gitignore entry
 cds build        # writes the bundle to gen/okf
 ```
 
@@ -82,7 +83,8 @@ gen/okf/
 - **Concept types:** `Service`, `Entity`, `Projection`, `View`, `Action`, `Function`, `Type`,
   `Aspect` and `Event`.
 - **Frontmatter:** each generated concept has `type`, `title`, `description`, `resource`
-  (`cds:<name>`), `tags` (`cds`, the kind, the namespace, plus your `@okf.tags`) and `generated`
+  (`cds:<name>`), `tags` (`cds`, the kind, the parent name — the namespace, or the service for a
+  service member — plus your `@okf.tags`) and `generated`
   (`by: cap-okf/<version>`, `at: <time of the build>`).
 - **Body:** elements with their types and notes, associations and compositions as links,
   actions and functions with parameters and return types, and an authorization section (see
@@ -91,7 +93,9 @@ gen/okf/
   from any folder.
 
 By default only your **services and what they use** are exported: the services, the entities
-they expose, the entities those are built on, and the types, aspects and targets they use.
+they expose, the entities those are built on, and the types and association targets they use.
+An aspect is exported when an element uses it as a type or a composition target; aspects mixed
+in with `:` (such as `cuid` or `managed`) aren't, and their elements appear on the entity.
 Definitions nothing reaches are left out. Set `cds.okf.include` to `"all"` to export everything
 (see [Configuration](#configuration)).
 
@@ -124,7 +128,9 @@ Rules:
   get a warning (L2). Without `okf/index.md`, cap-okf writes one that lists your folders and
   `model/`.
 - **Folders get an index.** A folder in `okf/` with concepts but no `index.md` of its own gets a
-  generated one.
+  generated one. If you write a folder's `index.md` yourself, give it no frontmatter (only the
+  bundle's root `index.md` may have it, for `okf_version`) and list entries under headings as
+  `* [Title](path) - description` (OKF §8); otherwise the build fails (R3).
 - **`index.md` and `log.md` are reserved names** (OKF §3.1), in lower case only: `INDEX.md` or
   `Log.md` is an error (L1).
 - **No two paths may differ only in letter case or accents** (`Guides/` and `guides/`): macOS
@@ -140,9 +146,9 @@ cap-okf reads what your model already has, and adds two annotations of its own.
 | In your CDS | Becomes |
 | --- | --- |
 | `/** Doc comment. More text. */` | The concept's body text. Its first sentence is the description when there is no `@description`. |
-| `@title: 'Books'` | The concept's `title` (default: the definition's short name). |
+| `@title: 'Books'` | The concept's `title` (default: the definition's short name). `@Common.Label` isn't read yet. |
 | `@description: 'Books that …'` | The concept's `description`. |
-| `@title: '{i18n>Books}'` | Resolved from your `_i18n/i18n.properties`, in `cds.i18n.default_language`. |
+| `@title: '{i18n>Books}'` | Resolved as CAP does, from the `_i18n/` or `i18n/` folders next to your model, in `cds.i18n.default_language` (e.g. `i18n_en.properties`), falling back to `i18n.properties`. |
 | `@okf: false` | Leaves the definition, element, parameter or bound action out of the bundle. |
 | `@okf.tags: ['sales', 'core']` | Adds tags to the concept (a single tag can be a string). |
 | `@restrict`, `@requires`, `@readonly`, `@insertonly`, `@Capabilities` | The concept's authorization section. |
@@ -156,7 +162,10 @@ About `@okf: false`:
   their built-in type, because they exist on the wire.
 - An authorization rule that mentions an excluded definition still shows it as CAP applies it.
 
-Projections and views without their own description or doc comment take their source's.
+Projections and views without their own description or doc comment take their source's. CAP
+copies `@description` from the source onto the projection, and `@description` wins over a doc
+comment, so a projection's own doc comment doesn't replace its source's `@description`: set
+`@description` on the projection to change it.
 
 ```cds
 namespace sample.bookshop;
@@ -176,7 +185,8 @@ entity Books {
 
 Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CAP's profiles
 (`[development]`, `[production]`) and environment variables (e.g. `CDS_OKF_INCLUDE=all`).
-`cds add okf` writes them with their default values:
+`cds add okf` writes them with their default values, but only when no CAP config file sets
+`okf` yet (in any profile), so it never overrides your settings:
 
 ```json
 "cds": {
@@ -191,7 +201,7 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | --- | --- | --- | --- |
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
 | `serve.static` | `false`, `true`, `"/path"` | `false` | *Planned for 0.2.* Serves the bundle as Markdown files from a route. |
-| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. See [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md). |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. The object's shape follows [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md), which is still a proposal, so it may change. |
 
 Nothing is ever served unless you turn it on ([ADR-0002](docs/adr/0002-serving-is-opt-in.md)).
 Installing an MCP plugin doesn't change that.
@@ -200,7 +210,8 @@ Also good to know:
 
 - **Build tasks.** If your app lists its own `cds.build.tasks`, CAP only runs the tasks in that
   list. Add `{ "for": "okf" }` to it, or `cds build` writes no bundle. `cds add okf` does this for
-  you in `package.json` and `.cdsrc.json`.
+  you in `package.json` and `.cdsrc.json` (base and top-level profiles); for `.cdsrc.yaml` or
+  `.cdsrc.js`, and for task lists in profiles inside `build`, add it yourself.
 - **Reproducible builds.** `generated.at` is the build time. Set `SOURCE_DATE_EPOCH` (seconds
   since 1970, e.g. `git log -1 --format=%ct`) to stamp a fixed time, so two builds of the same
   sources give the same bytes.
@@ -235,7 +246,8 @@ without an authenticated user ([ADR-0003](docs/adr/0003-authorization-sections.m
 
 **The files on disk always contain them.** That includes `gen/okf` and the copy in your deployed
 app (`gen/srv/okf-bundle/`). If you commit `gen/okf`, publish it, or ship it anywhere public,
-consider whether your role names and `where` conditions may be seen.
+consider whether your role names and `where` conditions may be seen. `cds add okf` puts
+`gen/okf` in `.gitignore` for this reason.
 
 ## Building and deploying
 
@@ -276,7 +288,12 @@ instead of a file.
 
 ## Known limits
 
-- Texts come from `cds.i18n.default_language` only; `cds compile -l` is refused.
+- Texts come from `cds.i18n.default_language` only; `cds compile -l` is refused, and so are
+  `-s <service>` (the bundle holds every exported service), a model piped in on stdin and
+  `--sort` (cap-okf loads the model's files again, with doc comments).
+- `cds compile --to okf` reports only problems with `okf/` (L1, L2); the full OKF check
+  (R1–R3, W1–W4) runs in `cds build`.
+- Markdown inside i18n texts (e.g. a link) isn't escaped, so it renders as Markdown.
 - CAP's generated `.texts` entities have no description, so their concepts get a W1 warning.
 - `cds compile -o` adds and overwrites files but never deletes any; compile into an empty folder,
   or use `cds build`.
