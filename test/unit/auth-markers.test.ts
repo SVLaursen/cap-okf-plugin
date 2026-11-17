@@ -233,3 +233,30 @@ describe("authMarkerFindings: what counts as a fenced code block", () => {
     expect(found(`${FRONTMATTER}${body}`)).toEqual([]);
   });
 });
+
+describe("authMarkerFindings: review round 3", () => {
+  test("a comment that explains the markers in words is a warning, not an error", () => {
+    const text = `${FRONTMATTER}<!-- okf:auth:start must stay alone on its line -->\n${AUTH_START}\nS.\n${AUTH_END}\n`;
+    expect(found(text)).toEqual([[5, "L4"]]);
+  });
+
+  test("a fence in a quote ends with the quote, so a later fence can't hide a leak", () => {
+    const text =
+      `${FRONTMATTER}> \`\`\`\n> code\n\n- ${AUTH_START}\nSecret.\n- ${AUTH_END}\n\n` +
+      "```js\nx\n```\n";
+    expect(found(text)).toEqual([
+      [8, "L3"],
+      [10, "L3"],
+    ]);
+  });
+
+  test("a fence in a list item ends with the item", () => {
+    const text =
+      `${FRONTMATTER}1. Step:\n    \`\`\`\n    code\n- ${AUTH_START}\nSecret.\n- ${AUTH_END}\n` +
+      "    ```\n";
+    expect(found(text)).toEqual([
+      [8, "L3"],
+      [10, "L3"],
+    ]);
+  });
+});

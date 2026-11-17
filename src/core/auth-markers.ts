@@ -77,12 +77,21 @@ function checkNotAMarker(content: string, line: number, inComment: boolean, add:
   const touchesComment = inComment || outsideCode.includes("<!--") || outsideCode.includes("-->");
   if (comment !== null) {
     add(line, "L3", hidden(comment[1]!.toLowerCase() === "end" ? AUTH_END : AUTH_START));
-  } else if (MARKER_LIKE.test(outsideCode) && touchesComment) {
+  } else if (touchesComment && isOnlyAMarker(outsideCode)) {
     add(line, "L3", MISSPELLED);
   } else if (MARKER_LIKE.test(outsideCode) || isMarkerInInlineCode(visible)) {
     add(line, "L4", LOOKS_LIKE);
   }
   return commentOpenAfter(outsideCode, inComment);
+}
+
+// A line with nothing but marker-like text, comment dashes and the decorations that hide a marker
+// (bullet, #, quote, task box): it was meant as a marker. A comment that explains the markers in
+// words ("okf:auth:start must stay alone") isn't one.
+const DECORATIONS = /^(?:[\s>#*+-]|\d+[.)]|\[[ xX]\])*/;
+const ONLY_A_MARKER = /^[\s<!>-]*okf[\s:_-]*auth[\s:_-]*(start|end)[\s<!>-]*$/i;
+function isOnlyAMarker(text: string): boolean {
+  return ONLY_A_MARKER.test(text.replace(DECORATIONS, ""));
 }
 
 // A line that is nothing but inline code holding marker-like text was probably meant as a marker.
@@ -130,21 +139,38 @@ function codeBlockLines(lines: string[], frontmatterEnd: number): boolean[] {
 }
 
 // The index of the fence closing the block that lines[open] opens, or undefined when lines[open]
-// opens no block (it isn't a fence, or nothing closes it).
+// opens no block (it isn't a fence, or nothing closes it). A fence in a quote or an indented
+// list item ends with its container: at the first line without ">", or the first non-blank line
+// indented less than the opening fence. Ending early only means more lines are checked.
 function closingFenceIndex(lines: string[], open: number): number | undefined {
-  const opening = FENCE_LINE.exec(lines[open]!);
+  const openingLine = lines[open]!;
+  const opening = FENCE_LINE.exec(openingLine);
   if (opening === null) return undefined;
   const run = opening[1]!;
   const info = opening[2]!;
   if (run.startsWith("`") && info.includes("`")) return undefined;
   for (let index = open + 1; index < lines.length; index += 1) {
-    const fence = FENCE_LINE.exec(lines[index]!);
-    if (fence === null) continue;
-    const closingRun = fence[1]!;
-    const sameKind = closingRun[0] === run[0] && closingRun.length >= run.length;
-    if (sameKind && fence[2]!.trim() === "") return index;
+    const content = lines[index]!;
+    if (leavesContainer(openingLine, content)) return undefined;
+    if (closesFence(content, run)) return index;
   }
   return undefined;
+}
+
+// Whether `content` is outside the quote or list item the opening fence is in.
+function leavesContainer(openingLine: string, content: string): boolean {
+  if (openingLine.trimStart().startsWith(">")) return !content.trimStart().startsWith(">");
+  return content.trim() !== "" && indentOf(content) < indentOf(openingLine);
+}
+
+// Whether `content` closes a block opened by `run`: the same character, at least as long, and
+// nothing after it.
+function closesFence(content: string, run: string): boolean {
+  const fence = FENCE_LINE.exec(content);
+  if (fence === null) return false;
+  const closingRun = fence[1]!;
+  const sameKind = closingRun[0] === run[0] && closingRun.length >= run.length;
+  return sameKind && fence[2]!.trim() === "";
 }
 
 function hidden(marker: string): { message: string; fix: string } {
@@ -189,3 +215,7 @@ const UNCLOSED = {
   message: "a start marker without an end marker: anonymous readers would get nothing after it",
   fix: `Add ${AUTH_END} on its own line where the section ends`,
 };
+
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
+}

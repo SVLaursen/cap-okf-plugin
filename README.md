@@ -258,8 +258,8 @@ the frontmatter. `cds build` stops on a marker it can't trust (L3): an end witho
 start without an end, a marker in the frontmatter, a marker that isn't alone on its line (a
 bullet, `#`, quote or other text with it), or a comment meant as a marker but misspelled
 (`<!-- okf: auth:start -->`). None of these would hide anything. It warns about a marker written
-slightly differently, or inside a code block, where it still cuts the text (L4). Markers in inline
-code or fenced examples are fine.
+slightly differently, or inside a code block, where it still cuts the text (L4). Marker text in
+inline code within a sentence, or a bulleted example in a fenced block, is fine.
 
 **The files on disk always contain them.** That includes `gen/okf` and the copy in your deployed
 app (`gen/srv/okf-bundle/`). If you commit `gen/okf`, publish it, or ship it anywhere public,
