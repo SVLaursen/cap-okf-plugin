@@ -313,7 +313,7 @@ cap-okf then adds a read-only `OkfService` to the app, which the MCP plugin offe
 - `true` alone picks the plugin's own default channel, which for `@gavdi/cap-mcp` is resources (planned), so
   write `as: ["tools"]` for the tools.
 - `requires` (default `"authenticated-user"`) is the role or roles a caller needs; one is enough. Callers
-  without it don't see the tools, and calls get 401 or 403.
+  without it don't see the tools; calling one anyway is answered like an unknown tool.
 - Authorization sections are removed for callers who aren't authenticated, as on the static route; the
   index lists links only to concepts the caller can open.
 - `OkfService` has no OData endpoint: only the MCP plugin reaches it. It is never part of the bundle.

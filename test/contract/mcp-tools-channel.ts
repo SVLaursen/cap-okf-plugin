@@ -9,7 +9,8 @@ import type { Answer, Channel, Reader } from "./server.contract";
 
 type Post = Parameters<typeof rpc>[0];
 
-const BOB = { username: "bob", password: "bob" };
+/** The demo's mocked user bob: authenticated, no roles. */
+export const BOB = { username: "bob", password: "bob" };
 
 function authOf(reader: Reader): { username: string; password: string } | undefined {
   return reader === "authenticated" ? BOB : undefined;

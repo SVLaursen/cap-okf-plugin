@@ -77,5 +77,8 @@ function messageOf(response: {
       ? undefined
       : (JSON.parse(last.slice(5).trim()) as RpcAnswer["message"]);
   }
-  return JSON.parse(data) as RpcAnswer["message"];
+  // Anything else (e.g. Express's HTML 404 when /mcp isn't mounted) is no JSON-RPC answer.
+  return type.startsWith("application/json")
+    ? (JSON.parse(data) as RpcAnswer["message"])
+    : undefined;
 }

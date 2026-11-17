@@ -2,7 +2,7 @@ import path from "node:path";
 import cds from "@sap/cds";
 import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
 import { rpc } from "../helpers/mcp-rpc";
-import { mcpToolsChannel } from "./mcp-tools-channel";
+import { BOB, mcpToolsChannel } from "./mcp-tools-channel";
 import { hiddenContract, serverContract } from "./server.contract";
 
 // The server contract (4.1) on the MCP tools channel (4.5), through @gavdi/cap-mcp v2 itself
@@ -30,7 +30,7 @@ describeWithGavdi("the MCP tools channel through @gavdi/cap-mcp", () => {
   hiddenContract("MCP tools", channel, "guides/ordering.md");
 
   test("the plugin offers exactly OkfService's five tools", async () => {
-    const answer = await rpc(POST as never, { username: "bob", password: "bob" }, "tools/list");
+    const answer = await rpc(POST as never, BOB, "tools/list");
     const names = (answer.message?.result?.["tools"] as { name: string }[]).map(
       (tool) => tool.name,
     );
@@ -48,7 +48,7 @@ describeWithGavdi("the MCP tools channel through @gavdi/cap-mcp", () => {
     expect((await GET("/odata/v4/okf-service/Index", { validateStatus: () => true })).status).toBe(
       404,
     );
-    const info = await rpc(POST as never, { username: "bob", password: "bob" }, "tools/call", {
+    const info = await rpc(POST as never, BOB, "tools/call", {
       name: "OkfService_bundleInfo",
       arguments: {},
     });
