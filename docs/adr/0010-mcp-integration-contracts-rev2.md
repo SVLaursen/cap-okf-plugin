@@ -4,7 +4,8 @@
 - Date: 2026-11-17
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code, from the maintainer's revision 2 of ADR-0006 (2026-11-17), merged
-  with the findings of task 0.5 that ADR-0006 recorded
+  with the findings of task 0.5 that ADR-0006 recorded; Contract A updated the same day to the
+  `@gavdi/cap-mcp` maintainers' answer (`docs/upstream/gavdi-cap-mcp/reply-2026-11-17.md`)
 - Supersedes: ADR-0006 (once Accepted; ADR-0006 is Accepted and can't be edited, so this ADR
   replaces it as a whole)
 - Amends: ADR-0004 point 3 (channel shapes). The maintainer's amendment note for ADR-0004 is
@@ -77,20 +78,25 @@ ADR-0006, with the channel shapes below.
   - *Not* in the root `index.md`: OKF v0.2 §8 allows only `okf_version` in an index file's
     frontmatter, and cap-okf's validator reports any other key as R3 (an error that fails the
     build).
-  - *Proposed instead:* `bundleHash` (SHA-256 over the sorted paths and texts the caller may see
-    before filtering, i.e. of the `(tenant, locale)` bundle) in each resource's `_meta`
-    (`okf/bundleHash`) on Contract A, and as the function `bundleInfo()` on Contract B, returning
-    `{ okfVersion, bundleHash, namespace }`.
+  - *Not* in resource metadata either: Contract A as built passes no `_meta` (template `list`
+    entries carry only `uri`, `name`, `title`, `description`).
+  - *Proposed instead:* `bundleHash` (SHA-256 over the sorted paths and texts of the
+    `(tenant, locale)` bundle, before filtering) from the function `bundleInfo()` on Contract B,
+    returning `{ okfVersion, bundleHash, namespace }`. A host that pins `okf://` resources and
+    wants to check staleness calls that tool.
 
-### Contract A — `mcp:resources` (to be added to `@gavdi/cap-mcp`), revision 2
+### Contract A — `mcp:resources` in `@gavdi/cap-mcp`, as built
 
-Changes from ADR-0006: `contractVersion`; optional `registerTemplate`; `tenant` in every context;
-async `visible`; "not found" is a thrown 404, not `undefined`; URI namespace rule on the cap-okf
-side.
+The `@gavdi/cap-mcp` maintainers build this (their ADR 0013, accepted once cap-okf confirms); their
+answer, with the reasons for each difference from the first proposal, is in
+`docs/upstream/gavdi-cap-mcp/reply-2026-11-17.md`. Changes from ADR-0006: `contractVersion`;
+`registerTemplate` in the same release; `tenant` in every context; "not found" is a thrown 404,
+not `undefined`; canonical URIs; concepts through one template.
 
-Emitted once on `served`, right after `mcp:apps`, from the same listener. Listeners register
-synchronously while the event is being emitted; `register` and `registerTemplate` throw after
-that.
+Emitted once on `served`, right after `mcp:apps`, from the same listener, also when nothing else
+produces resources. Listeners register synchronously, before any `await`; the registry closes
+when the emit returns, and `register` and `registerTemplate` throw after that. A registration
+that throws fails startup with a `cap-mcp:` message.
 
 ```ts
 interface ResourceContext { user: unknown; tenant?: string; locale?: string }
@@ -98,75 +104,85 @@ interface ResourceContext { user: unknown; tenant?: string; locale?: string }
 interface ResourceRegistry {
   readonly contractVersion: 1;
   register(resource: FixedResource): void;
-  /** Optional in contractVersion 1. Listeners feature-detect it. */
+  /** Ships with register in contractVersion 1; listeners still feature-detect it. */
   registerTemplate?(template: TemplateResource): void;
 }
 
 interface FixedResource {
-  uri: string;                 // absolute; scheme not cap: or ui:; unique (duplicates throw)
+  uri: string;                 // absolute and canonical: new URL(uri).href === uri; not cap:/ui:
   name: string;
   title?: string;
   description?: string;
   mimeType: string;            // "text/markdown" for OKF; text only
-  _meta?: Record<string, unknown>;
   /** Called per resources/read, inside the request's cds.context; not wrapped in srv.tx. */
   read(ctx: ResourceContext): string | Promise<string>;
-  /** Optional: hide the resource (not listed, not readable) from callers it returns false for. */
-  visible?(ctx: ResourceContext): boolean | Promise<boolean>;
+  /** Optional, synchronous: hide the resource (not listed, not readable) for this caller. */
+  visible?(ctx: ResourceContext): boolean;
 }
 
 interface TemplateResource {
-  uriTemplate: string;         // RFC 6570, e.g. "okf://acme-orders/{+path}"; unique
-  name: string;
+  uriTemplate: string;         // RFC 6570, canonical once expanded, e.g. "okf://acme-orders/{+path}"
+  name: string;                // unique among templates, e.g. "okf-acme-orders-concepts"
   title?: string;
   description?: string;
   mimeType: string;
-  /** Optional: concrete resources to add to resources/list. Omit to keep the list short. */
+  /** Optional: concrete resources to add to resources/list. */
   list?(ctx: ResourceContext): ListedResource[] | Promise<ListedResource[]>;
-  /** Called per resources/read of a URI that matches the template. */
+  /** Per resources/read of a matching URI; params are strings, still percent-encoded. */
   read(ctx: ResourceContext & { uri: string; params: Record<string, string> }): string | Promise<string>;
-  /** Optional: values for completion/complete on a template parameter. */
+  /** Optional: completion for the template's own variables; at most 100 values are passed on. */
   complete?(ctx: ResourceContext, param: string, value: string): string[] | Promise<string[]>;
 }
 
 interface ListedResource { uri: string; name: string; title?: string; description?: string }
 ```
 
-`@gavdi/cap-mcp` side:
+`@gavdi/cap-mcp` side (as built):
 
 - Adds, per request, every fixed resource whose `visible(ctx)` is not `false`, and every template.
-- Advertises the `resources` capability when the caller has at least one visible fixed resource
-  or one template; `listChanged: false`, no subscriptions; `resources/list` keeps
-  `cacheScope: private`.
-- A fixed URI wins over a template that would also match it.
-- Calls `read`, `list`, `complete` and `visible` inside the request's `cds.context`, not inside
+  A `visible` that throws hides that resource for the request and is logged.
+- Advertises the `resources` capability only when the caller has a resource; `listChanged: false`,
+  no subscriptions; `resources/list` keeps `cacheScope: private`.
+- A hidden fixed URI that a template also matches is answered by the template's `read`.
+  Overlapping templates match in sorted `uriTemplate` order.
+- Calls the callbacks inside the request's `cds.context` (user, tenant, locale), not inside
   `srv.tx`, and doesn't cache their results across requests.
 - Hidden and unknown URIs get the same resource-not-found answer.
-- Errors: `status`/`statusCode` 404 or `code: "NOT_FOUND"` → resource-not-found; anything else is
-  logged as an internal error and its message is not passed to the client.
-- Rejects at registration: a URI that isn't absolute, a `cap:` or `ui:` URI, a duplicate URI,
-  name or template, a missing `read`.
-- Never imports cap-okf. `registerTemplate` may ship in a later minor release than `register`.
+- Errors: `status`/`statusCode` 404 or `code: "NOT_FOUND"` → resource-not-found, with the URI only
+  (the error's message is not passed on); anything else is logged as an internal error. A `read`
+  that returns something other than a string is an internal error; a `list` that throws adds
+  nothing; a `complete` that throws offers nothing.
+- Rejects at registration: a URI that isn't absolute and canonical, a `cap:` or `ui:` URI, a
+  duplicate URI, `uriTemplate` or template `name`, a template the SDK's `UriTemplate` can't parse.
+- Exports the contract's types from `@gavdi/cap-mcp` as types only. Never imports cap-okf.
 
 cap-okf side:
 
 - **Subscribes at plugin load** (`cds.on('mcp:resources', …)` from `cds-plugin.js`), not inside
   its own `served` listener: cap-mcp emits from within its `served` listener, and plugin load
-  order is not fixed (task 0.5).
-- Always registers `okf://<namespace>/index.md` as a fixed resource.
-- At or below `templateThreshold` concepts (default 50), or without `registerTemplate`: one fixed
-  resource `okf://<namespace>/<path>` per concept, `visible` = the ADR-0003 rule for `ctx.user`.
-- Above the threshold with `registerTemplate`: one template `okf://<namespace>/{+path}` with
-  `read` and `complete`, no `list`. Agents find paths in the index.
-- `read` returns the concept through the ADR-0003 filter for `ctx.user`; an unknown or hidden
-  path throws an error with `status: 404`.
+  order is not fixed (task 0.5; their answer says the same). It registers synchronously; the
+  callbacks may await the bundle, which is ready before `served` completes (ADR-0007).
+- **One fixed resource:** `okf://<namespace>/index.md`, without `visible` (its text goes through
+  the ADR-0003 filter in `read`, so every caller may see the index).
+- **One template for every concept, whatever the bundle size:** `okf://<namespace>/{+path}`,
+  named `okf-<namespace>-concepts`, with `read` and `complete`, no `list` (agents find paths in
+  the index; a long resource list is what this avoids).
+  - `read` percent-decodes `params.path` once, accepts it only if it is a path the bundle lists
+    (no `..`, no absolute paths: `BundleSource.read` already refuses those), and returns the
+    concept through the ADR-0003 filter for `ctx.user`. An unknown or hidden path throws an
+    error with `status: 404`.
+  - `complete` offers bundle paths the caller may see that start with the typed value, sorted.
+- **Canonical URIs:** every URI cap-okf builds encodes each path segment as a URI path (ADR-0007,
+  path rules) and is checked with `new URL(uri).href === uri` before registering, so a mistake
+  fails at startup with an `[okf]` message rather than inside cap-mcp.
+- **Without `registerTemplate`** (a release without it, which the maintainers don't plan): one
+  warning, nothing registered, and the tools channel if `tools` was requested. cap-okf doesn't
+  fall back to one fixed resource per concept, which the maintainers asked us not to do.
 - Checks at `listening` whether the event arrived. If not (`@gavdi/cap-mcp` 1.x, or 2.x without
   Contract A): one warning naming the version and event it needs, and the tools channel if
   `tools` was requested.
-
-The `@gavdi/cap-mcp` side is specified in `docs/upstream/gavdi-cap-mcp/` (handoff `README.md`
-and its ADR `0013-mcp-resources-event.md`). Both describe ADR-0006's Contract A and must be
-updated to this revision and agreed again with that plugin's maintainer before task 4.6.
+- The contract test may import the exported types (`import type`), which adds a dev dependency
+  only (task 4.8), never a runtime one (ADR-0004: never `require` an MCP plugin).
 
 ### Contract B — `OkfService` (both plugins), revision 2
 
@@ -214,8 +230,15 @@ service OkfService {
   comparisons and `contains` on `path`, `type`, `title`, `tags`; `orderBy`; paging; `columns`.
   It rejects with a clear error what it doesn't support: `search` (use `searchConcepts`), `one`,
   `groupBy`/`having`, expands, functions and aggregates. Tool descriptions don't promise more.
-- The doc comments are the tool descriptions in both plugins, so they are written as
-  instructions to an agent.
+- **Descriptions as `@description`, not only doc comments.** `@gavdi/cap-mcp` takes a tool's
+  description from `@mcp.description`, then `@description`, then the doc comment, and doc
+  comments reach the model only when the app sets `cdsc.docs` (its ADR 0011; cap-okf never sets
+  it for the app). So the service, `Index`, each function and each parameter carry an
+  `@description`, written as an instruction to an agent; the doc comments above say the same for
+  readers of the CDS file.
+- **Tool names under `@gavdi/cap-mcp`** (confirmed by its maintainers for the first four; the
+  fifth follows the same pattern): `OkfService_getConcept`, `OkfService_searchConcepts`,
+  `OkfService_Index_query`, `OkfService_Index_get`, `OkfService_bundleInfo`.
 - `@requires` comes from `cds.okf.serve.mcp.requires`, default `authenticated-user`.
 - The model is only added to the app when the tools channel is on (ADR-0005 (e)).
 - **How it is served differs by plugin** (task 0.5, unchanged): with `@cap-js/mcp` only at
@@ -223,8 +246,8 @@ service OkfService {
   client configs (README must say so); with `@gavdi/cap-mcp` at `/mcp`, and `OkfService` is
   marked `@protocol: 'none'` so it isn't also opened on OData (maintainer's decision,
   2026-11-13; task 4.5 proves it works, else the endpoint stays and is documented).
-- **Fallback**, if task 4.5 finds that either plugin can't expose unbound functions as tools
-  with their doc comments: replace the functions with an entity `Concepts` (the `Index` columns
+- **Fallback**, if task 4.5 finds that `@cap-js/mcp` can't expose unbound functions as tools
+  (`@gavdi/cap-mcp` can, per its maintainers): replace the functions with an entity `Concepts` (the `Index` columns
   plus `body : LargeString`) whose READ handler fills `body` only on a single-key read
   (`Concepts('model/…/Books.md')`) and returns `null` on collection reads, and says so in its doc
   comment; `body` is not filterable. One shape is used for both plugins.
@@ -235,32 +258,33 @@ service OkfService {
 "cds": { "okf": { "serve": { "mcp": {
   "plugin": "auto", "as": ["resources", "tools"],
   "namespace": "<derived from package.json name>",
-  "requires": "authenticated-user",
-  "templateThreshold": 50
+  "requires": "authenticated-user"
 } } } }
 ```
 
-All three new keys are optional. `templateThreshold` must be a whole number ≥ 0.
+Both new keys are optional. (The first draft's `templateThreshold` is gone: concepts are always
+served through the template.)
 
 ### Open points
 
-- **Task 4.5, first step:** check in the source of both plugins whether unbound CDS functions
-  become tools, with doc comments as descriptions (`@cap-js/mcp`: through `call` or
-  `per_action_tool`; `@gavdi/cap-mcp`: its ADR 0004). This decides between Contract B and its
-  fallback.
-- **Before task 4.6:** update `docs/upstream/gavdi-cap-mcp/` to Contract A revision 2 and agree it
-  with that plugin's maintainer, including whether `registerTemplate` ships in the first release.
+- **Task 4.5, first step:** check in the `@cap-js/mcp` source whether unbound CDS functions
+  become tools (through `call` or `per_action_tool`) and where their descriptions come from. This
+  decides between Contract B and its fallback for that plugin. (`@gavdi/cap-mcp`: yes, answered.)
+- **For the maintainer:** confirm Contract A as built to the `@gavdi/cap-mcp` maintainers, so
+  their ADR 0013 is marked accepted. Task 4.6 stays blocked until a release emits
+  `mcp:resources`.
 - **For the maintainer:** accept the proposed `(tenant, locale)` scope and the `bundleHash`
-  placement, or say otherwise.
+  placement (now `bundleInfo()` only), or say otherwise.
 
 ## Consequences
 
 - Agents get the index first on both channels; full concepts are pulled one at a time.
 - Several cap-okf apps can sit in one MCP host without URI collisions.
-- `@gavdi/cap-mcp` can ship fixed resources first and templates later without breaking cap-okf.
+- The resource list stays short for any bundle size: one index and one template per app.
 - The bundle files stay exactly OKF v0.2: the hash lives in MCP metadata, not in `index.md`.
 - One contract test suite per contract, run in cap-okf against a fake emitter (with and without
-  `registerTemplate`) and against a real fixture app per plugin (task 4.8).
+  `registerTemplate`, and with non-canonical URIs) and against a real fixture app per plugin
+  (task 4.8).
 - `@gavdi/cap-mcp` 1.x stays unsupported; the runtime warning names what's needed.
 - ADR-0006 becomes Superseded when this is Accepted; its Context stays the record of task 0.5.
 
@@ -272,12 +296,11 @@ All three new keys are optional. `templateThreshold` must be a whole number ≥ 
 > channel shapes in point 3. The decision itself (opt-in, two channels, one interface, one
 > authorization rule) is unchanged.
 >
-> - Resource URIs carry a namespace: `okf://<namespace>/index.md` and
->   `okf://<namespace>/<bundle path>`.
+> - Resource URIs carry a namespace: `okf://<namespace>/index.md` as a fixed resource, and every
+>   concept through one template `okf://<namespace>/{+path}`.
 > - The tools channel is index-first: `OkfService.Index` (no body) plus the functions
 >   `getConcept(path)`, `searchConcepts(...)` and `bundleInfo()`, instead of one `Concepts`
 >   entity with `body`.
-> - The object form of `cds.okf.serve.mcp` gains three optional keys: `namespace`, `requires`,
->   `templateThreshold`.
+> - The object form of `cds.okf.serve.mcp` gains two optional keys: `namespace` and `requires`.
 >
 > The context table keeps `call` as the name of `@cap-js/mcp`'s third tool (not `call_action`).
