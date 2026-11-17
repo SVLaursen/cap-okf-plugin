@@ -3,8 +3,13 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export const GAVDI_ROOT =
-  process.env["CAP_MCP_V2"] ?? path.join(__dirname, "..", "..", "..", "cap-mcp-v2");
+// The same rule as test/gavdi-cap-mcp-plugin.js: an empty CAP_MCP_V2 counts as not set.
+export const GAVDI_ROOT = path.resolve(
+  process.env["CAP_MCP_V2"] || path.join(__dirname, "..", "..", "..", "cap-mcp-v2"),
+);
+
+/** An empty plugin to register under "@gavdi/cap-mcp" where only its name must be found. */
+export const MCP_PLUGIN_STUB = path.join(__dirname, "..", "mcp-plugin-stub.js");
 
 /** The test-only plugin entry that loads it with this repository's @sap/cds. */
 export const GAVDI_PLUGIN = path.join(__dirname, "..", "gavdi-cap-mcp-plugin.js");

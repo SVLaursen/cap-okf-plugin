@@ -71,7 +71,9 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
     // cds build rebuilds cds.env before it asks hasTask() (no task list) or constructs the
     // listed plugins, so OkfService's model is added again here (ADR-0005 (e)).
     static hasTask(): boolean {
-      return addToolsModel(cds);
+      addToolsModel(cds);
+      // The okf task always runs: the bundle is always built (ADR-0002).
+      return true;
     }
 
     constructor() {
@@ -95,21 +97,11 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
       // CAP has already logged that the app has no CDS model.
       if (model === undefined || model === null) return;
       const bundle = await mergedBundle(cds, build, model as Csn);
-      await this.writeFiles(bundle.files, this.task.dest);
+      await writeFiles(this, bundle.files, this.task.dest);
       this.reportFindings(bundle);
       const deployedApp = deployedNodejsApp(cds, this.context.tasks);
       if (deployedApp !== undefined) {
-        await this.writeFiles(bundle.files, path.join(deployedApp, DEPLOYED_BUNDLE_FOLDER));
-      }
-    }
-
-    // The folder is cap-okf's alone, so it is emptied first.
-    private async writeFiles(files: MergedFile[], folder: string): Promise<void> {
-      await rm(folder, { recursive: true, force: true });
-      for (const file of files) {
-        // Curated files that aren't Markdown are copied byte for byte.
-        const content = file.bytes === undefined ? file.text : Buffer.from(file.bytes);
-        await this.write(content).to(path.join(folder, ...file.path.split("/")));
+        await writeFiles(this, bundle.files, path.join(deployedApp, DEPLOYED_BUNDLE_FOLDER));
       }
     }
 
@@ -129,6 +121,17 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
       }
     }
   };
+}
+
+// Writes the bundle into `folder` through CAP's plugin.write, which records each file for the
+// build's output list. The folder is cap-okf's alone, so it is emptied first.
+async function writeFiles(plugin: BuildPlugin, files: MergedFile[], folder: string): Promise<void> {
+  await rm(folder, { recursive: true, force: true });
+  for (const file of files) {
+    // Curated files that aren't Markdown are copied byte for byte.
+    const content = file.bytes === undefined ? file.text : Buffer.from(file.bytes);
+    await plugin.write(content).to(path.join(folder, ...file.path.split("/")));
+  }
 }
 
 // Only a staging build is deployed as built; an in-place build has no deployed app folder.

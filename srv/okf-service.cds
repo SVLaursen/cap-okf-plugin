@@ -25,7 +25,7 @@ service OkfService {
 
   @description: 'The full concept as Markdown with frontmatter. Take the path from Index or searchConcepts.'
   function getConcept(
-    path : String @description: 'The concept''s path, e.g. model/sample/bookshop/Books.md.'
+    path : String not null @description: 'The concept''s path, e.g. model/sample/bookshop/Books.md.'
   ) returns LargeString;
 
   @description: 'Find concepts by words in their title, tags, description or path; optionally only of one type or with one tag. Returns Index rows (default 20, at most 100); read the ones you need with getConcept.'
@@ -38,8 +38,8 @@ service OkfService {
 
   @description: 'The bundle''s OKF version, a hash of its content and the namespace of its okf:// resources, to check whether a stored copy is stale.'
   function bundleInfo() returns {
-    okfVersion : String;
-    bundleHash : String;
-    namespace  : String;
+    okfVersion : String @description: 'The OKF version the bundle follows, e.g. 0.2.';
+    bundleHash : String @description: 'A hash of the bundle''s content: when it changes, re-read what you stored.';
+    namespace  : String @description: 'The namespace of the bundle''s okf:// resources.';
   };
 }

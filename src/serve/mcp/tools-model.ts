@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Cds } from "../../index";
+import { SetupError } from "../../build/errors";
 import { installedPlugins, selectMcp } from "./select";
 
 /** The cds.requires key the model is added under. */
@@ -23,7 +24,9 @@ export function toolsModelPath(): string {
 /**
  * Whether the tools channel is on, with the same rules as the MCP selector (task 4.4): true
  * picks the installed plugin's natural channel, so "on" alone isn't enough. A setup mistake in
- * cds.okf.serve.mcp counts as off here; the server reports it when it starts.
+ * cds.okf.serve.mcp counts as off here, so it never breaks cds build or cds compile; the server
+ * reports it once selectMcp runs at bootstrap (task 4.5, step 2). Any other error is a bug and
+ * is thrown.
  */
 export function wantsToolsModel(cds: Cds): boolean {
   try {
@@ -33,21 +36,17 @@ export function wantsToolsModel(cds: Cds): boolean {
       packageName: packageNameOf(cds.root),
     });
     return selection.choice?.as.includes("tools") ?? false;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error instanceof SetupError) return false;
+    throw error;
   }
 }
 
-/**
- * Adds OkfService's model to cds.requires when the tools channel is on. Always returns true, so
- * the okf build task's hasTask() can return it: the task always runs (ADR-0002).
- */
-export function addToolsModel(cds: Cds): true {
-  if (wantsToolsModel(cds)) {
-    const requires = (cds.env as unknown as { requires: Record<string, unknown> }).requires;
-    requires[TOOLS_MODEL_KEY] = { model: toolsModelPath() };
-  }
-  return true;
+/** Adds OkfService's model to cds.requires when the tools channel is on. */
+export function addToolsModel(cds: Cds): void {
+  if (!wantsToolsModel(cds)) return;
+  const requires = (cds.env as unknown as { requires: Record<string, unknown> }).requires;
+  requires[TOOLS_MODEL_KEY] = { model: toolsModelPath() };
 }
 
 /** Warns once at served when the tools channel is on but OkfService isn't in the model. */

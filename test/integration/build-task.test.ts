@@ -6,7 +6,7 @@ import cds from "@sap/cds";
 import { serializeConcept } from "../../src/core/concept";
 import type { Csn } from "../../src/export/csn";
 import { exportModel } from "../../src/export/exporter";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
 import { defaultLanguageTexts } from "../../src/export/i18n";
 
 // `cds build` with the okf build task (task 2.9, ADR-0005 (b), ADR-0007), run as a user runs it:
@@ -316,8 +316,11 @@ describe("cds build with definitions whose paths clash", () => {
 
 // Task 4.5 (ADR-0005 (e)): with the MCP tools channel on, cds build puts OkfService into the
 // deployed app's model, for no task list and for one with okf; a list without okf misses it.
-describeWithGavdi("cds build with the MCP tools channel on", () => {
-  const withGavdi = { CDS_PLUGINS: JSON.stringify({ "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } }) };
+// "@gavdi/cap-mcp" is an empty stub here: detection only needs its name in the plugin list.
+describe("cds build with the MCP tools channel on", () => {
+  const withGavdi = {
+    CDS_PLUGINS: JSON.stringify({ "@gavdi/cap-mcp": { impl: MCP_PLUGIN_STUB } }),
+  };
 
   function deployedModel(app: string): string {
     return fs.readFileSync(path.join(app, "gen", "srv", "srv", "csn.json"), "utf8");
@@ -337,6 +340,8 @@ describeWithGavdi("cds build with the MCP tools channel on", () => {
         stderr: false,
       });
       expect(deployedModel(app).includes('"OkfService"')).toBe(expected);
+      // @okf: false: the service that serves the bundle is never a concept in it.
+      expect(fs.existsSync(path.join(app, "gen", "okf", "model", "OkfService.md"))).toBe(false);
     } finally {
       fs.rmSync(app, { recursive: true, force: true });
     }
