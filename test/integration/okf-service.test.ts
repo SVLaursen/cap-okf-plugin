@@ -150,5 +150,7 @@ describe("OkfService is reached through the MCP plugin only", () => {
   test("it has no OData endpoint", async () => {
     expect((await GET("/odata/v4/okf-service/Index")).status).toBe(404);
     expect(cds.model!.definitions["OkfService"]?.["@protocol"]).toBe("none");
+    // Only the OData endpoint goes: the MCP plugin calls the service itself.
+    expect((cds.services as unknown as Record<string, unknown>)["OkfService"]).toBeDefined();
   });
 });

@@ -100,7 +100,12 @@ export function annotateToolsModel(cds: Cds): void {
       if (error instanceof SetupError) return;
       throw error;
     }
-    if (choice === undefined) return;
+    // A model built with the tools channel on, served with it off: no handlers will come, so
+    // the MCP plugin mustn't offer its tools.
+    if (choice === undefined || !choice.as.includes("tools")) {
+      service["@mcp"] = false;
+      return;
+    }
     service["@requires"] = choice.requires;
     if (choice.plugin === GAVDI_CAP_MCP) service["@protocol"] = "none";
   });

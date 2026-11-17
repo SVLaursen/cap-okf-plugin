@@ -10,5 +10,5 @@ export async function servableText(
 ): Promise<string | undefined> {
   const text = await (await source()).read(bundlePath);
   if (text === undefined || bundlePath.endsWith(".md")) return text;
-  return text === "" || text.includes("�") ? undefined : text;
+  return text === "" || text.includes("\uFFFD") ? undefined : text;
 }

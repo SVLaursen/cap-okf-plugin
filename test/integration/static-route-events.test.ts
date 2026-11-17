@@ -135,3 +135,47 @@ describe("the static route and files that aren't text", () => {
     expect((await s.get("/logo.png")).status).toBe(404);
   });
 });
+
+// Review of 4.5 step 2b: the MCP selector runs at bootstrap; a setup mistake stops the server
+// with the [okf] message and no stack, and its warnings are logged once.
+describe("serving's startup and the MCP settings", () => {
+  function bootstrap(okf: object, plugins: object = {}) {
+    const listeners: Record<string, ((arg?: unknown) => unknown)[]> = {};
+    const warnings: string[] = [];
+    const fake = Object.create(cds, {
+      root: { value: app() },
+      env: { value: Object.create(cds.env, { okf: { value: okf }, plugins: { value: plugins } }) },
+      log: { value: () => ({ warn: (message: string) => warnings.push(message) }) },
+      on: {
+        value: (event: string, listener: (arg?: unknown) => unknown) =>
+          (listeners[event] ??= []).push(listener),
+      },
+    });
+    registerServing(fake);
+    const start = () =>
+      (listeners["bootstrap"] ?? []).forEach((listener) => listener({ use: () => undefined }));
+    return { start, warnings };
+  }
+
+  test("a setup mistake stops the server with the [okf] message, no stack", () => {
+    const { start } = bootstrap({ serve: { mcp: { plugin: "nope" } } }, { "@gavdi/cap-mcp": {} });
+    let thrown: Error | undefined;
+    try {
+      start();
+    } catch (error) {
+      thrown = error as Error;
+    }
+    expect(thrown?.message).toMatch(/^\[okf\] cds\.okf\.serve\.mcp\.plugin — /);
+    expect(thrown?.stack).toBe(thrown?.message);
+  });
+
+  test("selector warnings are logged once", () => {
+    const { start, warnings } = bootstrap({ serve: { mcp: true } });
+    start();
+    expect(warnings).toEqual([
+      expect.stringMatching(
+        /^\[okf\] cds\.okf\.serve\.mcp — is on, but no MCP plugin is installed/,
+      ),
+    ]);
+  });
+});

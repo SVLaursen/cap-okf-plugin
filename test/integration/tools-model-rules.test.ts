@@ -5,6 +5,7 @@ import path from "node:path";
 import cds from "@sap/cds";
 import {
   addToolsModel,
+  annotateToolsModel,
   TOOLS_MODEL_KEY,
   toolsModelPath,
   wantsToolsModel,
@@ -88,5 +89,36 @@ describe("warnWithoutToolsModel", () => {
   test("tools on and OkfService there, or tools off: no warning", () => {
     expect(served(toolsOn, { definitions: { OkfService: {} } })).toEqual([]);
     expect(served({ okf: {} }, { definitions: {} })).toEqual([]);
+  });
+});
+
+// Review of 4.5 step 2b: annotations on every loaded model.
+describe("annotateToolsModel", () => {
+  function loaded(env: object): Record<string, unknown> {
+    const events = new EventEmitter();
+    const app = appCds(env, {
+      on: {
+        value: (event: string, listener: (csn: unknown) => void) => events.on(event, listener),
+      },
+    });
+    annotateToolsModel(app);
+    const csn = {
+      definitions: { OkfService: { kind: "service", "@mcp": true } as Record<string, unknown> },
+    };
+    events.emit("loaded", csn);
+    return csn.definitions.OkfService;
+  }
+
+  test("tools on: @requires from the settings, and @protocol none under @gavdi/cap-mcp", () => {
+    const service = loaded({
+      okf: { serve: { mcp: { as: ["tools"], requires: "admin" } } },
+      ...GAVDI,
+    });
+    expect(service).toMatchObject({ "@requires": ["admin"], "@protocol": "none", "@mcp": true });
+  });
+
+  test("a model built with tools, served with them off: @mcp false, so no broken tools", () => {
+    expect(loaded({ okf: { serve: { mcp: false } }, ...GAVDI })["@mcp"]).toBe(false);
+    expect(loaded({ okf: { serve: { mcp: true } }, ...GAVDI })["@mcp"]).toBe(false);
   });
 });

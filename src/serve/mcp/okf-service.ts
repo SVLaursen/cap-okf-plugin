@@ -29,9 +29,10 @@ interface Service {
   on(event: string, entity: string, handler: (req: Request) => unknown): void;
   on(event: string, handler: (req: Request) => unknown): void;
   prepend(register: () => void): void;
+  before(event: string, handler: (req: Request) => void): void;
 }
 
-/** What one reader sees of one bundle: the files as they get them, and the Index rows. */
+/** What one kind of reader (anonymous or authenticated) sees of one bundle: its Index rows. */
 interface ReaderView {
   rows: IndexRow[];
 }
@@ -49,6 +50,9 @@ export function attachOkfService(cds: Cds, bundles: Bundles, choice: McpChoice):
   // Before CAP's generic handlers, which would answer READ on an entity without persistence
   // with an error: handlers run in the order they are registered.
   service.prepend(() => {
+    // requires, checked here too: CAP's own service-level check lets in-process calls through
+    // for "internal-user", and apps can switch it off (cds.features.service_level_restrictions).
+    service.before("*", (req) => checkRequires(req, choice.requires));
     service.on("READ", "Index", async (req) => {
       const { rows } = await viewFor(req);
       try {
@@ -68,6 +72,14 @@ export function attachOkfService(cds: Cds, bundles: Bundles, choice: McpChoice):
       namespace: choice.namespace,
     }));
   });
+}
+
+// As CAP decides @requires: one of the roles is enough (a privileged user has them all);
+// anonymous callers get 401, others 403.
+function checkRequires(req: Request, roles: readonly string[]): void {
+  if (roles.some((role) => req.user.is(role))) return;
+  if (isAuthenticated(req)) req.reject(403, "Forbidden");
+  req.reject(401, "Unauthorized");
 }
 
 function isAuthenticated(req: Request): boolean {
@@ -96,7 +108,10 @@ function readerView(
   authenticated: boolean,
 ): Promise<ReaderView> {
   let byReader = views.get(source);
-  if (byReader === undefined) views.set(source, (byReader = new Map()));
+  if (byReader === undefined) {
+    byReader = new Map();
+    views.set(source, byReader);
+  }
   let view = byReader.get(authenticated);
   if (view === undefined) {
     view = buildView(source, authenticated);
