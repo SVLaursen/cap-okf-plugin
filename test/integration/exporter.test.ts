@@ -76,7 +76,9 @@ describe("exportModel on the bookshop fixture", () => {
       });
     }
   });
+});
 
+describe("exportModel output details", () => {
   test("the root index declares the OKF version and lists model/", () => {
     const root = run().find((concept) => concept.path === "index.md")!;
     expect(root.frontmatter).toEqual({ okf_version: "0.2" });
