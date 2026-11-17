@@ -3,6 +3,12 @@ import path from "node:path";
 import * as conceptModule from "../../src/core/concept";
 import { validateBundle, type BundleFile, type Finding } from "../../src/core/validate";
 
+// Coverage instrumentation slows code down several times, so a wall-clock limit means nothing
+// in a coverage run (maintainer decision at gate G3). Timing tests are skipped there; CI runs
+// them on their own, without coverage: npm run test:timing.
+const isCoverageRun = "__coverage__" in globalThis;
+const timingTest = isCoverageRun ? test.skip : test;
+
 // validateBundle checks a bundle against OKF v0.2 §11 (errors R1–R3) and the shapes §5 asks
 // for (warnings W1–W3). Each folder in test/fixtures/broken is a tiny bundle with one problem.
 
@@ -343,15 +349,20 @@ describe("validateBundle links at scale", () => {
 
   // Prepared paths, cheap lower bounds and one search per missing path keep large bundles
   // fast. The limit is generous (about 1 second here); before the fix this took 17 seconds.
-  test("a large bundle with many broken links is validated quickly", () => {
-    const files = Array.from({ length: 2000 }, (_, index) =>
-      file(
-        `model/n${index}/Entity${index}.md`,
-        `---\ntype: X\ntitle: t\ndescription: d\n---\n[a](Missing${index}.md)\n`,
-      ),
-    );
-    const started = performance.now();
+  const files = Array.from({ length: 2000 }, (_, index) =>
+    file(
+      `model/n${index}/Entity${index}.md`,
+      `---\ntype: X\ntitle: t\ndescription: d\n---\n[a](Missing${index}.md)\n`,
+    ),
+  );
+
+  test("a large bundle with many broken links gets one finding per link", () => {
     expect(validateBundle(files)).toHaveLength(2000);
+  });
+
+  timingTest("a large bundle with many broken links is validated quickly (timing)", () => {
+    const started = performance.now();
+    validateBundle(files);
     expect(performance.now() - started).toBeLessThan(3000);
   });
 });

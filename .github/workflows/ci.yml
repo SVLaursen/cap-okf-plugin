@@ -29,6 +29,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test -- --coverage
+      # Timing tests are skipped under coverage, which slows code down; run them without it.
+      - run: npm run test:timing
       - name: Build fixture bundle for reviewers
         if: hashFiles('src/build/compile.ts') != ''
         # cds-with-okf.js loads this repo's own plugin (ADR-0005); the commit time keeps it reproducible.
