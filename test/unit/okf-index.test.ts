@@ -290,3 +290,80 @@ describe("bundleHash", () => {
     expect(bundleHash([{ path: "ab", text: "" }])).not.toBe(bundleHash([{ path: "a", text: "b" }]));
   });
 });
+
+// Review of 4.5 step 2a.
+describe("runIndexQuery and searchConcepts: review cases", () => {
+  const withNullType: IndexRow[] = [
+    ...ROWS,
+    { path: "untyped.md", type: null, title: null, description: null, tags: "solo", links: null },
+  ];
+
+  test("!= is true when exactly one side is null, as CAP's databases do; <> is refused", () => {
+    const where = (op: string) => [{ ref: ["type"] }, op, { val: "Guide" }];
+    expect(
+      paths(runIndexQuery(withNullType, { SELECT: { from: INDEX, where: where("!=") } })),
+    ).toContain("untyped.md");
+    expect(() =>
+      runIndexQuery(withNullType, { SELECT: { from: INDEX, where: where("<>") } }),
+    ).toThrow(/the operator "<>" isn't supported/);
+  });
+
+  test("a query as CAP hands it over: a limit without offset, implicit key orderBy", () => {
+    const result = runIndexQuery(ROWS, {
+      SELECT: {
+        from: INDEX,
+        limit: { rows: { val: 1000 } },
+        orderBy: [{ ref: ["path"], sort: "asc", implicit: true }],
+      },
+    });
+    expect(paths(result)).toEqual(["guides/ordering.md", "model/x/Authors.md", "model/x/Books.md"]);
+  });
+
+  test.each([
+    [{ SELECT: { from: "OkfService.Index" } }],
+    [{ SELECT: { from: { SELECT: { from: INDEX } } } }],
+    [{ SELECT: { from: { ref: ["OkfService.Index", "links"] } } }],
+  ])("a from clause that isn't the entity, alone or with its key, is refused: %j", (query) => {
+    expect(() => runIndexQuery(ROWS, query as never)).toThrow(/this from clause isn't supported/);
+  });
+
+  test("the refusal is a 400 error", () => {
+    try {
+      runIndexQuery(ROWS, { SELECT: { from: INDEX, groupBy: [] } });
+    } catch (error) {
+      expect((error as { status?: number }).status).toBe(400);
+    }
+    expect.assertions(1);
+  });
+});
+
+describe("searchConcepts and indexRows: review cases", () => {
+  const withNullType: IndexRow[] = [
+    ...ROWS,
+    { path: "untyped.md", type: null, title: null, description: null, tags: "solo", links: null },
+  ];
+
+  test("searchConcepts needs every word, wherever each is", () => {
+    expect(paths(searchConcepts(ROWS, { text: "books order" }))).toEqual(["guides/ordering.md"]);
+    expect(searchConcepts(ROWS, { text: "books nowhere" })).toEqual([]);
+  });
+
+  test("a tag written as a single string counts; top 0, negative or fractional is handled", () => {
+    expect(paths(searchConcepts(withNullType, { tag: "solo" }))).toEqual(["untyped.md"]);
+    expect(searchConcepts(withNullType, { top: 0 })).toHaveLength(4);
+    expect(searchConcepts(withNullType, { top: -3 })).toHaveLength(4);
+    expect(searchConcepts(withNullType, { top: 1.9 })).toHaveLength(1);
+  });
+
+  test("an empty frontmatter gives a row with null values; a YAML list as frontmatter gives none", () => {
+    const rows = indexRows([
+      { path: "empty.md", text: "---\n---\nBody.\n" },
+      { path: "list.md", text: "---\n- a\n- b\n---\n" },
+      { path: "solo.md", text: "---\ntype: Note\ntags: solo\n---\n" },
+    ]);
+    expect(rows.map((row) => [row.path, row.type, row.tags])).toEqual([
+      ["empty.md", null, null],
+      ["solo.md", "Note", "solo"],
+    ]);
+  });
+});

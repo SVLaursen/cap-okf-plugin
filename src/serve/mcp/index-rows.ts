@@ -24,7 +24,10 @@ export interface BundleText {
 const RESERVED_NAMES = ["index.md", "log.md"];
 
 /**
- * The Index rows for `files`, sorted by path. Files that aren't concepts, don't parse or have no
+ * The Index rows for `files`, sorted by path. Pass the files as the reader gets them: only the
+ * files they may see, each already filtered for them (ADR-0003). Otherwise `links` would name
+ * concepts linked only from inside an authorization section.
+ * Files that aren't concepts, don't parse or have no
  * frontmatter have none.
  */
 export function indexRows(files: readonly BundleText[]): IndexRow[] {

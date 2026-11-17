@@ -33,9 +33,9 @@ const COMPARE: Record<string, (order: number) => boolean> = {
   ">": (order) => order > 0,
   ">=": (order) => order >= 0,
 };
-const notEqual = (order: number) => order !== 0;
-COMPARE["!="] = notEqual;
-COMPARE["<>"] = notEqual;
+// "<>" isn't listed: CAP gives it plain SQL meaning (null rows never match), unlike "!=", and
+// the tools never send it, so it is refused rather than guessed.
+COMPARE["!="] = (order) => order !== 0;
 const TEXT_FUNCTIONS = ["contains", "startswith", "endswith"];
 
 /** The rows, page, row or count that `query` asks for. */
@@ -70,8 +70,11 @@ function unsupported(what: string): IndexQueryError {
 }
 
 // The get tool's key filter: from: { ref: [{ id, where }] }.
+// Only the entity itself, or it with a key filter; a sub-select or a path is refused.
 function keyFilterOf(from: unknown): unknown {
-  const first = (from as { ref?: unknown[] } | undefined)?.ref?.[0];
+  const ref = (from as { ref?: unknown[] } | undefined)?.ref;
+  if (!Array.isArray(ref) || ref.length !== 1) throw unsupported("this from clause");
+  const first = ref[0];
   return typeof first === "object" && first !== null ? (first as Expression)["where"] : undefined;
 }
 
@@ -121,7 +124,8 @@ function meetsComparison(
   const test = typeof operator === "string" ? COMPARE[operator] : undefined;
   if (test === undefined) throw unsupported(`the operator ${JSON.stringify(operator)}`);
   const expected = literalOf(value);
-  // As in SQL, a comparison with null is never true; only != tells null from a value.
+  // As CAP's databases do: a comparison with null is never true, except != (IS DISTINCT FROM),
+  // which is true when exactly one side is null.
   if (actual === null || expected === null) return test === COMPARE["!="] && actual !== expected;
   return test(compareText(actual, String(expected)));
 }
