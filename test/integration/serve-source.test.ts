@@ -15,14 +15,33 @@ async function appCds(root: string): Promise<typeof cds> {
   return Object.create(cds, { root: { value: root }, model: { value: model } });
 }
 
+/**
+ * A log that keeps its warnings, emptied before each test. The knowledge lint's warnings (K1–K3,
+ * ADR-0012) are kept apart, so the other checks stay exact.
+ */
+function collectingLog(): {
+  log: { warn(message: string): void };
+  warnings: string[];
+  lint: string[];
+} {
+  const warnings: string[] = [];
+  const lint: string[] = [];
+  beforeEach(() => {
+    warnings.length = 0;
+    lint.length = 0;
+  });
+  const log = {
+    warn: (message: string) => (/\(K\d\)\./.test(message) ? lint : warnings).push(message),
+  };
+  return { log, warnings, lint };
+}
+
 describe("startupBundleSource", () => {
   let root: string;
-  let warnings: string[];
-  const log = { warn: (message: string) => warnings.push(message) };
+  const { log, warnings, lint } = collectingLog();
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-serve-"));
     fs.cpSync(FIXTURE, root, { recursive: true });
-    warnings = [];
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -31,7 +50,7 @@ describe("startupBundleSource", () => {
     fs.writeFileSync(path.join(root, "okf-bundle", "index.md"), "# Built\n");
     const source = await startupBundleSource(await appCds(root), log, {});
     expect(await source.list()).toEqual(["index.md"]);
-    expect(warnings).toEqual([]);
+    expect({ warnings, lint }).toEqual({ warnings: [], lint: [] }); // linted by cds build
   });
 
   test("without one, the bundle is generated in memory, with doc comments and okf/", async () => {
@@ -48,6 +67,18 @@ describe("startupBundleSource", () => {
       "description: A person who wrote one or more books.",
     );
     expect(warnings).toEqual([]);
+    // ADR-0012: the knowledge lint's warnings are logged once for a generated bundle.
+    expect(lint).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^\[okf\] okf\/notes\.md:\d+ — this note has no tags.*\(K1\)/),
+        expect.stringMatching(
+          /^\[okf\] okf\/notes\.md:\d+ — this note links to no generated concept.*\(K2\)/,
+        ),
+        expect.stringMatching(
+          /^\[okf\] model\/CatalogService\/Authors\.md:\d+ — country looks like a code field.*\(K3\)/,
+        ),
+      ]),
+    );
   });
 
   test("generating at startup under NODE_ENV=production gives one warning", async () => {
@@ -62,12 +93,10 @@ describe("startupBundleSource", () => {
 
 describe("startupBundleSource: curated files with errors", () => {
   let root: string;
-  let warnings: string[];
-  const log = { warn: (message: string) => warnings.push(message) };
+  const { log, warnings } = collectingLog();
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-serve-"));
     fs.cpSync(FIXTURE, root, { recursive: true });
-    warnings = [];
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 

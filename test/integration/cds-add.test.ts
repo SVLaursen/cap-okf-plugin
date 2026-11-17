@@ -76,7 +76,7 @@ describe("cds add okf", () => {
     fs.writeFileSync(path.join(app, "package.json"), JSON.stringify(packageJson, null, 2) + "\n");
     expect(cdsAdd(app).status).toBe(0);
     const result = cds(app, ["build"]);
-    expect({ status: result.status, okf: result.stdout.includes("[okf]") }).toEqual({
+    expect({ status: result.status, okf: okfMessagesBesidesLint(result.stdout) }).toEqual({
       status: 0,
       okf: false,
     });
@@ -84,3 +84,11 @@ describe("cds add okf", () => {
     expect(fs.existsSync(path.join(app, "gen", "okf", "model", "CatalogService.md"))).toBe(true);
   });
 });
+
+// [okf] messages other than the knowledge lint's warnings (K1–K3, ADR-0012), which a bookshop
+// without curated notes always has.
+function okfMessagesBesidesLint(output: string): boolean {
+  const all = output.match(/\[okf\]/g)?.length ?? 0;
+  const lint = output.match(/\(K\d\)\./g)?.length ?? 0;
+  return all > lint;
+}

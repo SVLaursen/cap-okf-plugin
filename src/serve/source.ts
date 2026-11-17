@@ -5,11 +5,14 @@
 //   model, loaded again with doc comments, plus okf/, with the same code as cds build. Under
 //   NODE_ENV=production that gets one warning: the app was deployed without the okf build task.
 // Curated files with errors are left out and reported once; startup never fails over them.
+// The knowledge lint's warnings (ADR-0012) are logged once for a generated bundle; a built
+// bundle was linted by cds build.
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { MemoryBundleSource, FileBundleSource, type BundleSource } from "../bundle/source";
 import type { MergedBundle } from "../bundle/merge";
 import { formatFinding } from "../core/finding";
+import { lintBundle } from "../core/lint";
 import { validateBundle } from "../core/validate";
 import type { Csn } from "../export/csn";
 import type { Cds } from "../index";
@@ -51,13 +54,19 @@ async function modelWithDocComments(cds: Cds): Promise<Csn> {
   return (await cds.load(files, { docs: true })) as unknown as Csn;
 }
 
-/** The bundle's files without curated ones that have errors, which are reported once. */
+/**
+ * The bundle's files without curated ones that have errors, which are reported once, as are the
+ * knowledge lint's warnings (ADR-0012), so a developer sees them while working on the notes.
+ */
 function servableFiles(bundle: MergedBundle, log: Log): Map<string, string> {
   const findings = namedFindings(bundle, validateBundle(bundle.files), "");
   const leftOut = new Set<string>();
   for (const finding of findings.filter((each) => each.severity === "error")) {
     log.warn(formatFinding(finding));
     leftOut.add(finding.file);
+  }
+  for (const finding of namedFindings({ ...bundle, findings: [] }, lintBundle(bundle.files), "")) {
+    log.warn(formatFinding(finding));
   }
   const files = new Map<string, string>();
   for (const file of bundle.files) {

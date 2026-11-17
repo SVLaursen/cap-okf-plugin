@@ -68,7 +68,11 @@ describe("the okf build task and validation findings", () => {
     jest.mocked(validateBundle).mockReturnValue([WARNING]);
     const plugin = okfPlugin(out);
     await plugin.build();
-    expect(plugin.messages).toEqual([
+    // The knowledge lint's warnings (K1–K3, ADR-0012) are tested on their own.
+    const notLint = plugin.messages.filter(
+      (each: { message: string }) => !/\(K\d\)\./.test(each.message),
+    );
+    expect(notLint).toEqual([
       expect.objectContaining({
         message: expect.stringMatching(/^\[okf\] gen\/okf\/model\/x\/A\.md:2 — /),
         severity: "Warning",

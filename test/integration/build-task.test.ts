@@ -243,7 +243,7 @@ describe("cds build with a curated okf/ folder", () => {
     const logo = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0x00, 0x01]);
     fs.writeFileSync(path.join(app, "okf", "guides", "logo.png"), logo);
     const result = cdsBuild(app);
-    expect({ status: result.status, okf: result.stdout.includes("[okf]") }).toEqual({
+    expect({ status: result.status, okf: okfMessagesBesidesLint(result.stdout) }).toEqual({
       status: 0,
       okf: false,
     });
@@ -357,3 +357,11 @@ describe("cds build with the MCP tools channel on", () => {
     }
   });
 });
+
+// [okf] messages other than the knowledge lint's warnings (K1–K3, ADR-0012), which a bookshop
+// without curated notes always has.
+function okfMessagesBesidesLint(output: string): boolean {
+  const all = output.match(/\[okf\]/g)?.length ?? 0;
+  const lint = output.match(/\(K\d\)\./g)?.length ?? 0;
+  return all > lint;
+}

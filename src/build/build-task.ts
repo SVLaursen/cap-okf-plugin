@@ -15,6 +15,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import type { MergedBundle, MergedFile } from "../bundle/merge";
+import { lintKnowledge } from "../core/lint";
 import { validateBundle } from "../core/validate";
 import type { Csn } from "../export/csn";
 import { ModelClashError } from "../export/exporter";
@@ -109,7 +110,9 @@ function okfBuildPlugin(cds: Cds, build: BuildApi) {
     // Each message names the file to open: okf/<path> for curated files, else gen/okf/<path>.
     private reportFindings(bundle: MergedBundle): void {
       const bundleFolder = path.relative(cds.root, this.task.dest).split(path.sep).join("/");
-      const findings = namedFindings(bundle, validateBundle(bundle.files), bundleFolder);
+      // The knowledge lint (ADR-0012) adds warnings only; the validator already reports W1 and W4.
+      const checks = [...validateBundle(bundle.files), ...lintKnowledge(bundle.files)];
+      const findings = namedFindings(bundle, checks, bundleFolder);
       const { errors, warnings } = buildMessagesOf(findings);
       for (const warning of warnings) this.pushMessage(warning, build.Plugin.WARNING);
       if (errors.length > 0) {
