@@ -6,6 +6,7 @@ import cds from "@sap/cds";
 import { serializeConcept } from "../../src/core/concept";
 import type { Csn } from "../../src/export/csn";
 import { exportModel } from "../../src/export/exporter";
+import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
 import { defaultLanguageTexts } from "../../src/export/i18n";
 
 // `cds build` with the okf build task (task 2.9, ADR-0005 (b), ADR-0007), run as a user runs it:
@@ -307,6 +308,45 @@ describe("cds build with definitions whose paths clash", () => {
           "model/clash/Books.md (clash.Books, db/clash.cds:2) only in letter case or Unicode form (M1).",
       );
       expect(output).not.toMatch(/\n\s+at /);
+    } finally {
+      fs.rmSync(app, { recursive: true, force: true });
+    }
+  });
+});
+
+// Task 4.5 (ADR-0005 (e)): with the MCP tools channel on, cds build puts OkfService into the
+// deployed app's model, for no task list and for one with okf; a list without okf misses it.
+describeWithGavdi("cds build with the MCP tools channel on", () => {
+  const withGavdi = { CDS_PLUGINS: JSON.stringify({ "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } }) };
+
+  function deployedModel(app: string): string {
+    return fs.readFileSync(path.join(app, "gen", "srv", "srv", "csn.json"), "utf8");
+  }
+
+  test.each([
+    ["no task list", true, undefined],
+    ["[nodejs, okf]", true, [{ for: "nodejs" }, { for: "okf" }]],
+    ["[nodejs]", false, [{ for: "nodejs" }]],
+  ])("%s: OkfService in gen/srv is %s", (_label, expected, tasks) => {
+    const okf = { serve: { mcp: { as: ["tools"] } } };
+    const app = bookshopApp(tasks === undefined ? { okf } : { okf, build: { tasks } });
+    try {
+      const result = cdsBuild(app, withGavdi);
+      expect({ status: result.status, stderr: result.stderr.includes("[okf]") }).toEqual({
+        status: 0,
+        stderr: false,
+      });
+      expect(deployedModel(app).includes('"OkfService"')).toBe(expected);
+    } finally {
+      fs.rmSync(app, { recursive: true, force: true });
+    }
+  });
+
+  test("with MCP off, OkfService is absent", () => {
+    const app = bookshopApp();
+    try {
+      expect(cdsBuild(app, withGavdi).status).toBe(0);
+      expect(deployedModel(app).includes('"OkfService"')).toBe(false);
     } finally {
       fs.rmSync(app, { recursive: true, force: true });
     }

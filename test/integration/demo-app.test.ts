@@ -35,6 +35,11 @@ describe("demo app: cap-okf wiring", () => {
   });
 
   // Tests must exercise the TypeScript sources, not a possibly stale lib/ (test/setup-env.js).
+  // ADR-0005 (e): MCP is off in the demo, so OkfService isn't added.
+  test("without the MCP tools channel, the app has no OkfService", () => {
+    expect(cds.model?.definitions["OkfService"]).toBeUndefined();
+  });
+
   test("in these tests, CAP loads cap-okf from src/", () => {
     const impl = (cds.env["plugins"] as Record<string, { impl: string }>)["cap-okf"]?.impl;
     expect(impl).toBe(path.join(ROOT, "test", "cds-plugin-src.js"));
