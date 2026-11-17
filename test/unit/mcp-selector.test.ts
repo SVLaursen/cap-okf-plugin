@@ -142,6 +142,12 @@ describe("selectMcp: requires", () => {
   });
 });
 
+describe("selectMcp: null", () => {
+  test("counts as off, so a profile can reset serve.mcp", () => {
+    expect(select(null, [GAVDI])).toEqual({ warnings: [] });
+  });
+});
+
 describe("selectMcp: a setting that isn't false, true or an object", () => {
   test("is an error naming the allowed values", () => {
     expect(() => select("yes", [GAVDI])).toThrow(

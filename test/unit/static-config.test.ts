@@ -8,6 +8,7 @@ describe("staticRouteOf", () => {
     [{}, undefined],
     [{ serve: {} }, undefined],
     [{ serve: { static: false } }, undefined],
+    [{ serve: { static: null } }, undefined],
     [{ serve: { static: true } }, "/okf"],
     [{ serve: { static: "/knowledge" } }, "/knowledge"],
     [{ serve: { static: "/docs/okf/" } }, "/docs/okf"],

@@ -68,9 +68,9 @@ export function selectMcp(input: SelectorInput): McpSelection {
   return { choice: { plugin, as, namespace, requires: rolesFor(settings["requires"]) }, warnings };
 }
 
-// false or undefined → off; true → {}; an object as it is.
+// false, undefined or null (a profile resetting it) → off; true → {}; an object as it is.
 function objectForm(setting: unknown): Record<string, unknown> | undefined {
-  if (setting === undefined || setting === false) return undefined;
+  if (setting === undefined || setting === null || setting === false) return undefined;
   if (setting === true) return {};
   if (typeof setting === "object" && setting !== null && !Array.isArray(setting)) {
     return setting as Record<string, unknown>;

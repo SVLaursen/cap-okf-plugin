@@ -84,6 +84,22 @@ describe("configWarnings: serve settings during cds build and cds compile", () =
     ]);
   });
 
+  test("@cap-js/mcp named as the plugin is checked as installed", () => {
+    const okf = { serve: { mcp: { plugin: "@cap-js/mcp", as: ["tools"] } } };
+    expect(configWarnings(okf, BUILD)).toEqual([]);
+  });
+
+  test("an unknown plugin name is a warning", () => {
+    const [warning] = configWarnings({ serve: { mcp: { plugin: "gavdi" } } }, BUILD);
+    expect(warning).toMatch(
+      /^\[okf\] cds\.okf\.serve\.mcp\.plugin — "gavdi" is not a known MCP plugin/,
+    );
+  });
+
+  test("null serve settings count as not set (a profile resetting them)", () => {
+    expect(configWarnings({ serve: { static: null, mcp: null } }, BUILD)).toEqual([]);
+  });
+
   test("compile checks them too", () => {
     expect(configWarnings({ serve: { static: 5 } }, { ...BUILD, command: "compile" })).toHaveLength(
       1,

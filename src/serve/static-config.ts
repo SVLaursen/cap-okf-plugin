@@ -11,7 +11,8 @@ const ROUTE = /^(\/[A-Za-z0-9._-]+)+$/;
 export function staticRouteOf(okf: unknown): string | undefined {
   const serve = (okf as { serve?: { static?: unknown } } | undefined)?.serve;
   const setting = serve?.static;
-  if (setting === undefined || setting === false) return undefined;
+  // null counts as not set, so a profile can reset the setting.
+  if (setting === undefined || setting === null || setting === false) return undefined;
   if (setting === true) return DEFAULT_ROUTE;
   if (typeof setting !== "string") {
     throw setupError(

@@ -42,7 +42,7 @@ export function configWarnings(okf: unknown, context: CheckContext): string[] {
   const mcp = serve?.["mcp"];
   if (isObject(mcp)) unknownKeys("cds.okf.serve.mcp", mcp, warnings);
   if (serve !== undefined && BUILD_COMMANDS.includes(context.command ?? "")) {
-    warnings.push(...serveWarnings(block, context.packageName));
+    warnings.push(...serveWarnings(block, serve, context.packageName));
   }
   return warnings;
 }
@@ -77,11 +77,15 @@ function unknownKeys(key: keyof typeof KEYS, block: object, warnings: string[]):
 }
 
 // What startup would say about serve.static and serve.mcp, as warnings.
-function serveWarnings(okf: Record<string, unknown>, packageName: string | undefined): string[] {
+function serveWarnings(
+  okf: Record<string, unknown>,
+  serve: Record<string, unknown>,
+  packageName: string | undefined,
+): string[] {
   const warnings: string[] = [];
   collect(warnings, () => staticRouteOf(okf));
   collect(warnings, () => {
-    const selection = selectMcp({ okf, installed: assumedInstalled(okf), packageName });
+    const selection = selectMcp({ okf, installed: assumedInstalled(serve), packageName });
     warnings.push(...selection.warnings);
   });
   return warnings;
@@ -89,8 +93,8 @@ function serveWarnings(okf: Record<string, unknown>, packageName: string | undef
 
 // Whether a plugin is installed is startup's business; here the settings are checked as if the
 // plugin they name (or, for "auto", @gavdi/cap-mcp) were the one installed.
-function assumedInstalled(okf: Record<string, unknown>): McpPlugin[] {
-  const mcp = (okf["serve"] as Record<string, unknown>)["mcp"];
+function assumedInstalled(serve: Record<string, unknown>): McpPlugin[] {
+  const mcp = serve["mcp"];
   const plugin = isObject(mcp) ? mcp["plugin"] : undefined;
   return plugin === CAP_JS_MCP ? [CAP_JS_MCP] : [GAVDI_CAP_MCP];
 }
