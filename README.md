@@ -1,37 +1,299 @@
 # cap-okf
 
-A CAP plugin that turns your CDS model and curated Markdown into an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) (OKF) bundle that people and AI agents can read, and lets your app choose how to serve it: a static route, MCP through [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) or [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp), both, or neither.
+A CAP plugin that turns your CDS model, plus any notes you write yourself, into one
+[Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+(OKF) bundle: a folder of Markdown files that people and AI agents can read to understand your
+app.
 
-> Status: pre-release, under development. Targets OKF v0.2. See `docs/PLAN.md` for the roadmap.
+> **Status:** pre-release, not yet on npm. Release 0.1 covers generating the bundle (`cds build`,
+> `cds compile`, `cds add okf`). Serving it from a running app, as a static route or over MCP
+> through [`@gavdi/cap-mcp`](https://github.com/gavdilabs/cap-mcp-plugin) or
+> [`@cap-js/mcp`](https://cap.cloud.sap/docs/guides/protocols/mcp), is planned for 0.2. Targets
+> OKF v0.2. Roadmap: [`docs/PLAN.md`](docs/PLAN.md).
 
-## Planned usage
+## What is OKF?
+
+OKF is a simple, open format for "knowledge as files". A bundle is a folder of Markdown files.
+Each file describes one thing, a *concept*, and starts with a small YAML block (*frontmatter*)
+that says what kind of thing it is:
+
+```markdown
+---
+type: Entity
+title: Books
+description: Books that the shop sells, with stock and authors
+---
+
+# Books
+…
+```
+
+Only `type` is required. Every folder can have an `index.md` that lists what is in it, so a
+reader (or an agent) can look at the index first and open only the concepts it needs.
+
+For a CAP app, cap-okf writes one concept per service, entity, projection, view, action,
+function, type, aspect and event, with their elements, associations, parameters and access
+rules. You add what the model can't say, such as how ordering works or why a rule exists, as
+Markdown files in `okf/`.
+
+## Quick start
+
+In your CAP project:
 
 ```sh
 npm add -D cap-okf
-cds build            # writes gen/okf
-cds add okf          # scaffolds okf/ for curated knowledge
+cds add okf      # creates okf/ with an index and an example, and the cds.okf settings
+cds build        # writes the bundle to gen/okf
 ```
+
+Open `gen/okf/index.md` and follow the links. That's the bundle.
+
+To look at the bundle without a full build:
+
+```sh
+cds compile srv --to okf              # prints the bundle's file paths, one per line
+cds compile srv --to okf -o preview   # writes the bundle to preview/
+```
+
+`cds compile --help` doesn't list `okf` as a target; it works anyway once cap-okf is installed.
+
+## What the bundle contains
+
+```text
+gen/okf/
+├── index.md                    # the bundle's front page: okf/index.md, or a generated one
+├── guides/                     # your files from okf/, at the same paths
+│   ├── index.md
+│   └── getting-started.md
+└── model/                      # generated from the CDS model; never edit by hand
+    ├── index.md
+    ├── CatalogService.md
+    ├── CatalogService/
+    │   ├── index.md
+    │   └── Books.md
+    └── sample/bookshop/
+        ├── index.md
+        └── Books.md
+```
+
+- **Paths follow the fully qualified name.** `sample.bookshop.Books` becomes
+  `model/sample/bookshop/Books.md`, and `CatalogService.Books` becomes
+  `model/CatalogService/Books.md`.
+- **Concept types:** `Service`, `Entity`, `Projection`, `View`, `Action`, `Function`, `Type`,
+  `Aspect` and `Event`.
+- **Frontmatter:** each generated concept has `type`, `title`, `description`, `resource`
+  (`cds:<name>`), `tags` (`cds`, the kind, the namespace, plus your `@okf.tags`) and `generated`
+  (`by: cap-okf/<version>`, `at: <time of the build>`).
+- **Body:** elements with their types and notes, associations and compositions as links,
+  actions and functions with parameters and return types, and an authorization section (see
+  below).
+- **Links** between concepts are absolute within the bundle, e.g. `/model/User.md`, so they work
+  from any folder.
+
+By default only your **services and what they use** are exported: the services, the entities
+they expose, the entities those are built on, and the types, aspects and targets they use.
+Definitions nothing reaches are left out. Set `cds.okf.include` to `"all"` to export everything
+(see [Configuration](#configuration)).
+
+## Writing curated knowledge in `okf/`
+
+Everything in `okf/` at your project root goes into the bundle at the same path:
+`okf/guides/ordering.md` becomes `guides/ordering.md`.
+
+A concept is a Markdown file with frontmatter. Only `type` is required; `title` and
+`description` are recommended, because indexes and agents show them:
+
+```markdown
+---
+type: Guide
+title: Placing an order
+description: How a shopper orders a book, and what the shop checks first.
+tags: [ordering]
+---
+
+# Placing an order
+
+Shoppers browse [Books](/model/CatalogService/Books.md) first. …
+```
+
+Rules:
+
+- **`model/` belongs to the generator.** A file in `okf/model/` is an error (L1) and is left
+  out. Link to generated concepts instead.
+- **Your `okf/index.md` is the bundle's front page.** Link to `model/index.md` from it, or you
+  get a warning (L2). Without `okf/index.md`, cap-okf writes one that lists your folders and
+  `model/`.
+- **Folders get an index.** A folder in `okf/` with concepts but no `index.md` of its own gets a
+  generated one.
+- **`index.md` and `log.md` are reserved names** (OKF §3.1), in lower case only: `INDEX.md` or
+  `Log.md` is an error (L1).
+- **No two paths may differ only in letter case or accents** (`Guides/` and `guides/`): macOS
+  and Windows treat them as one. That's an error too (L1).
+- **Other files** (a `.sql` query, a `.py` script, an image) are copied as they are. `cds compile
+  -o` writes only text files and tells you which it left out; `cds build` copies everything.
+- **Not bundled:** dotfiles, and anything reached through a symbolic link.
+
+## Annotation reference
+
+cap-okf reads what your model already has, and adds two annotations of its own.
+
+| In your CDS | Becomes |
+| --- | --- |
+| `/** Doc comment. More text. */` | The concept's body text. Its first sentence is the description when there is no `@description`. |
+| `@title: 'Books'` | The concept's `title` (default: the definition's short name). |
+| `@description: 'Books that …'` | The concept's `description`. |
+| `@title: '{i18n>Books}'` | Resolved from your `_i18n/i18n.properties`, in `cds.i18n.default_language`. |
+| `@okf: false` | Leaves the definition, element, parameter or bound action out of the bundle. |
+| `@okf.tags: ['sales', 'core']` | Adds tags to the concept (a single tag can be a string). |
+| `@restrict`, `@requires`, `@readonly`, `@insertonly`, `@Capabilities` | The concept's authorization section. |
+
+About `@okf: false`:
+
+- On a definition, it leaves the definition and everything inside it out, and no other concept
+  mentions it: associations to it are left out, and so are projections' references to it.
+- CAP copies annotations from aspects, types and projection sources, and so does
+  `@okf: false`. Excluding a type doesn't hide the elements that use it: they stay, shown with
+  their built-in type, because they exist on the wire.
+- An authorization rule that mentions an excluded definition still shows it as CAP applies it.
+
+Projections and views without their own description or doc comment take their source's.
+
+```cds
+namespace sample.bookshop;
+
+/** A book that the shop can sell. */
+@description: 'Books that the shop sells, with stock and authors'
+@okf.tags: ['catalog']
+entity Books {
+  key ID     : UUID;
+  title      : String(150);
+  /** Internal purchasing notes. */
+  buyerNotes : String @okf: false;
+}
+```
+
+## Configuration
+
+Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CAP's profiles
+(`[development]`, `[production]`) and environment variables (e.g. `CDS_OKF_INCLUDE=all`).
+`cds add okf` writes them with their default values:
 
 ```json
 "cds": {
   "okf": {
-    "serve": {
-      "static": false,
-      "mcp": false
-    },
-    "[development]": {
-      "serve": { "static": "/okf", "mcp": { "plugin": "auto", "as": ["resources", "tools"] } }
-    }
+    "include": "services",
+    "serve": { "static": false, "mcp": false }
   }
 }
 ```
 
-Nothing is served unless you turn it on. With `mcp` on, cap-okf finds the MCP plugin your app uses; `resources` publishes each concept as an `okf://` resource (`@gavdi/cap-mcp`), `tools` adds a read-only `OkfService` that either plugin exposes as query tools. Authorization rules are only shown to authenticated requesters.
+| Setting | Values | Default | What it does |
+| --- | --- | --- | --- |
+| `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
+| `serve.static` | `false`, `true`, `"/path"` | `false` | *Planned for 0.2.* Serves the bundle as Markdown files from a route. |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires }` | `false` | *Planned for 0.2.* Serves the bundle over MCP. See [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md). |
+
+Nothing is ever served unless you turn it on ([ADR-0002](docs/adr/0002-serving-is-opt-in.md)).
+Installing an MCP plugin doesn't change that.
+
+Also good to know:
+
+- **Build tasks.** If your app lists its own `cds.build.tasks`, CAP only runs the tasks in that
+  list. Add `{ "for": "okf" }` to it, or `cds build` writes no bundle. `cds add okf` does this for
+  you in `package.json` and `.cdsrc.json`.
+- **Reproducible builds.** `generated.at` is the build time. Set `SOURCE_DATE_EPOCH` (seconds
+  since 1970, e.g. `git log -1 --format=%ct`) to stamp a fixed time, so two builds of the same
+  sources give the same bytes.
+- **Doc comments** don't need `cdsc.docs`: cap-okf loads the model with them itself, so your
+  `$metadata` stays as it is.
+
+## Authorization sections
+
+Each concept for something with access rules ends with an authorization section, between two
+marker lines:
+
+```markdown
+<!-- okf:auth:start -->
+## Authorization
+
+A request must pass every rule in this section. In a table of privileges, one matching row is enough.
+
+| Grant | To | Where |
+| --- | --- | --- |
+| `READ` | `authenticated-user` |  |
+| `CREATE`, `UPDATE`, `DELETE` | `catalog-manager` |  |
+
+### From service [AdminService](/model/AdminService.md)
+
+Requires: `authenticated-user`
+<!-- okf:auth:end -->
+```
+
+It shows the rules as CAP applies them, including those inherited from the service or a
+composition's root. When serving arrives (0.2), cap-okf removes these sections for requests
+without an authenticated user ([ADR-0003](docs/adr/0003-authorization-sections.md)).
+
+**The files on disk always contain them.** That includes `gen/okf` and the copy in your deployed
+app (`gen/srv/okf-bundle/`). If you commit `gen/okf`, publish it, or ship it anywhere public,
+consider whether your role names and `where` conditions may be seen.
+
+## Building and deploying
+
+`cds build` writes the bundle to `gen/okf` (to `gen/okf` also for in-place builds with
+`build.target: "."`), for review and CI. For a Node.js app it also puts the same files into the
+app it deploys: `gen/srv/okf-bundle/`. That copy is what a deployed app will serve in 0.2.
+
+The build validates the bundle against OKF v0.2. Errors fail the build, and nothing goes into
+the deployed app; warnings are listed and never fail it.
+
+## Messages
+
+Every message names the file to fix, the line, the rule and how to fix it:
+
+```text
+[okf] okf/model/notes.md:1 — model/ belongs to the generator; a curated file can't be there (L1).
+  Move it out of okf/model/, e.g. to okf/notes/notes.md.
+```
+
+Files from `okf/` are named `okf/<path>`; generated files `gen/okf/<path>`; problems in the
+model name the `.cds` file and line.
+
+| Rule | Kind | Meaning |
+| --- | --- | --- |
+| R1 | error | A concept has no valid frontmatter (OKF §11). |
+| R2 | error | A concept has no `type`, or an empty one. |
+| R3 | error | An `index.md` or `log.md` breaks its structure (OKF §8, §9). |
+| W1 | warning | `title` or `description` is missing. |
+| W2 | warning | An OKF v0.2 field has the wrong shape. |
+| W3 | warning | A deprecated v0.1 field is used (e.g. `timestamp`). |
+| W4 | warning | A link points at a file that isn't in the bundle. |
+| L1 | error | A file in `okf/` can't go into the bundle (in `model/`, a reserved name, or a path clash). |
+| L2 | warning | `okf/index.md` doesn't link to `model/`. |
+| M1 | error | Two definitions would get the same path, or paths that differ only in letter case. |
+
+Setting mistakes (e.g. `cds.okf.include: "everything"`) name the setting and its allowed values
+instead of a file.
+
+## Known limits
+
+- Texts come from `cds.i18n.default_language` only; `cds compile -l` is refused.
+- CAP's generated `.texts` entities have no description, so their concepts get a W1 warning.
+- `cds compile -o` adds and overwrites files but never deletes any; compile into an empty folder,
+  or use `cds build`.
+- An `okf/` folder whose only Markdown file is its own `index.md` isn't listed in a generated
+  root index.
 
 ## Demo app
 
-`demo/` is a small bookshop app that uses cap-okf as a real plugin. Run `npm run demo` (cds watch) or `npm run demo:build` from the repo root. See `demo/README.md` for what each part of it exercises.
+`demo/` is a small bookshop app that uses cap-okf as a real plugin. Run `npm run demo`
+(`cds watch`) or `npm run demo:build` from the repository root. See
+[`demo/README.md`](demo/README.md).
+
+To run the cds CLI with this repository's cap-okf in any CAP project during development:
+`npm run cds:okf -- build <path to the app>` (CAP only loads plugins an app lists as
+dependencies, so the script names this one through `CDS_PLUGINS`).
 
 ## Contributing
 
-See `CONTRIBUTING.md` and `docs/GOVERNANCE.md`. Licensed under Apache-2.0.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md). Licensed
+under Apache-2.0.
