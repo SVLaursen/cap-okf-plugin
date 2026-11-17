@@ -20,7 +20,11 @@ const VERSION = (
   JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { version: string }
 ).version;
 
-function cdsWithOkf(args: string[], extraEnv: Record<string, string> = {}) {
+function cdsWithOkf(
+  args: string[],
+  extraEnv: Record<string, string> = {},
+  more: { cwd?: string; input?: string } = {},
+) {
   // Without CDS_CONFIG: test/setup-env.js points it at src/, but a child process can't run TS.
   const env: Record<string, string | undefined> = {
     ...process.env,
@@ -29,9 +33,10 @@ function cdsWithOkf(args: string[], extraEnv: Record<string, string> = {}) {
   };
   delete env["CDS_CONFIG"];
   return spawnSync(process.execPath, [path.join(ROOT, "scripts", "cds-with-okf.js"), ...args], {
-    cwd: ROOT,
+    cwd: more.cwd ?? ROOT,
     env,
     encoding: "utf8",
+    input: more.input,
   });
 }
 
@@ -62,7 +67,7 @@ describe("cds compile --to okf", () => {
     const result = cdsWithOkf(["compile", FIXTURE, "--to", "okf"]);
     expect(result.status).toBe(0);
     const expected = (await expectedBundle()).map((file) => file.path);
-    expect(result.stdout.trim().split("\n")).toEqual(expected);
+    expect(result.stdout).toBe(expected.join("\n") + "\n");
   });
 
   test("with -o, writes exactly the bundle the exporter makes, doc comments and texts included", async () => {
@@ -79,20 +84,63 @@ describe("cds compile --to okf", () => {
     }
   });
 
+  // The second compile runs from the fixture's own folder: the working directory doesn't matter.
   test("two compiles with the same SOURCE_DATE_EPOCH write byte-identical bundles", () => {
     const outs = [0, 1].map(() => fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-compile-")));
     try {
-      for (const out of outs) cdsWithOkf(["compile", FIXTURE, "--to", "okf", "-o", out]);
+      const first = cdsWithOkf(["compile", FIXTURE, "--to", "okf", "-o", outs[0]!]);
+      const second = cdsWithOkf(
+        ["compile", ".", "--to", "okf", "-o", outs[1]!],
+        {},
+        { cwd: FIXTURE },
+      );
+      expect([first.status, second.status]).toEqual([0, 0]);
+      expect(readTree(outs[0]!).length).toBeGreaterThan(10);
       expect(readTree(outs[0]!)).toEqual(readTree(outs[1]!));
     } finally {
       for (const out of outs) fs.rmSync(out, { recursive: true, force: true });
     }
   });
 
-  test("a bad SOURCE_DATE_EPOCH fails with an [okf] message", () => {
+  // A setup mistake gets the [okf] message and its fix, not a stack trace.
+  test("a bad SOURCE_DATE_EPOCH fails with an [okf] message and no stack trace", () => {
     const result = cdsWithOkf(["compile", FIXTURE, "--to", "okf"], { SOURCE_DATE_EPOCH: "soon" });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("[okf] SOURCE_DATE_EPOCH — ");
+    expect(result.stderr).not.toMatch(/\n\s+at /);
+  });
+
+  test("cds.okf.include can be set the ways CAP allows, e.g. CDS_OKF_INCLUDE", () => {
+    const services = cdsWithOkf(["compile", FIXTURE, "--to", "okf"]).stdout.split("\n").length;
+    const all = cdsWithOkf(["compile", FIXTURE, "--to", "okf"], { CDS_OKF_INCLUDE: "all" });
+    expect(all.stdout.split("\n").length).toBeGreaterThan(services);
+  });
+});
+
+describe("cds compile --to okf refuses options that would mislead", () => {
+  test.each([
+    ["-l, since texts come from the default language", ["-l", "de"], /\[okf\] -l — /],
+    [
+      "-s with one service, since the bundle holds every exported one",
+      ["-s", "CatalogService"],
+      /\[okf\] -s — /,
+    ],
+    ["--sort, which drops what the model needs to be loaded again", ["--sort"], /\[okf\] model — /],
+  ])("%s", (_label, extra, message) => {
+    const result = cdsWithOkf(["compile", FIXTURE, "--to", "okf", ...extra]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(message);
+    expect(result.stdout).not.toContain("{}");
+  });
+
+  test("a model piped in on stdin", () => {
+    const result = cdsWithOkf(
+      ["compile", "--to", "okf"],
+      {},
+      { input: "entity A { key ID : Integer; }" },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/\[okf\] model — wasn't compiled from CDS files on disk/);
   });
 });
 
@@ -105,8 +153,13 @@ describe("the compile target in-process", () => {
     model = (await cds.load(FIXTURE)) as unknown as Csn;
   });
 
+  // Each test changes cds.okf; the configured value comes back afterwards.
+  let configured: unknown;
+  beforeEach(() => {
+    configured = (cds.env as unknown as Record<string, unknown>)["okf"];
+  });
   afterEach(() => {
-    delete (cds.env as unknown as Record<string, unknown>)["okf"];
+    (cds.env as unknown as Record<string, unknown>)["okf"] = configured;
   });
 
   type Target = (csn: unknown, options?: Record<string, unknown>) => Promise<unknown>;
@@ -148,8 +201,11 @@ describe("the compile target in-process", () => {
   });
 });
 
-test("scripts/cds-with-okf.js runs the cds CLI with cap-okf loaded", () => {
-  const env: Record<string, string | undefined> = { ...process.env };
+test("scripts/cds-with-okf.js runs the cds CLI with cap-okf loaded, keeping plugins already set", () => {
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    CDS_PLUGINS: JSON.stringify({ other: { impl: path.join(ROOT, "test", "cds-plugin-src.js") } }),
+  };
   delete env["CDS_CONFIG"];
   const output = execFileSync(
     process.execPath,
@@ -162,4 +218,5 @@ test("scripts/cds-with-okf.js runs the cds CLI with cap-okf loaded", () => {
   );
   const plugins = JSON.parse(output) as Record<string, { impl: string }>;
   expect(plugins["cap-okf"]?.impl).toBe(path.join(ROOT, "cds-plugin.js"));
+  expect(plugins["other"]?.impl).toBe(path.join(ROOT, "test", "cds-plugin-src.js"));
 });
