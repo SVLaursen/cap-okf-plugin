@@ -100,7 +100,8 @@ describe("the compile target in-process", () => {
   let model: Csn;
 
   beforeAll(async () => {
-    await cds.plugins;
+    // CAP's types don't declare cds.plugins, the promise that loads every plugin.
+    await (cds as unknown as { plugins: Promise<unknown> }).plugins;
     model = (await cds.load(FIXTURE)) as unknown as Csn;
   });
 
@@ -115,6 +116,17 @@ describe("the compile target in-process", () => {
     expect(typeof target()).toBe("function");
   });
 
+  test("with an output folder, gives CAP's writer one file per path, without the .md", async () => {
+    const files = [
+      ...((await target()(model, { dest: "out" })) as Iterable<
+        [string, { file: string; suffix: string }]
+      >),
+    ];
+    const tree = ((await target()(model)) as string).split("\n");
+    expect(files.map(([, place]) => `${place.file}${place.suffix}`)).toEqual(tree);
+    expect(files[0]![0]).toMatch(/^---\nokf_version: "0\.2"\n---\n/);
+  });
+
   test("cds.okf.include chooses what is exported", async () => {
     const services = (await target()(model)) as string;
     (cds.env as unknown as Record<string, unknown>)["okf"] = { include: "all" };
@@ -125,7 +137,7 @@ describe("the compile target in-process", () => {
   test("an unknown cds.okf.include fails with an [okf] message naming the allowed values", async () => {
     (cds.env as unknown as Record<string, unknown>)["okf"] = { include: "everything" };
     await expect(target()(model)).rejects.toThrow(
-      /\[okf\] cds\.okf\.include — .*"services" or "all"/,
+      /\[okf\] cds\.okf\.include — [\s\S]*"services"[\s\S]*"all"/,
     );
   });
 

@@ -31,7 +31,8 @@ jobs:
       - run: npm test -- --coverage
       - name: Build fixture bundle for reviewers
         if: hashFiles('src/build/compile.ts') != ''
-        run: npm run build && npx cds compile test/fixtures/bookshop --to okf -o bundle-preview
+        # cds-with-okf.js loads this repo's own plugin (ADR-0005); the commit time keeps it reproducible.
+        run: SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) npm run cds:okf -- compile test/fixtures/bookshop --to okf -o bundle-preview
       - uses: actions/upload-artifact@v4
         if: matrix.node == 24 && matrix.cds == 10 && hashFiles('bundle-preview/**') != ''
         with:

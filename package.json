@@ -35,6 +35,7 @@
     "check": "npm run format && npm run typecheck && npm run lint && npm test",
     "demo": "npm run build && npm run watch --workspace=demo",
     "demo:build": "npm run build && npm run build --workspace=demo",
+    "cds:okf": "npm run build && node scripts/cds-with-okf.js",
     "format": "prettier --check .",
     "format:fix": "prettier --write ."
   },

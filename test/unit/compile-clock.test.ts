@@ -6,7 +6,7 @@ import { clockFrom } from "../../src/build/clock";
 describe("clockFrom", () => {
   test("uses SOURCE_DATE_EPOCH, in seconds since 1970", () => {
     expect(clockFrom({ SOURCE_DATE_EPOCH: "1795001400" }, () => new Date(0)).toISOString()).toBe(
-      "2026-11-18T08:50:00.000Z",
+      "2026-11-18T11:30:00.000Z",
     );
   });
 
