@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import cds from "@sap/cds";
 import { serializeConcept, type Concept } from "../../src/core/concept";
@@ -177,6 +179,38 @@ describe("exportModel and path collisions", () => {
     ],
   ])("is refused for %s", (_label, definitions, message) => {
     expect(() => exportModel({ definitions }, OPTIONS)).toThrow(message);
+  });
+});
+
+// Task 3.2: a clash in a model loaded from files names the .cds file and line of the definition
+// that clashes, and the earlier one, with rule M1 and a fix; no stack trace in the CLI.
+describe("exportModel and path collisions, located", () => {
+  const OPTIONS: ExportOptions = { include: "all", now: NOW, version: VERSION };
+
+  test("names the .cds file and line of both definitions, the rule and the fix", async () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-clash-"));
+    try {
+      fs.writeFileSync(
+        path.join(folder, "clash.cds"),
+        "namespace my;\nentity Books { key ID : Integer; }\nentity books { key ID : Integer; }\n",
+      );
+      const model = (await cds.load(path.join(folder, "clash.cds"))) as unknown as Csn;
+      let thrown: unknown;
+      try {
+        exportModel(model, OPTIONS);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toMatchObject({
+        name: "ModelClashError",
+        message: expect.stringMatching(
+          /^\[okf\] \S*clash\.cds:3 — my\.books: its path model\/my\/books\.md differs from model\/my\/Books\.md \(my\.Books, \S*clash\.cds:2\) only in letter case or Unicode form \(M1\)\.\n {2}Rename one of the definitions, or leave one out with @okf: false\.$/,
+        ),
+      });
+      expect((thrown as Error).stack).toBe((thrown as Error).message);
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
   });
 });
 
