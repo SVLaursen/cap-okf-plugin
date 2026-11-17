@@ -69,7 +69,9 @@ describe("exportModel on the bookshop fixture", () => {
       );
     expect(paths(reversed)).toEqual(paths(model));
   });
+});
 
+describe("exportModel contents", () => {
   test("gives the exported concepts, an index for model/ and each folder below, and a root index", () => {
     expect(run().map((concept) => concept.path)).toEqual([
       "index.md",
@@ -174,7 +176,7 @@ describe("exportModel and path collisions", () => {
       /folder model\/my\/a differs from model\/my\/A \(my\.A\.x\) only in letter case/,
     ],
   ])("is refused for %s", (_label, definitions, message) => {
-    expect(() => exportModel({ definitions } as Csn, OPTIONS)).toThrow(message);
+    expect(() => exportModel({ definitions }, OPTIONS)).toThrow(message);
   });
 });
 

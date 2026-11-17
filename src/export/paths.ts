@@ -2,7 +2,7 @@
 // "Path rules"). Pure.
 
 /** Every generated concept lives below this folder. */
-const MODEL_FOLDER = "model";
+export const MODEL_FOLDER = "model";
 
 // Windows can't create files or folders with these names, whatever the extension.
 const WINDOWS_DEVICE_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;

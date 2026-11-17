@@ -102,7 +102,8 @@ function compareEntries(a: Entry, b: Entry): number {
   return compareText(a.relativePath, b.relativePath) || compareText(a.title, b.title);
 }
 
-function compareText(a: string, b: string): number {
+/** Compares by UTF-16 code unit, not by locale: the same order on every machine. */
+export function compareText(a: string, b: string): number {
   if (a < b) return -1;
   return a > b ? 1 : 0;
 }
