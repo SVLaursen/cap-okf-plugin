@@ -38,12 +38,16 @@ describe("withoutAuthSections", () => {
 
   test("a marker with spaces around it, or a Windows line ending, still counts", () => {
     const text = `Open.\r\n\r\n  ${START}  \r\nSecret.\r\n\t${END}\r\nAfter.\r\n`;
-    expect(withoutAuthSections(text)).toBe("Open.\r\n\r\nAfter.\r\n");
+    expect(withoutAuthSections(text)).toBe("Open.\r\nAfter.\r\n");
   });
 
   test("a start marker without an end removes everything after it, so nothing leaks", () => {
     const text = `Open.\n\n${START}\nSecret.\nMore secret.\n`;
     expect(withoutAuthSections(text)).toBe("Open.\n");
+  });
+
+  test("with Windows line endings, an unclosed section leaves the final \\r\\n in place", () => {
+    expect(withoutAuthSections(`Open.\r\n${START}\r\nSecret.\r\n`)).toBe("Open.\r\n");
   });
 
   test("a start marker inside a section doesn't end it; the first end marker does", () => {
