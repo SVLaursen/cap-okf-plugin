@@ -8,3 +8,8 @@ export function setupError(message: string): Error {
   error.stack = message;
   return error;
 }
+
+/** Whether `error` was made by setupError: a mistake to report plainly, not a bug. */
+export function isSetupError(error: unknown): error is Error {
+  return error instanceof Error && error.stack === error.message;
+}

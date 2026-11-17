@@ -7,16 +7,11 @@
 // build). So --for, --flavor and --docs change nothing, and options that would suggest otherwise
 // (-l, -s <service>) are refused. With -o, CAP's writer adds and overwrites files but never
 // deletes any: compile into an empty folder, or use cds build (task 2.9), which writes gen/okf.
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { serializeConcept, type Concept } from "../core/concept";
 import type { Csn } from "../export/csn";
-import { exportModel } from "../export/exporter";
-import { defaultLanguageTexts } from "../export/i18n";
-import { INCLUDE_VALUES, type Include } from "../export/selection";
 import type { Cds } from "../index";
-import { clockFrom } from "./clock";
 import { setupError } from "./errors";
+import { generateConcepts } from "./generate";
 
 /** One file for CAP's compile writer: its text, and where it goes (ADR-0005 (a)). */
 type CompiledFile = [content: string, place: { file: string; suffix: string }];
@@ -52,12 +47,7 @@ async function compileToOkf(
   options: CompileOptions,
 ): Promise<string | Generator<CompiledFile>> {
   const model = await withDocComments(cds, csn);
-  const concepts = exportModel(model, {
-    include: includeFrom(cds),
-    now: clockFrom(process.env, () => new Date()),
-    version: ownVersion(),
-    texts: defaultLanguageTexts(cds, model),
-  });
+  const concepts = generateConcepts(cds, model);
   if (options.dest === undefined) return concepts.map((concept) => concept.path).join("\n");
   return compiledFiles(concepts);
 }
@@ -100,25 +90,4 @@ async function withDocComments(cds: Cds, csn: Csn): Promise<Csn> {
     );
   }
   return (await cds.load(sources, { docs: true })) as unknown as Csn;
-}
-
-// cds.okf.include: "services" (default) or "all" (task 2.6), from cds.env, so profiles and
-// environment variables such as CDS_OKF_INCLUDE apply.
-function includeFrom(cds: Cds): Include {
-  const okf = (cds.env as unknown as { okf?: { include?: unknown } }).okf;
-  const include = okf?.include ?? "services";
-  if (!(INCLUDE_VALUES as readonly unknown[]).includes(include)) {
-    throw setupError(
-      `[okf] cds.okf.include — ${JSON.stringify(include)} is not a known value.\n` +
-        '  Use "services" (the default) or "all".',
-    );
-  }
-  return include as Include;
-}
-
-// cap-okf's own version, for generated.by. This file is src/build/compile.ts or, built,
-// lib/build/compile.js: in both, the package.json is two folders up.
-function ownVersion(): string {
-  const packageJson = path.join(__dirname, "..", "..", "package.json");
-  return (JSON.parse(readFileSync(packageJson, "utf8")) as { version: string }).version;
 }

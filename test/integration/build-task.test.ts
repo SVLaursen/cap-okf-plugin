@@ -154,12 +154,15 @@ describe("cds build with the app's own task list", () => {
 });
 
 describe("cds build, setup mistakes", () => {
-  test("a bad cds.okf.include fails the build with the [okf] message", () => {
+  test("a bad cds.okf.include fails the build with the [okf] message, printed plainly", () => {
     const app = bookshopApp({ okf: { include: "everything" } });
     try {
       const result = cdsBuild(app);
       expect(result.status).not.toBe(0);
-      expect(result.stdout + result.stderr).toContain("[okf] cds.okf.include — ");
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("[okf] cds.okf.include — ");
+      expect(output).not.toContain("[[okf]");
+      expect(output).not.toMatch(/\n\s+at /);
     } finally {
       fs.rmSync(app, { recursive: true, force: true });
     }

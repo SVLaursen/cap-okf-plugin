@@ -76,3 +76,11 @@ export function keyName(keyPath: KeyPath): string {
     })
     .join("");
 }
+
+/**
+ * A finding in the [okf] message style: "[okf] <file>:<line> — <what is wrong> (<rule>)." and,
+ * indented on the next line, "<how to fix it>."
+ */
+export function formatFinding(finding: Finding): string {
+  return `[okf] ${finding.file}:${finding.line} — ${finding.message} (${finding.rule}).\n  ${finding.fix}.`;
+}
