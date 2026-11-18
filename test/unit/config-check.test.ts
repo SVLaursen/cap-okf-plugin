@@ -37,7 +37,7 @@ describe("configWarnings: unknown keys", () => {
       "[okf] cds.okf.serve.statik — isn't a setting of cap-okf, so it is ignored.\n" +
         "  Use one of: static, mcp.",
       "[okf] cds.okf.serve.mcp.requries — isn't a setting of cap-okf, so it is ignored.\n" +
-        "  Use one of: plugin, as, namespace, requires, related, instructions, pointers.",
+        "  Use one of: plugin, as, namespace, requires, related, instructions, pointers, signals.",
     ]);
   });
 

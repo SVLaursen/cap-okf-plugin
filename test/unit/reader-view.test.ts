@@ -2,7 +2,7 @@ import { mergeBundle } from "../../src/bundle/merge";
 import { parseConcept, type Concept } from "../../src/core/concept";
 import { generateIndexes } from "../../src/core/index-md";
 import { readerView, snapshotOf, viewKey, type Reader } from "../../src/serve/reader-view";
-import { withRelated } from "../../src/serve/related";
+import { withReadTogether } from "../../src/serve/related";
 import { readerOf } from "../../src/serve/views";
 
 // ADR-0012 (amends ADR-0003): a concept with `requires:` exists only for readers with one of
@@ -94,11 +94,11 @@ describe("readerView: a concept with requires", () => {
     expect(finance.read("guides/shipping.md")).toContain("[Margins](/finance/margins.md)");
   });
 
-  test("the related block never names it", () => {
+  test('the "Read together with" line never names it', () => {
     const path = "guides/shipping.md";
-    expect(withRelated(outsider, path, outsider.read(path)!)).not.toContain("margins");
-    expect(withRelated(finance, path, finance.read(path)!)).toContain(
-      "- [Margins](/finance/margins.md) - About Margins.",
+    expect(withReadTogether(outsider, path, outsider.read(path)!)).not.toContain("margins");
+    expect(withReadTogether(finance, path, finance.read(path)!)).toContain(
+      "Margins (finance/margins.md)",
     );
   });
 });

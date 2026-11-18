@@ -1,19 +1,20 @@
-// OkfService: the MCP tools channel (ADR-0010 Contract B, revised by ADR-0012). cap-okf adds
-// this model to the app only when the tools channel is on (ADR-0005 (e)). Outline first: an
-// agent reads the index, searches, then reads the notes it needs, one getConcept call each.
+// OkfService: the MCP tools channel (ADR-0010 Contract B, revised by ADR-0012 and ADR-0013).
+// cap-okf adds this model to the app only when the tools channel is on (ADR-0005 (e)). Outline
+// first: an agent reads the index, searches, then reads the notes it needs, up to five a call.
 //
 // The agent-facing tools are getIndex, searchConcepts and getConcept. Index and bundleInfo stay
 // for code in the app (and for hosts that call the service in-process), marked @mcp: false so
 // they aren't on the tool list.
 //
 // Every description is an @description, because MCP plugins take a tool's description from it
-// and doc comments reach the model only when the app sets cdsc.docs (ADR-0010). They are written
-// as instructions to an agent.
+// and doc comments reach the model only when the app sets cdsc.docs (ADR-0010). They are
+// neutral: they say what each tool returns. When to read (the directive part) is added per
+// caller, only for callers who see curated notes (src/serve/mcp/tool-texts.ts, ADR-0013).
 
 @okf: false
 @mcp
 @path: 'okf-service'
-@description: 'This app''s business knowledge: what business terms and codes mean, how KPIs and figures are calculated, the rules and preconditions of actions, and fields that must not be used. Read getIndex first, then the notes you need with getConcept.'
+@description: 'This app''s knowledge bundle (OKF): curated notes and generated model concepts, as Markdown.'
 service OkfService {
 
   @readonly
@@ -39,17 +40,18 @@ service OkfService {
     matched     : Boolean @description: 'False when none of your words was found and this is the outline of curated notes instead.';
   }
 
-  @description: 'Read this first. Returns the outline of the app''s business knowledge as Markdown: curated notes (meanings of terms and codes, KPI and calculation definitions, rules for actions, fields not to use) with title, path and description, and the generated model folded into one line. Read it before you filter on a code or status field, compute a named figure, or call an action.'
+  @description: 'Returns the outline of this app''s business knowledge as Markdown: curated notes with title, path and description, then the model in one line.'
   function getIndex(
     folder : String @description: 'Optional: a folder to open its own index, e.g. model or model/CatalogService. Leave it out for the outline.'
   ) returns LargeString;
 
-  @description: 'Reads one knowledge note or model concept in full, as Markdown, followed by the related notes it links to. Take the path from getIndex or searchConcepts. Read the matching note before you filter on a code or status field, compute a figure the business has a name for, or call an action: it says what values mean and which fields must not be used.'
+  @description: 'Returns notes or model concepts in full, as Markdown: path for one, or up to 5 paths at once, each under a line with its path. Paths come from getIndex or searchConcepts.'
   function getConcept(
-    path : String not null @description: 'The path from getIndex or searchConcepts, e.g. guides/ordering.md.'
+    path  : String      @description: 'One path from getIndex or searchConcepts, e.g. guides/ordering.md.',
+    paths : many String @description: 'Up to 5 paths to read in one call, e.g. a note and the notes it says to read together with it.'
   ) returns LargeString;
 
-  @description: 'Finds knowledge notes and model concepts by any of your words, in titles, tags, synonyms, descriptions and text. Use it when a question names a business term, code, status value or KPI you don''t know. Returns paths with title and description, best first; read them with getConcept. If no word is found, you get the outline of curated notes (matched = false).'
+  @description: 'Finds notes and model concepts by any of your words, in titles, tags, synonyms, descriptions and text. Returns paths with title and description, best first. If no word is found, returns the outline of curated notes (matched = false).'
   function searchConcepts(
     text : String  @description: 'Words to look for, e.g. a business term, code or KPI name.',
     type : String  @description: 'Only concepts of this type, e.g. Guide or Entity.',

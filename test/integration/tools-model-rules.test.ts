@@ -11,6 +11,7 @@ import {
   wantsToolsModel,
   warnWithoutToolsModel,
 } from "../../src/serve/mcp/tools-model";
+import { directiveFor } from "../../src/serve/mcp/tool-texts";
 
 // Task 4.5 (ADR-0005 (e)): when the tools channel counts as on, with the 4.4 selector's rules.
 
@@ -93,22 +94,28 @@ describe("warnWithoutToolsModel", () => {
 });
 
 // Review of 4.5 step 2b: annotations on every loaded model.
-describe("annotateToolsModel", () => {
-  function loaded(env: object): Record<string, unknown> {
-    const events = new EventEmitter();
-    const app = appCds(env, {
-      on: {
-        value: (event: string, listener: (csn: unknown) => void) => events.on(event, listener),
-      },
-    });
-    annotateToolsModel(app);
-    const csn = {
-      definitions: { OkfService: { kind: "service", "@mcp": true } as Record<string, unknown> },
-    };
-    events.emit("loaded", csn);
-    return csn.definitions.OkfService;
-  }
+function loadedModel(env: object): Record<string, Record<string, unknown>> {
+  const events = new EventEmitter();
+  const app = appCds(env, {
+    on: {
+      value: (event: string, listener: (csn: unknown) => void) => events.on(event, listener),
+    },
+  });
+  annotateToolsModel(app);
+  const csn = {
+    definitions: {
+      OkfService: { kind: "service", "@mcp": true },
+      "OkfService.getIndex": { kind: "function", "@description": "Returns the outline." },
+    } as Record<string, Record<string, unknown>>,
+  };
+  events.emit("loaded", csn);
+  events.emit("loaded", csn); // a model loaded twice gets the directive once
+  return csn.definitions;
+}
+const loaded = (env: object) => loadedModel(env)["OkfService"]!;
+const getIndexOf = (env: object) => loadedModel(env)["OkfService.getIndex"]!["@description"];
 
+describe("annotateToolsModel", () => {
   test("tools on: @requires from the settings, and @protocol none under @gavdi/cap-mcp", () => {
     const service = loaded({
       okf: { serve: { mcp: { as: ["tools"], requires: "admin" } } },
@@ -122,5 +129,43 @@ describe("annotateToolsModel", () => {
     expect(loaded({ okf: { serve: { mcp: { as: ["resources"] } } }, ...GAVDI })["@mcp"]).toBe(
       false,
     );
+  });
+});
+
+describe("annotateToolsModel: the directive parts (ADR-0013)", () => {
+  test("the descriptions stay neutral by default under @gavdi/cap-mcp: the directive is a hint", () => {
+    expect(getIndexOf({ okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI })).toBe(
+      "Returns the outline.",
+    );
+  });
+
+  test('a model built with the directive part, served with signals "auto": it is taken out', () => {
+    const built = `Returns the outline. ${directiveFor("OkfService.getIndex")}`;
+    const events = new EventEmitter();
+    const on = (event: string, listener: (csn: unknown) => void) => events.on(event, listener);
+    const app = appCds(
+      { okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI },
+      { on: { value: on } },
+    );
+    annotateToolsModel(app);
+    const csn = {
+      definitions: {
+        OkfService: { kind: "service" },
+        "OkfService.getIndex": { kind: "function", "@description": built },
+      } as Record<string, Record<string, unknown>>,
+    };
+    events.emit("loaded", csn);
+    expect(csn.definitions["OkfService.getIndex"]!["@description"]).toBe("Returns the outline.");
+  });
+
+  test('signals "always", or @cap-js/mcp: the directive part goes into the model, once', () => {
+    const always = { okf: { serve: { mcp: { as: ["tools"], signals: "always" } } }, ...GAVDI };
+    const capJs = {
+      okf: { serve: { mcp: true } },
+      plugins: { "@cap-js/mcp": { impl: "x" } },
+    };
+    for (const env of [always, capJs]) {
+      expect(getIndexOf(env)).toBe(`Returns the outline. ${directiveFor("OkfService.getIndex")}`);
+    }
   });
 });

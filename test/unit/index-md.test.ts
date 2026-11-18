@@ -287,3 +287,29 @@ describe("generated index files in the official samples", () => {
     },
   );
 });
+
+describe("generateIndex outline: pinned notes (ADR-0013)", () => {
+  const notes = [
+    concept("guides/b.md", { type: "Guide", title: "B", description: "About b.", pinned: true }),
+    concept("guides/a.md", { type: "Guide", title: "A" }),
+    concept("rules/who.md", { type: "Rule", title: "Who sees what", pinned: true }),
+    concept("rules/not.md", { type: "Rule", title: "Not pinned", pinned: "yes" }),
+    concept("model/S/Orders.md", { type: "Entity", title: "Orders", pinned: true }),
+  ];
+
+  test("come first, in a Pinned section of their own, in path order; not again below", () => {
+    const index = generateIndex("", notes, { foldFolders: ["model"] });
+    expect(index.body).toBe(
+      "# Pinned\n\n* [B](guides/b.md) - About b.\n* [Who sees what](rules/who.md)\n\n" +
+        "# Guide\n\n* [A](guides/a.md)\n\n" +
+        "# Rule\n\n* [Not pinned](rules/not.md)\n\n" +
+        "# Subdirectories\n\n* [model](model/index.md) - 1 concept: Entity\n",
+    );
+  });
+
+  test("only the outline has the section; a folder's own index lists them as before", () => {
+    expect(generateIndex("guides", notes).body).toBe(
+      "# Guide\n\n* [A](a.md)\n* [B](b.md) - About b.\n",
+    );
+  });
+});

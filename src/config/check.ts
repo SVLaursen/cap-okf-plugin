@@ -23,6 +23,7 @@ const KEYS = {
     "related",
     "instructions",
     "pointers",
+    "signals",
   ],
 };
 

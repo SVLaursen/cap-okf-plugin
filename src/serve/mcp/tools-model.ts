@@ -11,6 +11,7 @@ import path from "node:path";
 import type { Cds } from "../../index";
 import { SetupError } from "../../build/errors";
 import { GAVDI_CAP_MCP, installedPlugins, selectMcp } from "./select";
+import { directiveDefinitions, directiveFor, directivesInModel, withDirective } from "./tool-texts";
 
 /** The cds.requires key the model is added under. */
 export const TOOLS_MODEL_KEY = "cap-okf/tools";
@@ -80,13 +81,15 @@ export function packageNameOf(root: string): string | undefined {
  * Sets OkfService's @requires from cds.okf.serve.mcp.requires (ADR-0010), so CAP enforces it on
  * every call and the MCP plugin hides tools a caller can't use, and @protocol: 'none' under
  * @gavdi/cap-mcp, where @mcp is no protocol and OkfService would otherwise also be on OData
- * (ADR-0006). Runs on every model cds.load loads, so cds build bakes in the build's settings and
+ * (ADR-0006). Adds the directive parts to the tool descriptions when they can't be added per
+ * caller (tool-texts.ts, ADR-0013). Runs on every model cds.load loads, so cds build bakes in the build's settings and
  * a server applies its own when it loads the built model.
  */
 export function annotateToolsModel(cds: Cds): void {
   cds.on("loaded", (csn: unknown) => {
-    const service = (csn as { definitions?: Record<string, Record<string, unknown>> })
-      .definitions?.["OkfService"];
+    const definitions = (csn as { definitions?: Record<string, Record<string, unknown>> })
+      .definitions;
+    const service = definitions?.["OkfService"];
     if (service === undefined) return;
     let choice;
     try {
@@ -108,5 +111,33 @@ export function annotateToolsModel(cds: Cds): void {
     }
     service["@requires"] = choice.requires;
     if (choice.plugin === GAVDI_CAP_MCP) service["@protocol"] = "none";
+    if (directivesInModel(choice)) addDirectives(definitions!);
+    else removeDirectives(definitions!);
   });
+}
+
+// A model built with the directive parts in it (e.g. cds build with signals "always") and served
+// with signals "auto": they come per caller as notes, so the model's copy goes.
+function removeDirectives(definitions: Record<string, Record<string, unknown>>): void {
+  for (const name of directiveDefinitions()) {
+    const definition = definitions[name];
+    const description = definition?.["@description"];
+    const suffix = ` ${directiveFor(name) ?? ""}`;
+    if (typeof description === "string" && description.endsWith(suffix)) {
+      definition!["@description"] = description.slice(0, -suffix.length);
+    }
+  }
+}
+
+// Once per model: a description that already ends with its directive part isn't changed again.
+function addDirectives(definitions: Record<string, Record<string, unknown>>): void {
+  for (const name of directiveDefinitions()) {
+    const definition = definitions[name];
+    const neutral = definition?.["@description"];
+    const directive = directiveFor(name);
+    if (definition === undefined || typeof neutral !== "string" || directive === undefined) {
+      continue;
+    }
+    if (!neutral.endsWith(directive)) definition["@description"] = withDirective(neutral, name);
+  }
 }

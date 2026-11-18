@@ -1,6 +1,7 @@
 import path from "node:path";
 import cds from "@sap/cds";
 import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { directiveFor } from "../../src/serve/mcp/tool-texts";
 
 // Task 4.5 (ADR-0005 (e)): OkfService's model is added only when the MCP tools channel is on.
 // The demo app with "@gavdi/cap-mcp" in its plugin list (an empty stub: only the name counts) and
@@ -37,4 +38,15 @@ describe("OkfService with the tools channel on", () => {
   test("is never part of the bundle it serves (@okf: false)", () => {
     expect(cds.model!.definitions["OkfService"]?.["@okf"]).toBe(false);
   });
+
+  // ADR-0013: what each tool returns, never when to read; the directive part is added per caller.
+  test.each(["getIndex", "getConcept", "searchConcepts"])(
+    "%s: a neutral description, within 400 characters with its directive part",
+    (name) => {
+      const neutral = cds.model!.definitions[`OkfService.${name}`]?.["@description"] as string;
+      expect(neutral).toMatch(/^(Returns|Finds) /);
+      expect(neutral).not.toMatch(/read this first|before you|read it /i);
+      expect(`${neutral}\n\n${directiveFor(`OkfService.${name}`)}`.length).toBeLessThanOrEqual(400);
+    },
+  );
 });

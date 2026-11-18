@@ -7,7 +7,7 @@ import { isBundlePath } from "../../bundle/paths";
 import { OKF_VERSION } from "../../export/exporter";
 import type { Cds } from "../../index";
 import type { ReaderView } from "../reader-view";
-import { withRelated } from "../related";
+import { withReadTogether } from "../related";
 import { readerOf, servableIn, viewOf } from "../views";
 import { bundleHash } from "./bundle-hash";
 import { indexRows, type IndexRow } from "./index-rows";
@@ -95,18 +95,65 @@ function indexFor(req: Request, view: ReaderView): string {
   return text;
 }
 
-// The concept's text as the caller gets it; unknown, hidden and unreadable paths alike are a 404.
+// path alone: the concept's text as the caller gets it; unknown, hidden and unreadable paths
+// alike are a 404. With paths: up to five concepts in the order asked, each under a line naming
+// its path; one that isn't there gets the same not-found text, and the others still come.
 function conceptFor(req: Request, view: ReaderView, related: boolean): string {
-  const path = req.data["path"];
-  const text = typeof path === "string" && isBundlePath(path) ? servableIn(view, path) : undefined;
-  if (text === undefined) {
+  const asked = pathsAsked(req);
+  if (asked === "single") {
+    const path = req.data["path"];
+    const text = readConcept(view, path, related);
+    return text ?? req.reject(404, notFoundText(path));
+  }
+  return asked
+    .map((path) => {
+      const text = readConcept(view, path, related) ?? notFoundText(path);
+      return `${CONCEPT_MARK(path)}\n${text.endsWith("\n") ? text : `${text}\n`}`;
+    })
+    .join("\n");
+}
+
+const MAX_PATHS = 5;
+const CONCEPT_MARK = (path: unknown) => `<!-- okf:concept ${String(path)} -->`;
+
+// "single" for a call with path only (the answer is as before); otherwise path, then paths,
+// each once. More than five, or none, is a 400.
+function pathsAsked(req: Request): "single" | unknown[] {
+  const { path, paths } = req.data;
+  if (paths === undefined || paths === null) {
+    if (path === undefined || path === null) return req.reject(400, noPathText());
+    return "single";
+  }
+  const list = Array.isArray(paths) ? paths : [paths];
+  const all = [...(path === undefined || path === null ? [] : [path]), ...list];
+  const unique = all.filter((each, index) => all.indexOf(each) === index);
+  if (unique.length === 0) return req.reject(400, noPathText());
+  if (unique.length > MAX_PATHS) {
     return req.reject(
-      404,
-      `[okf] ${String(path)} — isn't a file of the bundle.\n` +
-        "  Take the path from getIndex or searchConcepts.",
+      400,
+      `[okf] paths — ${unique.length} paths were asked for; at most ${MAX_PATHS} are read in one call.\n` +
+        `  Read them in calls of up to ${MAX_PATHS} paths.`,
     );
   }
-  return related ? withRelated(view, path as string, text) : text;
+  return unique;
+}
+
+function readConcept(view: ReaderView, path: unknown, related: boolean): string | undefined {
+  if (typeof path !== "string" || !isBundlePath(path)) return undefined;
+  const text = servableIn(view, path);
+  if (text === undefined) return undefined;
+  return related ? withReadTogether(view, path, text) : text;
+}
+
+function notFoundText(path: unknown): string {
+  return (
+    `[okf] ${String(path)} — isn't a file of the bundle.\n` +
+    "  Take the path from getIndex or searchConcepts."
+  );
+}
+
+function noPathText(): string {
+  return "[okf] getConcept — no path was given.\n  Pass path, or paths with up to 5 paths.";
 }
 
 // The Index rows of one view, built once.

@@ -128,6 +128,29 @@ describe("OkfService functions", () => {
     },
   );
 
+  test("getConcept with path and paths: each once, path first, under a line naming it", async () => {
+    const text = (await send(BOB, "getConcept", {
+      path: "guides/ordering.md",
+      paths: [ORDERS, "guides/ordering.md", "nope.md"],
+    })) as string;
+    const marks = [...text.matchAll(/^<!-- okf:concept (.+) -->$/gm)].map((match) => match[1]);
+    expect(marks).toEqual(["guides/ordering.md", ORDERS, "nope.md"]);
+    expect(text).toContain("[okf] nope.md — isn't a file of the bundle.");
+  });
+
+  test("getConcept with paths alone, even one, uses the marked form; none at all is a 400", async () => {
+    expect(await send(BOB, "getConcept", { paths: [ORDERS] })).toMatch(
+      new RegExp(`^<!-- okf:concept ${ORDERS} -->\\n---\\n`),
+    );
+    await expect(send(BOB, "getConcept", {})).rejects.toMatchObject({ code: 400 });
+    await expect(send(BOB, "getConcept", { paths: [] })).rejects.toMatchObject({ code: 400 });
+  });
+
+  test("getConcept with more than five paths is a 400", async () => {
+    const paths = ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"];
+    await expect(send(BOB, "getConcept", { paths })).rejects.toMatchObject({ code: 400 });
+  });
+
   test("searchConcepts finds Index rows by words", async () => {
     const rows = (await send(ANONYMOUS, "searchConcepts", { text: "placing order" })) as {
       path: string;

@@ -25,13 +25,28 @@ import type { KeyPath, LocatedConcept } from "./concept";
  * The knowledge lint (ADR-0012, lint.ts), warnings that make a bundle more useful to agents:
  * - K1 a curated note has no tags;
  * - K2 a curated note links to no generated concept;
- * - K3 an entity has elements that look like codes, and no curated note links to it.
+ * - K3 an entity has elements that look like codes, and no curated note links to it;
+ * - K4 a pinned note has no description.
  *
  * M1 (error, thrown by the exporter as ModelClashError, not a Finding): two CDS definitions
  * whose concepts would share a path, or paths that differ only in letter case or Unicode form.
  */
 export type Rule =
-  "R1" | "R2" | "R3" | "W1" | "W2" | "W3" | "W4" | "L1" | "L2" | "L3" | "L4" | "K1" | "K2" | "K3";
+  | "R1"
+  | "R2"
+  | "R3"
+  | "W1"
+  | "W2"
+  | "W3"
+  | "W4"
+  | "L1"
+  | "L2"
+  | "L3"
+  | "L4"
+  | "K1"
+  | "K2"
+  | "K3"
+  | "K4";
 
 export type Severity = "error" | "warning";
 
@@ -64,6 +79,7 @@ const SEVERITY: Record<Rule, Severity> = {
   K1: "warning",
   K2: "warning",
   K3: "warning",
+  K4: "warning",
 };
 
 /** The text of a finding: what is wrong and how to fix it. */

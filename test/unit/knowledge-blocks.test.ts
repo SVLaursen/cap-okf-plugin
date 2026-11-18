@@ -3,10 +3,10 @@ import { parseConcept } from "../../src/core/concept";
 import { withoutLinksTo } from "../../src/core/hidden-links";
 import { requiresOf, withoutRequiresKey } from "../../src/core/requires";
 import { readerView, snapshotOf } from "../../src/serve/reader-view";
-import { RELATED_END, RELATED_START, withRelated } from "../../src/serve/related";
+import { TOGETHER_END, TOGETHER_START, withReadTogether } from "../../src/serve/related";
 
-// ADR-0012: the "Business knowledge" section of generated concepts, the related-concepts block
-// after a concept that is read, and the pure helpers per-role visibility uses.
+// ADR-0012 and ADR-0013: the "Business knowledge" section of generated concepts, the "Read
+// together with" line in a concept that is read, and the pure helpers per-role visibility uses.
 
 const note = (path: string, title: string, body: string, extra = "") =>
   parseConcept(
@@ -61,34 +61,94 @@ describe("withBusinessKnowledge", () => {
   });
 });
 
-describe("withRelated", () => {
+describe("withReadTogether", () => {
   const files = [
     {
       path: "guides/a.md",
-      text: "---\ntype: Guide\ntitle: A\n---\n[B](b.md), [model](/model/S/Orders.md), [B again](/guides/b.md), [web](https://x.org), [index](/index.md)\n",
+      text: "---\ntype: Guide\ntitle: A\n---\n# A\n\n[B](b.md), [model](/model/S/Orders.md), [C](/guides/c.md), [B again](/guides/b.md), [web](https://x.org), [index](/index.md)\n",
     },
     {
       path: "guides/b.md",
       text: "---\ntype: Guide\ntitle: B\ndescription: The b note.\n---\nB.\n",
     },
+    { path: "guides/c.md", text: "---\ntype: Guide\n---\nC.\n" },
     { path: "model/S/Orders.md", text: "---\ntype: Entity\n---\nOrders.\n" },
     { path: "index.md", text: "# Guides\n" },
   ];
   const view = readerView(snapshotOf(files), { isAuthenticated: true, is: () => true });
 
-  test("appends the linked concepts, curated first, each once, in a marked block", () => {
-    expect(withRelated(view, "guides/a.md", view.read("guides/a.md")!)).toBe(
-      `${files[0]!.text}\n${RELATED_START}\n## Related concepts\n\n` +
-        "- [B](/guides/b.md) - The b note.\n- [Orders.md](/model/S/Orders.md)\n" +
-        `${RELATED_END}\n`,
+  test("names the curated notes it links to under the title, each once, in a marked line", () => {
+    expect(withReadTogether(view, "guides/a.md", view.read("guides/a.md")!)).toBe(
+      "---\ntype: Guide\ntitle: A\n---\n# A\n" +
+        `${TOGETHER_START}\nRead together with: B (guides/b.md), c.md (guides/c.md)\n${TOGETHER_END}\n` +
+        "\n[B](b.md), [model](/model/S/Orders.md), [C](/guides/c.md), [B again](/guides/b.md), [web](https://x.org), [index](/index.md)\n",
     );
   });
 
-  test("nothing for a concept without links, or a file that isn't a concept", () => {
-    expect(withRelated(view, "guides/b.md", "B")).toBe("B");
-    expect(withRelated(view, "index.md", "# Guides\n")).toBe("# Guides\n");
+  test("without a title, at the start of the body; a heading in code doesn't count", () => {
+    const untitled = [
+      { path: "n.md", text: "---\ntype: Note\n---\n```\n# not a title\n```\n[b](b.md)\n" },
+      { path: "b.md", text: "---\ntype: Note\ntitle: B\n---\nB.\n" },
+    ];
+    const small = readerView(snapshotOf(untitled), { isAuthenticated: true, is: () => true });
+    expect(withReadTogether(small, "n.md", small.read("n.md")!)).toBe(
+      `---\ntype: Note\n---\n${TOGETHER_START}\nRead together with: B (b.md)\n${TOGETHER_END}\n` +
+        "```\n# not a title\n```\n[b](b.md)\n",
+    );
   });
 
+  test("nothing for a concept that links to no curated note, or a file that isn't a concept", () => {
+    expect(withReadTogether(view, "guides/b.md", "B")).toBe("B");
+    expect(withReadTogether(view, "index.md", "# Guides\n")).toBe("# Guides\n");
+    const onlyModel = readerView(
+      snapshotOf([
+        { path: "n.md", text: "---\ntype: Note\n---\n[o](/model/S/Orders.md)\n" },
+        files[3]!,
+      ]),
+      { isAuthenticated: true, is: () => true },
+    );
+    expect(withReadTogether(onlyModel, "n.md", "x")).toBe("x");
+  });
+});
+
+describe("withReadTogether: where the line goes (review)", () => {
+  const linked = { path: "b.md", text: "---\ntype: Note\ntitle: B\n---\nB.\n" };
+  const placed = (text: string) => {
+    const small = readerView(snapshotOf([{ path: "n.md", text }, linked]), {
+      isAuthenticated: true,
+      is: () => true,
+    });
+    return withReadTogether(small, "n.md", small.read("n.md")!);
+  };
+  const LINE = `${TOGETHER_START}\nRead together with: B (b.md)\n${TOGETHER_END}\n`;
+
+  test("never inside an authorization section at the top: before it", () => {
+    const body =
+      "<!-- okf:auth:start -->\n# Authorization\n\nRules.\n<!-- okf:auth:end -->\n# A\n[b](b.md)\n";
+    expect(placed(`---\ntype: Note\n---\n${body}`)).toBe(`---\ntype: Note\n---\n${LINE}${body}`);
+  });
+
+  test("never under a later section: without a title first, at the start of the body", () => {
+    const body = "Intro [b](b.md).\n\n# Later section\n\ntext\n";
+    expect(placed(`---\ntype: Note\n---\n${body}`)).toBe(`---\ntype: Note\n---\n${LINE}${body}`);
+  });
+
+  test("after blank lines, still under the title", () => {
+    expect(placed("---\ntype: Note\n---\n\n# A\n[b](b.md)\n")).toBe(
+      `---\ntype: Note\n---\n\n# A\n${LINE}[b](b.md)\n`,
+    );
+  });
+
+  test("a CRLF file gets CRLF on the added lines", () => {
+    const text = placed("---\r\ntype: Note\r\n---\r\n# A\r\n[b](b.md)\r\n");
+    expect(text).toBe(
+      "---\r\ntype: Note\r\n---\r\n# A\r\n" +
+        `${TOGETHER_START}\r\nRead together with: B (b.md)\r\n${TOGETHER_END}\r\n[b](b.md)\r\n`,
+    );
+  });
+});
+
+describe("withReadTogether: at most ten", () => {
   test("at most ten", () => {
     const many = Array.from({ length: 12 }, (_, i) => ({
       path: `n${String(i).padStart(2, "0")}.md`,
@@ -99,8 +159,8 @@ describe("withRelated", () => {
       text: `---\ntype: Note\n---\n${many.map((each) => `[x](${each.path})`).join(" ")}\n`,
     };
     const big = readerView(snapshotOf([hub, ...many]), { isAuthenticated: true, is: () => true });
-    const block = withRelated(big, "hub.md", big.read("hub.md")!);
-    expect(block.match(/^- \[/gm)).toHaveLength(10);
+    const line = withReadTogether(big, "hub.md", big.read("hub.md")!).split("\n")[4]!;
+    expect(line.match(/\(n\d\d\.md\)/g)).toHaveLength(10);
   });
 });
 

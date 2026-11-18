@@ -175,6 +175,16 @@ changed and every deviation from the brief in `docs/changes/benchmark-m2.md`.
 - [x] **m2.8 Contract C** (`mcp:hints`, client side): instructions and tool notes (`serve.mcp.instructions`, `serve.mcp.pointers`).
 - [x] **m2.9 Defaults:** `serve.mcp: true` with `@gavdi/cap-mcp` serves both channels; one index plus one template stays.
 
+Round 2 (maintainer brief 2026-11-18, same branch): cheaper signals, several notes per read,
+honest gaps. Same ADRs, revised; "Round 2" in `docs/changes/benchmark-m2.md`.
+
+- [x] **m2.10 Tool notes opt-in:** `serve.mcp.pointers` `false` (default) | `"short"` | `true`.
+- [x] **m2.11 Several notes at once:** `getConcept(paths)` (up to 5); "Read together with" under the title replaces the related block.
+- [x] **m2.12 No "read this first" without curated notes:** per user, neutral OKF tool descriptions; `serve.mcp.signals`.
+- [x] **m2.13 Conditional directive** in the instructions and the OKF tool descriptions.
+- [x] **m2.14 Gaps:** the instructions and the index tool say to name what isn't defined.
+- [x] **m2.15 Pinned notes:** `pinned: true`, first in the index, listed in the instructions (at most 3), lint K4.
+
 **Gate G5:** contract suite green for the static route, the tools channel under both MCP plugins, and `@gavdi/cap-mcp` resources (or 4.6 recorded as blocked upstream), on both runtimes (Node.js only for the first release: Java is out of it, maintainer decision 2026-11-17); nothing served unless configured; auth sections never reach unauthenticated requesters.
 
 ## Phase 5 — Fiori authoring → Gate G6 → release 0.3

@@ -34,6 +34,7 @@ const CHOICE: McpChoice = {
   related: false,
   instructions: true,
   pointers: true,
+  signals: "auto",
 };
 
 /** A cds.User-like caller with the given roles. */

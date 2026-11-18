@@ -11,13 +11,15 @@ import type { Application } from "express";
 import type { Cds } from "../index";
 import { oneBundleForEveryKey } from "./bundles";
 import { gavdiResources } from "./mcp/gavdi-cap-mcp";
-import { gavdiHints } from "./mcp/gavdi-hints";
+import { MAX_PINNED, allPinnedNotes, gavdiHints } from "./mcp/gavdi-hints";
 import { attachOkfService } from "./mcp/okf-service";
 import { GAVDI_CAP_MCP, installedPlugins, selectMcp, type McpChoice } from "./mcp/select";
 import { packageNameOf } from "./mcp/tools-model";
 import { startupBundleSource } from "./source";
 import { staticRouteOf } from "./static-config";
 import { mountStaticRoute } from "./static-route";
+import type { Bundles } from "./bundles";
+import { viewOf } from "./views";
 
 /** Registers the serving channels for the app; they start at bootstrap. */
 export function registerServing(cds: Cds): void {
@@ -49,8 +51,29 @@ export function registerServing(cds: Cds): void {
     if (tools !== undefined) cds.on("served", () => attachOkfService(cds, bundles, tools));
     if (viaGavdi !== undefined) resources.use({ choice: viaGavdi, bundles });
     // Hints only through @gavdi/cap-mcp, and only when serve.mcp is on (ADR-0013).
-    if (mcp?.plugin === GAVDI_CAP_MCP) hints.use({ choice: mcp, bundles });
+    if (mcp?.plugin === GAVDI_CAP_MCP) {
+      hints.use({ choice: mcp, bundles });
+      if (mcp.instructions !== false) {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        cds.on("served", () => warnAboutPinned(bundles, warn));
+      }
+    }
   });
+}
+
+/** The instructions list at most three pinned notes; more than that is a warning, once. */
+export async function warnAboutPinned(
+  bundles: Bundles,
+  warn: (message: string) => void,
+): Promise<void> {
+  const everyone = { isAuthenticated: true, is: () => true };
+  const pinned = allPinnedNotes(await viewOf(await bundles.forKey({}), everyone));
+  if (pinned.length <= MAX_PINNED) return;
+  const listed = pinned.slice(0, MAX_PINNED).map((note) => note.path);
+  warn(
+    `[okf] okf/ — ${pinned.length} notes are pinned, so the server instructions list only the first ${MAX_PINNED}: ${listed.join(", ")}.\n` +
+      `  Pin at most ${MAX_PINNED} notes: set pinned: true only where a note must reach every agent.`,
+  );
 }
 
 /** The choice per MCP channel: tools (OkfService), and resources through @gavdi/cap-mcp. */

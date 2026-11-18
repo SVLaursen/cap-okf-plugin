@@ -11,9 +11,14 @@
 // - namespace (ADR-0010): from cds.okf.serve.mcp.namespace, else the package name, lower case,
 //   leading @ dropped, / → - (@acme/orders → acme-orders); must match the ADR's pattern.
 // - requires (ADR-0010): the roles a caller needs, default authenticated-user.
-// - related (ADR-0012): the related-concepts block after a concept that is read; default true.
-// - instructions and pointers (ADR-0013, Contract C): server instructions and tool notes through
-//   @gavdi/cap-mcp's mcp:hints; default true. instructions may also be the text to use.
+// - related (ADR-0012): the "Read together with" line in a concept that is read; default true.
+// - instructions (ADR-0013, Contract C): server instructions through @gavdi/cap-mcp's mcp:hints;
+//   default true. It may also be the text to use.
+// - pointers (ADR-0013): tool notes through mcp:hints; default false (they cost tokens on every
+//   request). "short" gives titles and paths only, true adds descriptions.
+// - signals (ADR-0013): "auto" (default) gives instructions, tool notes and the directive parts
+//   of OkfService's tool descriptions only to callers who see curated notes; "always" gives them
+//   to every caller.
 import { setupError } from "../../build/errors";
 
 export const GAVDI_CAP_MCP = "@gavdi/cap-mcp";
@@ -41,13 +46,21 @@ export interface McpChoice {
   namespace: string;
   /** Roles a caller needs; one of them is enough, as with CAP's @requires. */
   requires: string[];
-  /** Whether a concept that is read is followed by its related-concepts block. */
+  /** Whether a concept that is read gets its "Read together with" line. */
   related: boolean;
   /** Server instructions: the default text (true), none (false), or the app's own text. */
   instructions: boolean | string;
-  /** Whether tools whose definition a curated note links to get a note pointing at it. */
-  pointers: boolean;
+  /** Tool notes pointing a tool to the curated notes about it: none, titles only, or full. */
+  pointers: Pointers;
+  /** Whether the signals to read depend on the caller seeing curated notes ("auto"). */
+  signals: Signals;
 }
+
+/** cds.okf.serve.mcp.pointers: no tool notes, titles and paths only, or with descriptions. */
+export type Pointers = false | "short" | true;
+
+/** cds.okf.serve.mcp.signals. */
+export type Signals = "auto" | "always";
 
 export interface McpSelection {
   /** Undefined when nothing is served over MCP. */
@@ -81,7 +94,8 @@ export function selectMcp(input: SelectorInput): McpSelection {
     requires: rolesFor(settings["requires"]),
     related: switchFor("related", settings["related"]),
     instructions: instructionsFor(settings["instructions"]),
-    pointers: switchFor("pointers", settings["pointers"]),
+    pointers: pointersFor(settings["pointers"]),
+    signals: signalsFor(settings["signals"]),
   };
   return { choice, warnings };
 }
@@ -225,6 +239,27 @@ function instructionsFor(setting: unknown): boolean | string {
   throw setupError(
     `[okf] cds.okf.serve.mcp.instructions — ${JSON.stringify(setting)} isn't true, false or a text.\n` +
       "  Use true (the default text), false (none) or the instructions to give, as a string.",
+  );
+}
+
+// false, "short" or true; not set (or null) is false: tool notes cost tokens on every request,
+// and the server instructions are the cheap signal (ADR-0013).
+function pointersFor(setting: unknown): Pointers {
+  if (setting === undefined || setting === null) return false;
+  if (typeof setting === "boolean" || setting === "short") return setting;
+  throw setupError(
+    `[okf] cds.okf.serve.mcp.pointers — ${JSON.stringify(setting)} isn't false, "short" or true.\n` +
+      '  Use false (the default, no tool notes), "short" (titles and paths) or true (with descriptions).',
+  );
+}
+
+// "auto" or "always"; not set (or null) is "auto".
+function signalsFor(setting: unknown): Signals {
+  if (setting === undefined || setting === null) return "auto";
+  if (setting === "auto" || setting === "always") return setting;
+  throw setupError(
+    `[okf] cds.okf.serve.mcp.signals — ${JSON.stringify(setting)} isn't "auto" or "always".\n` +
+      '  Use "auto" (the default: only for callers who see curated notes) or "always".',
   );
 }
 

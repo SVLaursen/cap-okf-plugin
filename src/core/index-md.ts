@@ -15,6 +15,7 @@ export interface IndexOptions {
    * into one line per subfolder ("model" → "* [model](model/index.md) - 28 concepts: …").
    * Other subfolders get no line of their own: their concepts are already listed. Used for the
    * bundle-root index, so a reader sees the curated notes first and the generated ones folded.
+   * Concepts with `pinned: true` come first of all, in a "# Pinned" section of their own.
    */
   foldFolders?: readonly string[];
 }
@@ -25,6 +26,9 @@ export interface IndexOptions {
  */
 const UNTYPED_SECTION = "Other";
 
+/** The outline's first section: concepts whose frontmatter says `pinned: true` (ADR-0013). */
+export const PINNED_SECTION = "Pinned";
+
 const RESERVED_FILE_NAMES = ["index.md", "log.md"];
 
 /** A concept as one index entry needs it. */
@@ -34,6 +38,7 @@ interface Entry {
   type: string;
   title: string;
   description: string | undefined;
+  pinned: boolean;
 }
 
 /**
@@ -120,13 +125,14 @@ export function compareText(a: string, b: string): number {
 }
 
 function toEntry(concept: Concept, relativePath: string): Entry {
-  const { type, title, description } = concept.frontmatter ?? {};
+  const { type, title, description, pinned } = concept.frontmatter ?? {};
   return {
     relativePath,
     type: isNonEmptyString(type) ? oneLine(type) : UNTYPED_SECTION,
     // §4.1: without a title, consumers may derive one from the file name.
     title: isNonEmptyString(title) ? oneLine(title) : fileTitle(relativePath),
     description: isNonEmptyString(description) ? escapeHtml(oneLine(description)) : undefined,
+    pinned: pinned === true,
   };
 }
 
@@ -142,14 +148,25 @@ function typeSections(entries: readonly Entry[], deep = false): string[] {
   });
 }
 
-// The outline layout (IndexOptions.foldFolders): every entry outside the folded subfolders by
-// type, then one line per folded subfolder that holds concepts.
+// The outline layout (IndexOptions.foldFolders): the pinned entries, then every other entry
+// outside the folded subfolders by type, then one line per folded subfolder that holds concepts.
 function outlineSections(entries: readonly Entry[], foldFolders: readonly string[]): string[] {
   const isFolded = (entry: Entry) =>
     foldFolders.some((folder) => entry.relativePath.startsWith(`${folder}/`));
   const listed = entries.filter((entry) => !isFolded(entry));
+  const pinned = listed.filter((entry) => entry.pinned);
+  const unpinned = listed.filter((entry) => !entry.pinned);
   const folded = entries.filter(isFolded);
-  return [...typeSections(listed, true), ...subfolderSection(folded)];
+  return [...pinnedSection(pinned), ...typeSections(unpinned, true), ...subfolderSection(folded)];
+}
+
+// "# Pinned" with the pinned entries in path order; nothing when there are none.
+function pinnedSection(entries: readonly Entry[]): string[] {
+  if (entries.length === 0) return [];
+  const lines = entries.map((entry) =>
+    entryLine(entry.title, entry.relativePath, entry.description),
+  );
+  return [[`# ${PINNED_SECTION}`, "", ...lines].join("\n")];
 }
 
 // Types sorted by name, with the untyped section last.

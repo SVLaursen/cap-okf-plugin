@@ -4,6 +4,7 @@ title: Margin rules
 description: How the shop sets the margin on a book's price.
 tags: [pricing]
 requires: okf-finance
+pinned: true
 ---
 
 # Margin rules

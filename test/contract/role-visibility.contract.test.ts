@@ -4,8 +4,8 @@ import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
 import { connectMcp, type Login, type McpClient } from "../helpers/mcp-client";
 
 // ADR-0012 (amends ADR-0003): a curated note with `requires:` doesn't exist for a reader without
-// one of its roles, on any surface: the tools (getIndex, searchConcepts, getConcept and its
-// related block), the resources (index.md, read, complete), the static route, the Index entity
+// one of its roles, on any surface: the tools (getIndex, searchConcepts, getConcept with one
+// path or several, and its "Read together with" line), the resources (index.md, read, complete), the static route, the Index entity
 // in-process, other concepts' links, and the "Business knowledge" section of generated concepts.
 // Hidden and unknown paths give the same answer. The fixture's okf/finance/margins.md requires
 // okf-finance: controller has it, reader doesn't (both meet the channel's requires).
@@ -66,6 +66,8 @@ describeWithGavdi("a role-restricted curated note (requires: okf-finance)", () =
   const surfaces = surfacesOf(cds.test(path.join(__dirname, "..", "fixtures", "app-gavdi-mcp")));
   toolChecks(surfaces);
   textChecks(surfaces);
+  multiPathChecks(surfaces);
+  businessKnowledgeChecks(surfaces);
   resourceAndRouteChecks(surfaces);
 });
 
@@ -115,11 +117,46 @@ function textChecks({ tool, resource }: Surfaces): void {
     expect(await tool(CONTROLLER, "OkfService_getIndex", {})).toContain(
       "[Margin rules](finance/margins.md)",
     );
-    expect(await tool(CONTROLLER, "OkfService_getConcept", { path: "guides/shipping.md" })).toMatch(
-      /okf:related:start[\s\S]*\[Margin rules\]\(\/finance\/margins\.md\)/,
-    );
   });
 
+  test('"Read together with" names it under the title only for the role, on both channels', async () => {
+    const line =
+      "# Shipping\n<!-- okf:together:start -->\nRead together with: Margin rules (finance/margins.md)\n<!-- okf:together:end -->\n";
+    expect(
+      await tool(CONTROLLER, "OkfService_getConcept", { path: "guides/shipping.md" }),
+    ).toContain(line);
+    expect(await resource(CONTROLLER, "guides/shipping.md")).toContain(line);
+    expect(
+      await tool(READER, "OkfService_getConcept", { path: "guides/shipping.md" }),
+    ).not.toContain("okf:together");
+  });
+}
+
+function multiPathChecks({ tool }: Surfaces): void {
+  test("getConcept with several paths: the hidden one reads as unknown, the others still come", async () => {
+    const paths = ["guides/shipping.md", HIDDEN, UNKNOWN];
+    const text = (await tool(READER, "OkfService_getConcept", { paths })) as string;
+    const parts = text.split(/^<!-- okf:concept (.+) -->$/m);
+    expect(parts.filter((_, index) => index % 2 === 1)).toEqual(paths);
+    expect(parts[2]).toContain("# Shipping");
+    // The same text, apart from the path; the last part has no blank line after it.
+    expect(parts[4]!.replace(HIDDEN, "<path>").trim()).toBe(
+      parts[6]!.replace(UNKNOWN, "<path>").trim(),
+    );
+    expect(parts[4]).toContain("isn't a file of the bundle");
+    const controller = (await tool(CONTROLLER, "OkfService_getConcept", { paths })) as string;
+    expect(controller).toContain("The margin is set per genre.");
+  });
+
+  test("getConcept with more than five paths is an error", async () => {
+    const paths = ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"];
+    expect(await tool(READER, "OkfService_getConcept", { paths })).toEqual({
+      error: expect.stringContaining("at most 5 are read in one call"),
+    });
+  });
+}
+
+function businessKnowledgeChecks({ tool }: Surfaces): void {
   test("the Business knowledge section of a generated concept names it only for the role", async () => {
     const books = "model/AdminService/Books.md";
     expect(await tool(CONTROLLER, "OkfService_getConcept", { path: books })).toMatch(

@@ -1,18 +1,28 @@
 // Awareness through @gavdi/cap-mcp's mcp:hints event (ADR-0013, Contract C; their ADR 0014):
 // agents use the app's knowledge only when something tells them it exists and when it applies.
 // The two places every agent reads are the server's instructions and each tool's description.
+// One signal is enough, so the cheap one is the default:
 //
-// - Instructions (cds.okf.serve.mcp.instructions): a short default that says the app publishes
-//   its business knowledge and how to read it on the channels that are on; false for none; or
-//   the app's own text.
-// - Tool notes (cds.okf.serve.mcp.pointers): a tool whose CDS definition a curated note links to
-//   gets one line built only from that note's title, path and description, e.g.
-//   "Business knowledge: Shipping KPIs (guides/shipping-kpis.md): How on-time delivery is
-//   measured." Never for OkfService's own tools.
-// Both answer per caller: nothing for a caller who doesn't meet `requires`, and only notes the
-// caller may see (reader-view.ts). The plugin is never required (ADR-0004): it is met through
-// its event, and the shapes are declared here. Without the event (an older @gavdi/cap-mcp), one
-// line at debug level, and everything else works as before.
+// - Instructions (cds.okf.serve.mcp.instructions, default on): a short text that ties reading
+//   the index to need (a business term, a code, a named figure, an action; not a plain read of
+//   one record), says the notes have gaps, and lists up to three pinned notes the caller sees.
+//   false for none; or the app's own text, still followed by the pinned notes.
+// - Tool notes (cds.okf.serve.mcp.pointers, default off, as they cost tokens on every request):
+//   a tool whose CDS definition a curated note links to gets one line from the notes' titles and
+//   paths ("short"), or with their descriptions too (true), e.g. "Business knowledge: Shipping
+//   KPIs (guides/shipping-kpis.md): How on-time delivery is measured."
+// - OkfService's own tools get the directive part of their description (tool-texts.ts) as a
+//   note, unless it is already in the model (signals "always", or @cap-js/mcp).
+//
+// Everything answers per caller: nothing for a caller who doesn't meet `requires`, and only
+// notes the caller may see (reader-view.ts). With signals "auto" (the default), a caller who
+// sees no curated notes gets nothing at all: no instructions, no tool notes, and so the neutral
+// tool descriptions. "Read this first" over generated concepts only makes agents spend calls on
+// what the tools already say.
+//
+// The plugin is never required (ADR-0004): it is met through its event, and the shapes are
+// declared here. Without the event (an older @gavdi/cap-mcp), one line at debug level, and
+// everything else works as before.
 import { isNonEmptyString } from "../../core/values";
 import type { Bundles } from "../bundles";
 import type { ReaderView, ViewConcept } from "../reader-view";
@@ -20,6 +30,7 @@ import { linkedConcepts } from "../related";
 import { readerOf, viewOf } from "../views";
 import { meetsRequires } from "./requires";
 import type { McpChoice } from "./select";
+import { OKF_SERVICE, directiveFor, directivesInModel } from "./tool-texts";
 
 /** Who is asking: from the request's cds.context. */
 export interface HintContext {
@@ -61,9 +72,13 @@ export interface HintsSetup {
 
 const EVENT = "mcp:hints";
 const PROVIDER_ID = "cap-okf";
-const OWN_SERVICE = "OkfService";
 const MAX_NOTE = 400;
+const MAX_INSTRUCTIONS = 1500;
 const NOTE_PREFIX = "Business knowledge: ";
+/** At most this many pinned notes are listed in the instructions. */
+export const MAX_PINNED = 3;
+const MAX_PINNED_ENTRY = 300;
+const PINNED_HEADING = "Pinned notes, which always apply:";
 
 /**
  * Subscribes to mcp:hints and listening at plugin load, as gavdiResources does. `use` hands it
@@ -98,15 +113,36 @@ export function gavdiHints(
 function registerHints(registry: HintRegistry, setup: HintsSetup): void {
   const { choice } = setup;
   if (choice.instructions !== false) {
-    const text = instructionsText(choice);
-    registry.addInstructions({
-      id: PROVIDER_ID,
-      text: (ctx) => (meetsRequires(ctx.user, choice.requires) ? text : undefined),
-    });
+    registry.addInstructions({ id: PROVIDER_ID, text: (ctx) => instructionsFor(setup, ctx) });
   }
-  if (choice.pointers) {
+  if (choice.pointers !== false || directivesAsNotes(choice)) {
     registry.addToolNotes({ id: PROVIDER_ID, note: (target, ctx) => noteFor(setup, target, ctx) });
   }
+}
+
+// OkfService's directive parts go out as notes when the tools channel is on and they aren't in
+// the model already.
+function directivesAsNotes(choice: McpChoice): boolean {
+  return choice.as.includes("tools") && !directivesInModel(choice);
+}
+
+// The caller's view, or undefined when they get no signals: they don't meet `requires`, or
+// (with signals "auto") they see no curated notes.
+async function signalledView(
+  { choice, bundles }: HintsSetup,
+  ctx: HintContext,
+): Promise<ReaderView | undefined> {
+  if (!meetsRequires(ctx.user, choice.requires)) return undefined;
+  const source = await bundles.forKey({ tenant: ctx.tenant, locale: ctx.locale });
+  const view = await viewOf(source, readerOf(ctx.user));
+  if (choice.signals === "auto" && !view.concepts.some((each) => each.curated)) return undefined;
+  return view;
+}
+
+async function instructionsFor(setup: HintsSetup, ctx: HintContext): Promise<string | undefined> {
+  const view = await signalledView(setup, ctx);
+  if (view === undefined) return undefined;
+  return withPinned(instructionsText(setup.choice), pinnedNotes(view));
 }
 
 /** The instructions: the app's own text, or the default for the channels that are on. */
@@ -115,29 +151,66 @@ export function instructionsText(choice: McpChoice): string {
   const index = `okf://${choice.namespace}/index.md`;
   const tools = choice.as.includes("tools");
   const resources = choice.as.includes("resources");
-  const how =
+  const where =
     tools && resources
-      ? `call ${OWN_SERVICE}_getIndex (or read the resource ${index}), then read the notes you need with ${OWN_SERVICE}_getConcept`
+      ? `${OKF_SERVICE}_getIndex or ${index}`
       : tools
-        ? `call ${OWN_SERVICE}_getIndex, then read the notes you need with ${OWN_SERVICE}_getConcept`
-        : `read the resource ${index}, then the notes it lists`;
+        ? `${OKF_SERVICE}_getIndex`
+        : index;
   return (
-    "This app publishes its business knowledge as OKF notes: what business terms and codes " +
-    "mean, how figures and KPIs are calculated, and the rules and preconditions of its " +
-    "actions. Before you answer a question that uses a business term or code, or call an " +
-    `action, read the index: ${how}.`
+    "This app defines its business terms, codes, named figures and action rules in OKF notes. " +
+    "When a request uses a business term, code or status value, named figure or KPI, time or " +
+    `unit convention, or asks for an action, first read the index (${where}). A plain read of ` +
+    "one record by key or name doesn't need it. The notes don't cover everything: if a term, " +
+    "figure or rule you need isn't defined in them or in the data, say it isn't defined " +
+    "instead of assuming one."
   );
 }
 
+/** The curated notes the view shows with `pinned: true`, in index (path) order, at most three. */
+export function pinnedNotes(view: ReaderView): ViewConcept[] {
+  return view.concepts.filter(isPinned).slice(0, MAX_PINNED);
+}
+
+/** Every pinned curated note in a view, for the startup warning about more than three. */
+export function allPinnedNotes(view: ReaderView): ViewConcept[] {
+  return view.concepts.filter(isPinned);
+}
+
+function isPinned(concept: ViewConcept): boolean {
+  return concept.curated && concept.frontmatter["pinned"] === true;
+}
+
+/**
+ * The instructions followed by the pinned notes, one line each with title, path and
+ * description, within the contract's 1,500 characters: a long description is cut first, and a
+ * note that doesn't fit is left out.
+ */
+export function withPinned(instructions: string, pinned: readonly ViewConcept[]): string {
+  let text = instructions;
+  for (const [index, note] of pinned.entries()) {
+    const line = cut(`- ${entryOf(note, true)}`, MAX_PINNED_ENTRY);
+    const next = index === 0 ? `${text}\n\n${PINNED_HEADING}\n${line}` : `${text}\n${line}`;
+    if (Array.from(next).length > MAX_INSTRUCTIONS) break;
+    text = next;
+  }
+  return text;
+}
+
 async function noteFor(
-  { choice, bundles }: HintsSetup,
+  setup: HintsSetup,
   target: ToolTarget,
   ctx: HintContext,
 ): Promise<string | undefined> {
-  if (target.service === OWN_SERVICE || !meetsRequires(ctx.user, choice.requires)) return undefined;
-  const source = await bundles.forKey({ tenant: ctx.tenant, locale: ctx.locale });
-  const notes = notesFor(notesByDefinition(await viewOf(source, readerOf(ctx.user))), target);
-  return notes.length === 0 ? undefined : noteText(notes);
+  const view = await signalledView(setup, ctx);
+  if (view === undefined) return undefined;
+  const { choice } = setup;
+  if (target.service === OKF_SERVICE) {
+    return directivesAsNotes(choice) ? directiveFor(target.definition) : undefined;
+  }
+  if (choice.pointers === false) return undefined;
+  const notes = notesFor(notesByDefinition(view), target);
+  return notes.length === 0 ? undefined : noteText(notes, choice.pointers === "short");
 }
 
 // Most specific first: notes linking to the definition itself, then, for a bound action or
@@ -191,13 +264,14 @@ function definitionOf(concept: ViewConcept): string | undefined {
 
 /**
  * "Business knowledge: A (a.md): about a; B (b.md): about b", within 400 characters: when it is
- * too long, descriptions go first (the least specific note's first), then whole notes.
+ * too long, descriptions go first (the least specific note's first), then whole notes. `short`
+ * leaves every description out: "Business knowledge: A (a.md); B (b.md)".
  */
-export function noteText(notes: readonly ViewConcept[]): string {
+export function noteText(notes: readonly ViewConcept[], short = false): string {
   const entries = notes.map((note) => ({
     title: titleOf(note),
     path: note.path,
-    description: descriptionOf(note),
+    description: short ? undefined : descriptionOf(note),
   }));
   const render = () =>
     NOTE_PREFIX +
@@ -214,11 +288,22 @@ export function noteText(notes: readonly ViewConcept[]): string {
     entries[index]!.description = undefined;
   }
   while (entries.length > 1 && Array.from(render()).length > MAX_NOTE) entries.pop();
-  // Counted in code points, as @gavdi/cap-mcp counts them, so a cut never splits a character.
-  const characters = Array.from(render());
-  return characters.length > MAX_NOTE
-    ? `${characters.slice(0, MAX_NOTE - 1).join("")}…`
+  return cut(render(), MAX_NOTE);
+}
+
+// Counted in code points, as @gavdi/cap-mcp counts them, so a cut never splits a character.
+function cut(text: string, max: number): string {
+  const characters = Array.from(text);
+  return characters.length > max
+    ? `${characters.slice(0, max - 1).join("")}…`
     : characters.join("");
+}
+
+// "Title (path)", or with `withDescription` "Title (path): description" when it has one.
+function entryOf(note: ViewConcept, withDescription: boolean): string {
+  const description = withDescription ? descriptionOf(note) : undefined;
+  const entry = `${titleOf(note)} (${note.path})`;
+  return description === undefined ? entry : `${entry}: ${description}`;
 }
 
 function titleOf(note: ViewConcept): string {

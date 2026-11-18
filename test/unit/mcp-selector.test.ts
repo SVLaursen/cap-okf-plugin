@@ -42,7 +42,8 @@ describe("selectMcp: on, off and which plugin", () => {
         requires: ["authenticated-user"],
         related: true,
         instructions: true,
-        pointers: true,
+        pointers: false,
+        signals: "auto",
       },
       warnings: [],
     });
@@ -225,14 +226,29 @@ describe("selectMcp: edge cases", () => {
   });
 });
 
-describe("selectMcp: related, instructions and pointers (ADR-0012, ADR-0013)", () => {
-  test("default true; false switches each off; null is the default", () => {
-    expect(
-      select({ related: false, instructions: false, pointers: false }, [GAVDI]).choice,
-    ).toMatchObject({ related: false, instructions: false, pointers: false });
-    expect(
-      select({ related: null, instructions: null, pointers: null }, [GAVDI]).choice,
-    ).toMatchObject({ related: true, instructions: true, pointers: true });
+describe("selectMcp: related, instructions, pointers and signals (ADR-0012, ADR-0013)", () => {
+  test("related and instructions default true; false switches each off; null is the default", () => {
+    expect(select({ related: false, instructions: false }, [GAVDI]).choice).toMatchObject({
+      related: false,
+      instructions: false,
+    });
+    expect(select({ related: null, instructions: null }, [GAVDI]).choice).toMatchObject({
+      related: true,
+      instructions: true,
+    });
+  });
+
+  test('pointers: false by default (and for null); "short" and true as given', () => {
+    expect(select({}, [GAVDI]).choice?.pointers).toBe(false);
+    expect(select({ pointers: null }, [GAVDI]).choice?.pointers).toBe(false);
+    expect(select({ pointers: "short" }, [GAVDI]).choice?.pointers).toBe("short");
+    expect(select({ pointers: true }, [GAVDI]).choice?.pointers).toBe(true);
+  });
+
+  test('signals: "auto" by default (and for null); "always" as given', () => {
+    expect(select({}, [GAVDI]).choice?.signals).toBe("auto");
+    expect(select({ signals: null }, [GAVDI]).choice?.signals).toBe("auto");
+    expect(select({ signals: "always" }, [GAVDI]).choice?.signals).toBe("always");
   });
 
   test("instructions may be the app's own text, trimmed", () => {
@@ -244,6 +260,9 @@ describe("selectMcp: related, instructions and pointers (ADR-0012, ADR-0013)", (
   test.each([
     ["related", "yes"],
     ["pointers", 1],
+    ["pointers", "long"],
+    ["signals", true],
+    ["signals", "never"],
     ["instructions", ""],
     ["instructions", 3],
   ])("%s: %j is an [okf] setup error", (key, value) => {

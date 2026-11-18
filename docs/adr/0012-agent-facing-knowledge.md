@@ -1,7 +1,8 @@
 # 0012. Knowledge agents find, enter lightly, and see per role
 
 - Status: Proposed
-- Date: 2026-11-17
+- Date: 2026-11-17, revised 2026-11-18 (round 2: `getConcept` paths, "Read together with",
+  pinned notes first)
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code (benchmark brief m2, branch `feat/benchmark-m2-improvements`)
 - Amends: ADR-0003 (per-role visibility), ADR-0004 point 1 (`true` with `@gavdi/cap-mcp`),
@@ -27,6 +28,10 @@ the agent reads them, and that it reads them about half the time:
 - `Index_get` and `bundleInfo` were never called in 352 runs;
 - every signed-in user could read every curated note, so a confidential note was listed, with
   title and description, to users who shouldn't know it exists.
+
+A second evaluation (2026-11-18) found that agents read about two notes per question and stop
+after the first relevant one: answers that needed two notes were right less often than with all
+notes at hand, and a list of related notes at the end of a concept didn't change that.
 
 ## Options considered
 
@@ -60,8 +65,9 @@ Option 2.
 ### Outline first (the root index, `getIndex`)
 
 - The generated root `index.md` lists every curated concept (at any depth) with title, path and
-  description, by type, then folds `model/` into one line ("10 concepts: …"). Other folders keep
-  the layout they had.
+  description: first the concepts with `pinned: true` under `# Pinned` (ADR-0013), then the others
+  by type, then folds `model/` into one line ("10 concepts: …"). Other folders keep the layout
+  they had.
 - `OkfService.getIndex(folder?)` returns exactly the Markdown the reader gets from
   `okf://<namespace>/index.md` (or a folder's own index).
 
@@ -69,6 +75,11 @@ Option 2.
 
 - Agent-facing tools: `getIndex`, `searchConcepts`, `getConcept`
   (`OkfService_getIndex`, `OkfService_searchConcepts`, `OkfService_getConcept`).
+- `getConcept(path?, paths?)` reads one concept by `path` (the answer as before, a 404 when it
+  isn't there), or up to five with `paths` (`path` first when both are given, each once): the
+  concepts in the order asked, each under a line `<!-- okf:concept <path> -->`. A hidden or
+  unknown path among them gets the same not-found text as a single read would, in its place, and
+  the others still come. More than five, or none, is a 400.
 - `Index` and `bundleInfo` stay in the service for code in the app, marked `@mcp: false`
   (`@gavdi/cap-mcp`'s way to keep a definition off the tool list). The Index query subset of
   ADR-0011 is unchanged. `bundleHash` is not put into `index.md`: OKF v0.2 §8 allows only
@@ -78,7 +89,8 @@ Option 2.
 - Descriptions say what knowledge is there (meanings of terms and codes, KPI and calculation
   definitions, rules and preconditions for actions, fields not to use) and when to read it
   (before filtering on a code or status field, computing a named figure, or calling an action),
-  each under 400 characters, as instructions to an agent.
+  each under 400 characters, as instructions to an agent. Revised by ADR-0013: the descriptions
+  in the model are neutral, and the part that says when to read is added per caller.
 
 ### Search (revises ADR-0010 Contract B)
 
@@ -96,12 +108,25 @@ Option 2.
   filters that match nothing give an empty answer.
 - `type`, `tag`, `top` (default 20, at most 100) as before.
 
-### Related concepts
+### Read together with (revised 2026-11-18)
 
-A concept read over MCP (both channels, the same text) is followed by a block between
-`<!-- okf:related:start -->` and `<!-- okf:related:end -->` that lists the visible concepts it
-links to: title, path, description; curated first; at most ten. Config
+A concept read over MCP (both channels, the same text) names the visible curated notes it links
+to, directly under its title (when the body's first non-blank line is a `# ` heading; otherwise at
+the start of the body, so never inside an authorization section or under a later section):
+
+```markdown
+# Shipping
+<!-- okf:together:start -->
+Read together with: Shipping KPIs (guides/shipping-kpis.md), Units (guides/units.md)
+<!-- okf:together:end -->
+```
+
+In the order the text links to them, at most ten; nothing when it links to none. Config
 `cds.okf.serve.mcp.related` (default `true`). The static route serves files as they are.
+
+The block of related concepts at the end of a concept (round 1) is dropped: it didn't make agents
+read the second note, it repeated generated concepts whose links are already in the text, and it
+cost tokens on every read.
 
 ### Generated concepts
 
@@ -145,7 +170,8 @@ for agents and for any bundle size, and the code already does it.
 - The `Index` entity and `bundleInfo` are no longer MCP tools. A host that pinned them must call
   the service in-process or use `getIndex`.
 - New config keys: `cds.okf.projectionSources`, `cds.okf.serve.mcp.related`; new frontmatter keys
-  `requires` and `aliases`. The README documents them.
+  `requires`, `aliases` and (ADR-0013) `pinned`. The README documents them.
+- Agents can read a note and the notes it names in one `getConcept` call.
 - Every channel now builds one view per kind of reader; with many distinct `requires` roles that
   is up to 2 × 2^n views per bundle (n = roles the bundle names), each built on first use.
 
@@ -153,14 +179,19 @@ for agents and for any bundle size, and the code already does it.
 
 ### For ADR-0003
 
-> ### Amendment 2026-11-17 (ADR-0012)
+> ### Amendment 2026-11-17 (ADR-0012, ADR-0013)
 >
 > A concept may also declare `requires:` (a role or a list of roles) in its frontmatter. It then
 > exists only for readers who have one of them: every server leaves it out of listings, indexes,
-> search, links, related blocks, Business knowledge sections and tool notes, and answers a read
-> of it as not found. The `requires` key, like the authorization section, reaches authenticated
-> readers only. The filter lives in `src/core/filter.ts` (sections) and `src/serve/reader-view.ts`
-> (per-role visibility), which every server reads through.
+> search, links, "Read together with" lines, Business knowledge sections, tool notes and the
+> pinned notes of the server instructions, and answers a read of it as not found (also inside a
+> `getConcept` call with several paths). The `requires` key, like the authorization section,
+> reaches authenticated readers only. The filter lives in `src/core/filter.ts` (sections) and
+> `src/serve/reader-view.ts` (per-role visibility), which every server reads through.
+>
+> Whether a caller is told to read the knowledge at all is decided on the same view: a caller who
+> sees no curated note (`okf/`) gets no server instructions, no tool notes and the neutral OKF tool
+> descriptions (ADR-0013, `cds.okf.serve.mcp.signals: "auto"`).
 
 ### For ADR-0004
 
@@ -168,13 +199,16 @@ for agents and for any bundle size, and the code already does it.
 >
 > `true` means `{ "plugin": "auto" }` with the plugin's default channels: `["resources",
 > "tools"]` for `@gavdi/cap-mcp`, `["tools"]` for `@cap-js/mcp`. The object form gains
-> `related`, `instructions` and `pointers` (ADR-0012, ADR-0013).
+> `related`, `instructions`, `pointers` and `signals` (ADR-0012, ADR-0013).
 
 ### For ADR-0010
 
 > ### Amendment 2026-11-17 (ADR-0012, ADR-0013)
 >
 > Contract B's agent-facing tools are `getIndex(folder?)`, `searchConcepts(text, type, tag,
-> top)` and `getConcept(path)`; `Index` and `bundleInfo` are `@mcp: false`. `searchConcepts`
-> matches any word, also in the reader's text, and returns `ConceptSummary` rows. A concept read
-> on either channel ends with the related-concepts block. Contract C (`mcp:hints`) is ADR-0013.
+> top)` and `getConcept(path?, paths?)`, `paths` reading up to five concepts in one call, each
+> under `<!-- okf:concept <path> -->`; `Index` and `bundleInfo` are `@mcp: false`.
+> `searchConcepts` matches any word, also in the reader's text, and returns `ConceptSummary` rows.
+> A concept read on either channel gets a "Read together with" line under its title, naming the
+> curated notes it links to. The tool descriptions in the model are neutral; when to read is
+> added per caller. Contract C (`mcp:hints`) is ADR-0013.

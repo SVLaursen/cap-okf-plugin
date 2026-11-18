@@ -117,6 +117,7 @@ description: How a shopper orders a book, and what the shop checks first.
 tags: [ordering]
 aliases: [checkout, purchase]   # optional: other words people use, for search
 requires: [sales, support]      # optional: only these roles see this note
+pinned: true                    # optional: every agent is told about this note
 ---
 
 # Placing an order
@@ -124,13 +125,18 @@ requires: [sales, support]      # optional: only these roles see this note
 Shoppers browse [Books](/model/CatalogService/Books.md) first. …
 ```
 
-Two optional keys help agents:
+Three optional keys help agents:
 
 - **`aliases`**: words people use for the same thing. `searchConcepts` finds the note by them.
 - **`requires`**: one role or a list of roles. Only users with one of them see the note (CAP's
   `user.is(role)`, pseudo-roles included); for everyone else it doesn't exist on any channel: it
   isn't listed, found, linked or counted, and reading it answers "not found". Only authenticated
   readers see the `requires` key itself.
+- **`pinned: true`**: knowledge an agent needs without asking for it, such as who may see what or
+  a company-wide convention. Pinned notes come first in the root index, under **Pinned**, and the
+  MCP server instructions end with them (title, path and description; at most three, the first in
+  index order; more are a warning at startup). `requires` still applies: a pinned note is listed
+  only for users who may see it. Give it a `description` (lint K4).
 
 Link your notes to the generated concepts they explain: the concept then lists the note under
 **Business knowledge**, and its MCP tools point to it (see [Serving over MCP](#serving-over-mcp)).
@@ -217,7 +223,7 @@ Settings live under `cds.okf`, in `package.json` or `.cdsrc.json`, and follow CA
 | `include` | `"services"`, `"all"` | `"services"` | `"services"`: your services and what they use. `"all"`: every definition, except those marked `@okf: false`. |
 | `serve.static` | `false`, `true`, `"/path"` | `false` | Serves the bundle's files from a route: `true` means `/okf`. See [Serving the bundle](#serving-the-bundle). |
 | `projectionSources` | `false`, `true` | `false` | With `"services"`: also export the entities your projections are built on. |
-| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires, related, instructions, pointers }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`, as `okf://` resources, tools or both. See [Serving over MCP](#serving-over-mcp), [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md) and [ADR-0012](docs/adr/0012-agent-facing-knowledge.md). |
+| `serve.mcp` | `false`, `true`, `{ plugin, as, namespace, requires, related, instructions, pointers, signals }` | `false` | Serves the bundle over MCP through `@gavdi/cap-mcp`, as `okf://` resources, tools or both. See [Serving over MCP](#serving-over-mcp), [ADR-0010](docs/adr/0010-mcp-integration-contracts-rev2.md) and [ADR-0012](docs/adr/0012-agent-facing-knowledge.md). |
 
 cap-okf warns about a key it doesn't know (a typo such as `requries` would otherwise be ignored),
 and about `okf` or `serve` set to something other than an object. During `cds build` and
@@ -334,9 +340,15 @@ bundle over MCP on two channels: `okf://` resources, and tools.
 | `as` | both (`@gavdi/cap-mcp`) | `["resources"]`, `["tools"]` or both. |
 | `namespace` | from `package.json` | The `okf://<namespace>/` of the resources. |
 | `requires` | `"authenticated-user"` | The role or roles a caller needs. |
-| `related` | `true` | A concept read over MCP ends with its related concepts. |
-| `instructions` | `true` | Server instructions that tell agents the knowledge exists; `false` for none, or your own text. |
-| `pointers` | `true` | Tool notes that point a tool to the notes about its entity or action. |
+| `related` | `true` | A concept read over MCP names the notes it links to, under its title ("Read together with"). |
+| `instructions` | `true` | Server instructions that tell agents when to read the knowledge; `false` for none, or your own text. |
+| `pointers` | `false` | Tool notes that point a tool to the notes about its entity or action: `"short"` (titles and paths) or `true` (with descriptions). |
+| `signals` | `"auto"` | `"auto"`: instructions, tool notes and the "when to read" part of the OKF tool descriptions only for users who see at least one note from `okf/`. `"always"`: for everyone. |
+
+**Which signal to use.** One signal that the knowledge exists is enough for most agents, and the
+server instructions are the cheap one: a few sentences, sent once. Tool notes are added to the
+description of every tool they apply to, on every request, so on a large model they cost far more.
+Turn `pointers` on only for hosts that ignore server instructions; `"short"` keeps them small.
 
 ### Resources
 
@@ -358,12 +370,20 @@ With `as` including `"tools"`, cap-okf adds a read-only `OkfService` to the app,
 
 | Tool | What an agent gets |
 | --- | --- |
-| `OkfService_getIndex` | The Markdown index the caller would get from `okf://<namespace>/index.md`: the notes from `okf/` first, `model/` folded. An optional `folder` opens a folder's own index. |
+| `OkfService_getIndex` | The Markdown index the caller would get from `okf://<namespace>/index.md`: pinned notes first, then the other notes from `okf/`, `model/` folded. An optional `folder` opens a folder's own index. |
 | `OkfService_searchConcepts` | Concepts that have **any** of the words in their title, tags, `aliases`, description, text or path, best first (20 by default, at most 100), with path, type, title, description and tags. If no word is found, the notes from `okf/` in index order, with `matched: false`. |
-| `OkfService_getConcept` | One concept's full Markdown, by path. |
+| `OkfService_getConcept` | One concept's full Markdown, by `path`; or up to five at once with `paths`, each under a line `<!-- okf:concept <path> -->`. A path that isn't there gets the not-found text in its place, and the others still come. |
 
 `OkfService.Index` and `OkfService.bundleInfo` (the OKF version, a hash of the bundle and the
 namespace) stay in the service for code in your app, but aren't offered as MCP tools.
+
+The tool descriptions in the model are neutral: they say what each tool returns. The part that says
+when to read (a business term, a code or status value, a named figure or KPI, a time or unit
+convention, an action; not a plain read of one record) is added per user, through `mcp:hints`, only
+when the user sees at least one note from `okf/`. A bundle with generated concepts only repeats what
+the app's own tools already say, and telling agents to read it first only costs calls. With
+`signals: "always"`, or through `@cap-js/mcp` (which has no `mcp:hints`), that part is in the model
+for everyone.
 
 ### On both channels
 
@@ -372,14 +392,17 @@ namespace) stay in the service for code in your app, but aren't offered as MCP t
   tool, and reading a resource like an unknown resource.
 - Authorization sections are removed for callers who aren't authenticated, as on the static route; notes
   with `requires` exist only for callers with one of those roles, on every channel.
-- A concept that is read ends with a block of the concepts it links to (title, path, description; notes
-  from `okf/` first; at most ten), between `<!-- okf:related:start -->` and `<!-- okf:related:end -->`.
-  It isn't part of the file. `related: false` turns it off.
+- A concept that is read names the notes from `okf/` it links to directly under its title, e.g.
+  `Read together with: Shipping KPIs (guides/shipping-kpis.md), Units (guides/units.md)` (at most ten),
+  between `<!-- okf:together:start -->` and `<!-- okf:together:end -->`. It isn't part of the file.
+  `related: false` turns it off.
 - With a `@gavdi/cap-mcp` that emits `mcp:hints` ([ADR-0013](docs/adr/0013-mcp-hints-contract-c.md)),
-  cap-okf adds server instructions that tell agents the knowledge exists and how to read it, and a note
-  to each tool whose entity or action a note in `okf/` links to, e.g.
-  `Business knowledge: Shipping KPIs (guides/shipping-kpis.md): How on-time delivery is measured.`
-  `instructions` and `pointers` turn them off.
+  cap-okf adds server instructions that say when to read the index, that the notes have gaps (an
+  agent should say a term or figure isn't defined rather than assume one), and which notes are
+  pinned. With `pointers` on, each tool whose entity or action a note in `okf/` links to gets a note,
+  e.g. `Business knowledge: Shipping KPIs (guides/shipping-kpis.md)` (`"short"`) or with the
+  description after a colon (`true`). A user who sees no note from `okf/` gets none of these
+  (`signals: "auto"`).
 - `OkfService` has no OData endpoint: only the MCP plugin reaches it. It is never part of the bundle.
 - If the app lists its own `cds.build.tasks`, include `{ "for": "okf" }`, or the deployed app has no
   `OkfService` (cap-okf warns at startup).
@@ -423,9 +446,10 @@ model name the `.cds` file and line.
 | K1 | warning | A note in `okf/` has no tags. |
 | K2 | warning | A note in `okf/` links to no generated concept. |
 | K3 | warning | An entity has elements that look like codes (a short string, a list of values, or a name ending in `type`, `status`, `code` or `kind`), and no note in `okf/` links to it. |
+| K4 | warning | A pinned note has no `description`, so the server instructions list it by title only. |
 | M1 | error | Two definitions would get the same path, or paths that differ only in letter case. |
 
-K1–K3 are the knowledge lint ([ADR-0012](docs/adr/0012-agent-facing-knowledge.md)): `cds build`
+K1–K4 are the knowledge lint ([ADR-0012](docs/adr/0012-agent-facing-knowledge.md)): `cds build`
 lists them with its other warnings, and an app that generates its bundle at startup
 (`cds watch`) logs them once. In code, `lintBundle(files)` from `lib/core/lint` returns them
 together with W1 for notes in `okf/` and W4.

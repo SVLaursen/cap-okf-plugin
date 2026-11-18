@@ -7,7 +7,8 @@
 //   (no "Business knowledge" entry, no tool note);
 // - K3 an entity has elements that look like codes (a short string, a list of values, or a name
 //   ending in type, status, code or kind), and no curated note links to the entity, so nothing
-//   says what the values mean.
+//   says what the values mean;
+// - K4 a pinned note has no description, so the server instructions list it by title only.
 // lintBundle adds what the validator already reports, so it can be used on its own: W1 (a
 // curated note without description) and W4 (a broken link).
 import { parseConceptLocated, type LocatedConcept } from "./concept";
@@ -35,7 +36,7 @@ export function lintBundle(files: readonly BundleFile[]): Finding[] {
   );
 }
 
-/** Only the knowledge rules (K1–K3), which the validator doesn't check. */
+/** Only the knowledge rules (K1–K4), which the validator doesn't check. */
 export function lintKnowledge(files: readonly BundleFile[]): Finding[] {
   const concepts = parsedConcepts(files);
   const curated = concepts.filter((each) => isCurated(each.concept.path));
@@ -66,6 +67,18 @@ function noteFindings(note: LocatedConcept): Finding[] {
         message:
           "this note links to no generated concept, so no entity, action or tool points to it",
         fix: "Link the entities, elements' entities or actions it explains, e.g. [Orders](/model/MyService/Orders.md)",
+      }),
+    );
+  }
+  if (
+    note.concept.frontmatter?.["pinned"] === true &&
+    !isNonEmptyString(note.concept.frontmatter["description"])
+  ) {
+    findings.push(
+      findingOnLine(note, note.lineOf(["pinned"]), "K4", {
+        message:
+          "this note is pinned but has no description, so the server instructions list it by its title only",
+        fix: "Add description: with one sentence that says what every agent must know from it",
       }),
     );
   }

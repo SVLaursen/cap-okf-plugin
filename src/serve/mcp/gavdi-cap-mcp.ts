@@ -4,7 +4,7 @@
 // - okf://<namespace>/index.md, a fixed resource, visible only to callers who meet `requires`;
 // - okf://<namespace>/{+path}, one template for every concept (read and complete, no list).
 // Every answer is the file as the caller sees it (reader-view.ts: ADR-0003 and ADR-0012), and a
-// concept read is followed by its related-concepts block when cds.okf.serve.mcp.related is on.
+// concept read gets its "Read together with" line when cds.okf.serve.mcp.related is on.
 // An unknown path, a concept hidden from the caller, a caller who doesn't meet `requires` and a
 // malformed escape all throw the same 404, so they look alike.
 //
@@ -14,7 +14,7 @@ import { isBundlePath, sortPaths } from "../../bundle/paths";
 import { setupError } from "../../build/errors";
 import type { Bundles } from "../bundles";
 import type { ReaderView } from "../reader-view";
-import { withRelated } from "../related";
+import { withReadTogether } from "../related";
 import { readerOf, servableIn, viewOf } from "../views";
 import { meetsRequires } from "./requires";
 import type { McpChoice } from "./select";
@@ -132,7 +132,7 @@ function readingFor({ choice, bundles }: ResourcesSetup): Reading {
       const view = await viewFor(ctx);
       const text = servableIn(view, path);
       if (text === undefined) throw notFound(path);
-      return choice.related ? withRelated(view, path, text) : text;
+      return choice.related ? withReadTogether(view, path, text) : text;
     },
   };
 }
@@ -143,9 +143,8 @@ function indexResource({ namespace, requires }: McpChoice, reading: Reading): Fi
     name: `okf-${namespace}-index`,
     title: `${namespace} business knowledge`,
     description:
-      "Start here: this app's business knowledge (meanings of terms and codes, KPI and " +
-      "calculation definitions, rules for actions, fields not to use), curated notes first. " +
-      `Read a note as okf://${namespace}/<path>.`,
+      "The outline of this app's business knowledge as Markdown: curated notes with title, " +
+      `path and description, then the model in one line. Read a note as okf://${namespace}/<path>.`,
     mimeType: MIME_TYPE,
     visible: (ctx) => meetsRequires(ctx.user, requires),
     read: async (ctx) => {

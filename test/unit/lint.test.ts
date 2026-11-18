@@ -54,6 +54,21 @@ describe("lintKnowledge", () => {
   });
 });
 
+describe("lintKnowledge: pinned notes (ADR-0013)", () => {
+  test("a pinned note without a description (K4), on its pinned line", () => {
+    const linked = "[o](/model/S/Orders.md)\n";
+    const findings = lintKnowledge([
+      { path: "rules/a.md", text: note("tags: [x]\npinned: true\n", linked) },
+      { path: "rules/b.md", text: note("tags: [x]\ndescription: D.\npinned: true\n", linked) },
+      { path: "rules/c.md", text: note("tags: [x]\n", linked) },
+    ]);
+    expect(rules(findings)).toEqual(["K4 rules/a.md:5"]);
+    expect(findings[0]!.message).toBe(
+      "this note is pinned but has no description, so the server instructions list it by its title only",
+    );
+  });
+});
+
 describe("lintKnowledge: reading the element table (review)", () => {
   test("a description saying values: or holding an escaped pipe isn't a code field", () => {
     const rows =
