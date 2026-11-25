@@ -200,7 +200,7 @@ Rules for this block: skills are the app's and `@gavdi/cap-mcp`'s. cap-okf never
 `ctx.skills` at request time. Tests need a `../cap-mcp-v2` checkout at `48dff52` or later with
 a fresh `lib/` (`lib/adapter/skills.js` exists); if it is older, stop and ask the maintainer.
 
-- [ ] **dr.0 ADR-0014 (Proposed): skills in the instructions, and notes for skills.** Write the ADR; no code. It records the two decisions above and settles, each with a recommendation:
+- [x] **dr.0 ADR-0014 (Proposed): skills in the instructions, and notes for skills.** Write the ADR; no code. It records the two decisions above and settles, each with a recommendation:
   - how a note names its skills (recommended: frontmatter `skills:`, a list of skill names as in `ctx.skills[].name`; a single name allowed);
   - the instructions' layout and budget: where the skills block goes relative to the pinned notes, one line per skill (name, URI, description, then the titles and paths of its notes), how many skills at most, and what is cut first inside the contract's 1,500 characters (recommended: pinned notes before skills; a skill's description before its notes);
   - who gets the block (recommended: exactly the callers who get instructions today, so `requires` and `signals` keep their meaning; a note with its own `requires` is named only to callers who see it);

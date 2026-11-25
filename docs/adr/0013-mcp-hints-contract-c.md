@@ -113,3 +113,26 @@ Option 2.
   of the tool descriptions; `signals: "always"` puts the directive part into the model for it.
 - Depends on an unreleased `@gavdi/cap-mcp` contract (their ADR 0014, proposed). Older versions
   just don't emit the event.
+
+## Amendment 2026-11-25 (ADR-0014)
+
+`@gavdi/cap-mcp` accepted its ADR 0014 on 2026-11-25 and, with its ADR 0017, added `skills` to the
+context every provider gets (contract version still 1):
+
+```ts
+// ctx = { user, tenant?, locale?, skills }
+interface HintSkill { uri: string; name: string; description: string } // sorted by URI
+```
+
+- **Skills after the pinned notes.** The instructions (the default or the app's own text) end with
+  the pinned notes, then a block listing the skills the request serves, one line each with the
+  skill's name, URI and description and the curated notes the caller sees that name it
+  (frontmatter `skills:`). At most ten skills; pinned notes are cut before skills, a skill's
+  description before its notes; the whole text stays within 1,500 characters. No skills, no
+  block: the text is as before. Switch: `cds.okf.serve.mcp.skills` (default `true`). Details in
+  ADR-0014.
+- **Same callers.** The block goes only to callers who get the instructions under the rules above
+  (`requires`, `signals`).
+- **`skills` missing** (an older `@gavdi/cap-mcp`) or malformed counts as none.
+- **Contract version.** The `mcp:hints` listener registers nothing, with one `[okf]` warning, when
+  `contractVersion` isn't 1 (also for `mcp:resources`, ADR-0014).
