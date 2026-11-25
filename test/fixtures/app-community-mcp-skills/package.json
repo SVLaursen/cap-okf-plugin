@@ -1,8 +1,8 @@
 {
-  "name": "okf-fixture-gavdi-mcp-skills",
+  "name": "okf-fixture-community-mcp-skills",
   "version": "1.0.0",
   "private": true,
-  "description": "Fixture app for the dual release (dr.2): app-gavdi-mcp plus Agent Skills served by @gavdi/cap-mcp (cds.mcp.skills) and curated notes that name them.",
+  "description": "Fixture app for the dual release (dr.2): app-community-mcp plus Agent Skills served by @gavdi/cap-mcp (cds.mcp.skills) and curated notes that name them.",
   "cds": {
     "requires": {
       "auth": {
