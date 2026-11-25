@@ -10,6 +10,8 @@ import { connectMcp, type Login, type McpClient } from "../helpers/mcp-client";
 // isn't served. This suite only proves the fixture works: both plugins serve side by side.
 
 const READER: Login = { username: "reader", password: "reader" };
+const CONTROLLER: Login = { username: "controller", password: "controller" };
+const OUTSIDER: Login = { username: "outsider", password: "outsider" };
 
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
@@ -53,5 +55,22 @@ describeWithGavdi("the skills fixture app, through a real MCP client", () => {
       (await client.readResource({ uri: `okf://okf-fixture/${notePath}` })).contents[0]?.text;
     expect(await read("guides/shipping.md")).toContain("skills: [ship-order]");
     expect(await read("guides/returns.md")).toContain("skills: [handle-return]");
+  });
+
+  test("the finance note that names a skill is only for okf-finance", async () => {
+    const uri = "okf://okf-fixture/finance/margins.md";
+    const controller = await connect(CONTROLLER);
+    expect((await controller.readResource({ uri })).contents[0]?.text).toContain(
+      "skills: ship-order",
+    );
+    await expect((await connect(READER)).readResource({ uri })).rejects.toThrow();
+  });
+
+  test("a caller without requires gets nothing from cap-okf, but still the skills", async () => {
+    const { resources } = await (await connect(OUTSIDER)).listResources();
+    const uris = resources.map((each) => each.uri);
+    expect(uris.some((uri) => uri.startsWith("okf://"))).toBe(false);
+    expect(uris).toContain("skill://ship-order/SKILL.md");
+    expect((await connect(OUTSIDER)).getInstructions() ?? "").toBe("");
   });
 });
