@@ -1,6 +1,6 @@
 # 0014. Skills in the instructions, and notes for skills
 
-- Status: Proposed
+- Status: Accepted (Simon Vestergaard Laursen, 2026-11-25)
 - Date: 2026-11-25
 - Deciders: Simon Vestergaard Laursen
 - Proposed by: Claude Code (plan task dr.0, "Dual release with `@gavdi/cap-mcp` 2.0")
