@@ -1,0 +1,25 @@
+{
+  "name": "okf-fixture-gavdi-mcp-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fixture app for the dual release (dr.2): app-gavdi-mcp plus Agent Skills served by @gavdi/cap-mcp (cds.mcp.skills) and curated notes that name them.",
+  "cds": {
+    "requires": {
+      "auth": {
+        "kind": "mocked",
+        "users": {
+          "reader": { "password": "reader", "roles": ["okf-reader"] },
+          "outsider": { "password": "outsider", "roles": [] },
+          "controller": { "password": "controller", "roles": ["okf-reader", "okf-finance"] }
+        }
+      }
+    },
+    "mcp": { "skills": "mcp-skills" },
+    "okf": {
+      "serve": {
+        "static": true,
+        "mcp": { "plugin": "@gavdi/cap-mcp", "as": ["resources", "tools"], "namespace": "okf-fixture", "requires": "okf-reader" }
+      }
+    }
+  }
+}
