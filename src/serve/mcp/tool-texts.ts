@@ -4,7 +4,7 @@
 // concepts only, "read this first" makes an agent spend calls on what the tools already say.
 //
 // - Through @gavdi/cap-mcp with signals "auto", the directive part is a tool note (mcp:hints),
-//   added per caller only when they see curated notes (gavdi-hints.ts).
+//   added per caller only when they see curated notes (community-hints.ts).
 // - With signals "always", or through @cap-js/mcp (which has no hints), it is added to the
 //   descriptions in the model once, for everyone (tools-model.ts).
 //

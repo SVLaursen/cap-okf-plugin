@@ -1,9 +1,9 @@
 // A real MCP client for tests (task 4.8): the official @modelcontextprotocol/client, as an agent's
 // host uses it (initialize handshake, then requests over Streamable HTTP). It is loaded from the
 // @gavdi/cap-mcp v2 checkout's node_modules, where it is a dev dependency, so cap-okf adds none;
-// tests that use it run only where the checkout is (describeWithGavdi).
+// tests that use it run only where the checkout is (describeWithCommunity).
 import path from "node:path";
-import { GAVDI_ROOT } from "./gavdi";
+import { COMMUNITY_ROOT } from "./community";
 
 /** The parts of the SDK's Client the tests use. */
 export interface McpClient {
@@ -35,7 +35,7 @@ interface Sdk {
 }
 
 function sdk(): Sdk {
-  const entry = path.join(GAVDI_ROOT, "node_modules", "@modelcontextprotocol", "client");
+  const entry = path.join(COMMUNITY_ROOT, "node_modules", "@modelcontextprotocol", "client");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require(entry) as Sdk;
 }

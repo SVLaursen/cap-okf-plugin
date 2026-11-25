@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { describeWithCommunity, COMMUNITY_PLUGIN } from "../helpers/community";
 import { connectMcp, type Login, type McpClient } from "../helpers/mcp-client";
 import { directiveFor } from "../../src/serve/mcp/tool-texts";
 
@@ -17,11 +17,11 @@ const OUTSIDER: Login = { username: "outsider", password: "outsider" };
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
   ...config,
-  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } },
+  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: COMMUNITY_PLUGIN } },
 });
 
-describeWithGavdi("mcp:hints with the defaults, through a real MCP client", () => {
-  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-gavdi-mcp"));
+describeWithCommunity("mcp:hints with the defaults, through a real MCP client", () => {
+  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-community-mcp"));
   const clients: Promise<McpClient>[] = [];
   const connect = (login: Login) => {
     const client = connectMcp((app as unknown as { url: string }).url, login);

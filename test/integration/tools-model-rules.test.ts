@@ -15,7 +15,7 @@ import { directiveFor } from "../../src/serve/mcp/tool-texts";
 
 // Task 4.5 (ADR-0005 (e)): when the tools channel counts as on, with the 4.4 selector's rules.
 
-const GAVDI = { plugins: { "@gavdi/cap-mcp": { impl: "x" } } };
+const COMMUNITY = { plugins: { "@gavdi/cap-mcp": { impl: "x" } } };
 let root: string;
 beforeAll(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "cap-okf-tools-"));
@@ -33,22 +33,22 @@ function appCds(env: object, extra: object = {}): typeof cds {
 
 describe("wantsToolsModel and addToolsModel", () => {
   test.each([
-    ["mcp off", { okf: { serve: { mcp: false } }, ...GAVDI }, false],
+    ["mcp off", { okf: { serve: { mcp: false } }, ...COMMUNITY }, false],
     ["mcp on, no plugin installed", { okf: { serve: { mcp: true } } }, false],
     [
       "mcp on with @gavdi/cap-mcp: both channels (ADR-0012)",
-      { okf: { serve: { mcp: true } }, ...GAVDI },
+      { okf: { serve: { mcp: true } }, ...COMMUNITY },
       true,
     ],
-    ["as: [tools]", { okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI }, true],
+    ["as: [tools]", { okf: { serve: { mcp: { as: ["tools"] } } }, ...COMMUNITY }, true],
     [
       "as: [resources, tools]",
-      { okf: { serve: { mcp: { as: ["resources", "tools"] } } }, ...GAVDI },
+      { okf: { serve: { mcp: { as: ["resources", "tools"] } } }, ...COMMUNITY },
       true,
     ],
     [
       "a setup mistake counts as off here",
-      { okf: { serve: { mcp: { plugin: "nope", as: ["tools"] } } }, ...GAVDI },
+      { okf: { serve: { mcp: { plugin: "nope", as: ["tools"] } } }, ...COMMUNITY },
       false,
     ],
   ])("%s → %s", (_label, env, expected) => {
@@ -77,7 +77,7 @@ describe("warnWithoutToolsModel", () => {
     events.emit("served");
     return warnings;
   }
-  const toolsOn = { okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI };
+  const toolsOn = { okf: { serve: { mcp: { as: ["tools"] } } }, ...COMMUNITY };
 
   test("tools on but OkfService missing (an own task list without okf): one warning", () => {
     expect(served(toolsOn, { definitions: {} })).toEqual([
@@ -119,14 +119,14 @@ describe("annotateToolsModel", () => {
   test("tools on: @requires from the settings, and @protocol none under @gavdi/cap-mcp", () => {
     const service = loaded({
       okf: { serve: { mcp: { as: ["tools"], requires: "admin" } } },
-      ...GAVDI,
+      ...COMMUNITY,
     });
     expect(service).toMatchObject({ "@requires": ["admin"], "@protocol": "none", "@mcp": true });
   });
 
   test("a model built with tools, served with them off: @mcp false, so no broken tools", () => {
-    expect(loaded({ okf: { serve: { mcp: false } }, ...GAVDI })["@mcp"]).toBe(false);
-    expect(loaded({ okf: { serve: { mcp: { as: ["resources"] } } }, ...GAVDI })["@mcp"]).toBe(
+    expect(loaded({ okf: { serve: { mcp: false } }, ...COMMUNITY })["@mcp"]).toBe(false);
+    expect(loaded({ okf: { serve: { mcp: { as: ["resources"] } } }, ...COMMUNITY })["@mcp"]).toBe(
       false,
     );
   });
@@ -134,7 +134,7 @@ describe("annotateToolsModel", () => {
 
 describe("annotateToolsModel: the directive parts (ADR-0013)", () => {
   test("the descriptions stay neutral by default under @gavdi/cap-mcp: the directive is a hint", () => {
-    expect(getIndexOf({ okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI })).toBe(
+    expect(getIndexOf({ okf: { serve: { mcp: { as: ["tools"] } } }, ...COMMUNITY })).toBe(
       "Returns the outline.",
     );
   });
@@ -144,7 +144,7 @@ describe("annotateToolsModel: the directive parts (ADR-0013)", () => {
     const events = new EventEmitter();
     const on = (event: string, listener: (csn: unknown) => void) => events.on(event, listener);
     const app = appCds(
-      { okf: { serve: { mcp: { as: ["tools"] } } }, ...GAVDI },
+      { okf: { serve: { mcp: { as: ["tools"] } } }, ...COMMUNITY },
       { on: { value: on } },
     );
     annotateToolsModel(app);
@@ -159,7 +159,7 @@ describe("annotateToolsModel: the directive parts (ADR-0013)", () => {
   });
 
   test('signals "always", or @cap-js/mcp: the directive part goes into the model, once', () => {
-    const always = { okf: { serve: { mcp: { as: ["tools"], signals: "always" } } }, ...GAVDI };
+    const always = { okf: { serve: { mcp: { as: ["tools"], signals: "always" } } }, ...COMMUNITY };
     const capJs = {
       okf: { serve: { mcp: true } },
       plugins: { "@cap-js/mcp": { impl: "x" } },

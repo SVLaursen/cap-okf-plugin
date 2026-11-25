@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { describeWithCommunity, COMMUNITY_PLUGIN } from "../helpers/community";
 import { mcpResourcesChannel } from "./mcp-resources-channel";
 import { serverContract } from "./server.contract";
 
@@ -12,11 +12,11 @@ import { serverContract } from "./server.contract";
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
   ...config,
-  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } },
+  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: COMMUNITY_PLUGIN } },
   okf: { serve: { mcp: { as: ["resources"], requires: "any" } } },
 });
 
-describeWithGavdi("the MCP resources channel open to anonymous callers", () => {
+describeWithCommunity("the MCP resources channel open to anonymous callers", () => {
   const { POST } = cds.test(path.join(__dirname, "..", "..", "demo"));
 
   serverContract(

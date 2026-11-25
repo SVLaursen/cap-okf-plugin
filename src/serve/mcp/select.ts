@@ -21,19 +21,19 @@
 //   to every caller.
 import { setupError } from "../../build/errors";
 
-export const GAVDI_CAP_MCP = "@gavdi/cap-mcp";
+export const COMMUNITY_CAP_MCP = "@gavdi/cap-mcp";
 export const CAP_JS_MCP = "@cap-js/mcp";
 
 /** The MCP plugins cap-okf can serve through. */
-export type McpPlugin = typeof GAVDI_CAP_MCP | typeof CAP_JS_MCP;
+export type McpPlugin = typeof COMMUNITY_CAP_MCP | typeof CAP_JS_MCP;
 
 /** What an MCP client gets: okf:// resources, or tools over OkfService. */
 export type McpChannel = "resources" | "tools";
 
-const PLUGINS: readonly McpPlugin[] = [GAVDI_CAP_MCP, CAP_JS_MCP];
+const PLUGINS: readonly McpPlugin[] = [COMMUNITY_CAP_MCP, CAP_JS_MCP];
 const CHANNELS: readonly McpChannel[] = ["resources", "tools"];
 const DEFAULT_CHANNELS: Record<McpPlugin, readonly McpChannel[]> = {
-  [GAVDI_CAP_MCP]: ["resources", "tools"],
+  [COMMUNITY_CAP_MCP]: ["resources", "tools"],
   [CAP_JS_MCP]: ["tools"],
 };
 const DEFAULT_REQUIRES: readonly string[] = ["authenticated-user"];
@@ -123,7 +123,7 @@ function pluginFor(setting: unknown, installed: readonly string[]): McpPlugin | 
   if (!PLUGINS.includes(wanted as McpPlugin)) {
     throw setupError(
       `[okf] cds.okf.serve.mcp.plugin — ${JSON.stringify(wanted)} is not a known MCP plugin.\n` +
-        `  Use "auto", "${GAVDI_CAP_MCP}" or "${CAP_JS_MCP}".`,
+        `  Use "auto", "${COMMUNITY_CAP_MCP}" or "${CAP_JS_MCP}".`,
     );
   }
   if (!found.includes(wanted as McpPlugin)) {
@@ -137,16 +137,16 @@ function pluginFor(setting: unknown, installed: readonly string[]): McpPlugin | 
 
 function bothInstalled(): Error {
   return setupError(
-    `[okf] cds.okf.serve.mcp — both ${GAVDI_CAP_MCP} and ${CAP_JS_MCP} are installed, so ` +
+    `[okf] cds.okf.serve.mcp — both ${COMMUNITY_CAP_MCP} and ${CAP_JS_MCP} are installed, so ` +
       '"auto" can\'t choose.\n' +
-      `  Set cds.okf.serve.mcp.plugin to "${GAVDI_CAP_MCP}" or "${CAP_JS_MCP}".`,
+      `  Set cds.okf.serve.mcp.plugin to "${COMMUNITY_CAP_MCP}" or "${CAP_JS_MCP}".`,
   );
 }
 
 function noPluginWarning(): string {
   return (
     "[okf] cds.okf.serve.mcp — is on, but no MCP plugin is installed, so nothing is served over MCP.\n" +
-    `  Add ${GAVDI_CAP_MCP} or ${CAP_JS_MCP} to the app's dependencies, or turn MCP off.`
+    `  Add ${COMMUNITY_CAP_MCP} or ${CAP_JS_MCP} to the app's dependencies, or turn MCP off.`
   );
 }
 

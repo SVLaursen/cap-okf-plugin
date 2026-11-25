@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/community";
 
 // Task 4.5 step 2b (ADR-0010 Contract B, ADR-0011): OkfService's handlers on the demo app, with
 // "@gavdi/cap-mcp" in the plugin list (an empty stub: the tools are called in-process here, as

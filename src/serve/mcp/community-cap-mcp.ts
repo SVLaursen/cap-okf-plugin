@@ -78,7 +78,7 @@ const PATH_VARIABLE = "path";
  * at bootstrap, which CAP runs before served: a setup, or undefined when this server serves no
  * okf:// resources. Every bootstrap calls it, so one server's setup never reaches the next.
  */
-export function gavdiResources(
+export function communityResources(
   cds: Events,
   warn: (message: string) => void,
 ): { use(setup: ResourcesSetup | undefined): void } {

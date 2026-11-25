@@ -4,7 +4,7 @@ import { installedPlugins, selectMcp } from "../../src/serve/mcp/select";
 // { plugin, as, namespace, requires }. Detection (by package name in CAP's plugin list) only
 // decides how to serve once the developer has said that they want it.
 
-const GAVDI = "@gavdi/cap-mcp";
+const COMMUNITY = "@gavdi/cap-mcp";
 const CAPJS = "@cap-js/mcp";
 
 function select(
@@ -17,7 +17,7 @@ function select(
 
 describe("selectMcp: on, off and which plugin", () => {
   test.each([undefined, false])("off (%j): nothing, and no warning", (mcp) => {
-    expect(select(mcp, [GAVDI, CAPJS])).toEqual({ warnings: [] });
+    expect(select(mcp, [COMMUNITY, CAPJS])).toEqual({ warnings: [] });
   });
 
   test("on without an MCP plugin: nothing served, one warning", () => {
@@ -31,7 +31,7 @@ describe("selectMcp: on, off and which plugin", () => {
   });
 
   test.each([
-    [GAVDI, ["resources", "tools"]],
+    [COMMUNITY, ["resources", "tools"]],
     [CAPJS, ["tools"]],
   ])("on with only %s: that plugin, on its default channels", (plugin, channels) => {
     expect(select(true, [plugin, "@cap-js/sqlite"])).toEqual({
@@ -50,23 +50,23 @@ describe("selectMcp: on, off and which plugin", () => {
   });
 
   test("on with both and plugin auto: an error that asks for plugin", () => {
-    expect(() => select(true, [GAVDI, CAPJS])).toThrow(
+    expect(() => select(true, [COMMUNITY, CAPJS])).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp — both @gavdi\/cap-mcp and @cap-js\/mcp are installed[\s\S]*\n {2}Set cds\.okf\.serve\.mcp\.plugin/,
     );
   });
 
   test("with both, an explicit plugin is used", () => {
-    expect(select({ plugin: CAPJS }, [GAVDI, CAPJS]).choice?.plugin).toBe(CAPJS);
+    expect(select({ plugin: CAPJS }, [COMMUNITY, CAPJS]).choice?.plugin).toBe(CAPJS);
   });
 
   test("an explicit plugin that isn't installed: an error", () => {
-    expect(() => select({ plugin: GAVDI }, [CAPJS])).toThrow(
+    expect(() => select({ plugin: COMMUNITY }, [CAPJS])).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp\.plugin — @gavdi\/cap-mcp is set, but not installed/,
     );
   });
 
   test("an unknown plugin name: an error naming the allowed values", () => {
-    expect(() => select({ plugin: "mcp-x" }, [GAVDI])).toThrow(
+    expect(() => select({ plugin: "mcp-x" }, [COMMUNITY])).toThrow(
       /"auto", "@gavdi\/cap-mcp" or "@cap-js\/mcp"/,
     );
   });
@@ -74,14 +74,14 @@ describe("selectMcp: on, off and which plugin", () => {
 
 describe("selectMcp: channels (as)", () => {
   test("both channels when asked", () => {
-    expect(select({ as: ["resources", "tools"] }, [GAVDI]).choice?.as).toEqual([
+    expect(select({ as: ["resources", "tools"] }, [COMMUNITY]).choice?.as).toEqual([
       "resources",
       "tools",
     ]);
   });
 
   test("an unknown as value: a warning naming the allowed values, and it is left out", () => {
-    const result = select({ as: ["tools", "prompts"] }, [GAVDI]);
+    const result = select({ as: ["tools", "prompts"] }, [COMMUNITY]);
     expect(result.choice?.as).toEqual(["tools"]);
     expect(result.warnings).toEqual([
       expect.stringMatching(
@@ -97,7 +97,7 @@ describe("selectMcp: channels (as)", () => {
   });
 
   test("as written as one string is one channel", () => {
-    expect(select({ as: "tools" }, [GAVDI]).choice?.as).toEqual(["tools"]);
+    expect(select({ as: "tools" }, [COMMUNITY]).choice?.as).toEqual(["tools"]);
   });
 });
 
@@ -107,11 +107,11 @@ describe("selectMcp: namespace (ADR-0010)", () => {
     ["Bookshop", "bookshop"],
     ["my-app", "my-app"],
   ])("derived from the package name %j → %j", (packageName, namespace) => {
-    expect(select(true, [GAVDI], packageName).choice?.namespace).toBe(namespace);
+    expect(select(true, [COMMUNITY], packageName).choice?.namespace).toBe(namespace);
   });
 
   test("an explicit namespace wins", () => {
-    expect(select({ namespace: "shop" }, [GAVDI]).choice?.namespace).toBe("shop");
+    expect(select({ namespace: "shop" }, [COMMUNITY]).choice?.namespace).toBe("shop");
   });
 
   test.each([
@@ -119,7 +119,7 @@ describe("selectMcp: namespace (ADR-0010)", () => {
     [{ namespace: "-shop" }, "@acme/orders"],
     [true, "my_app"],
   ])("an invalid namespace (%j, package %j): a startup error", (mcp, packageName) => {
-    expect(() => select(mcp, [GAVDI], packageName)).toThrow(
+    expect(() => select(mcp, [COMMUNITY], packageName)).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp\.namespace — .* isn't a valid namespace/,
     );
   });
@@ -127,7 +127,7 @@ describe("selectMcp: namespace (ADR-0010)", () => {
   test("no namespace and no package name to derive one: a startup error", () => {
     // Directly: the helper's default would replace an explicit undefined.
     expect(() =>
-      selectMcp({ okf: { serve: { mcp: true } }, installed: [GAVDI], packageName: undefined }),
+      selectMcp({ okf: { serve: { mcp: true } }, installed: [COMMUNITY], packageName: undefined }),
     ).toThrow(/^\[okf\] cds\.okf\.serve\.mcp\.namespace — is missing/);
   });
 });
@@ -141,11 +141,11 @@ describe("selectMcp: requires", () => {
       ["admin", "support"],
     ],
   ])("requires %j → %j", (requires, roles) => {
-    expect(select({ requires }, [GAVDI]).choice?.requires).toEqual(roles);
+    expect(select({ requires }, [COMMUNITY]).choice?.requires).toEqual(roles);
   });
 
   test("requires that isn't a role or a list of roles: an error", () => {
-    expect(() => select({ requires: 5 }, [GAVDI])).toThrow(
+    expect(() => select({ requires: 5 }, [COMMUNITY])).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp\.requires — /,
     );
   });
@@ -153,13 +153,13 @@ describe("selectMcp: requires", () => {
 
 describe("selectMcp: null", () => {
   test("counts as off, so a profile can reset serve.mcp", () => {
-    expect(select(null, [GAVDI])).toEqual({ warnings: [] });
+    expect(select(null, [COMMUNITY])).toEqual({ warnings: [] });
   });
 });
 
 describe("selectMcp: a setting that isn't false, true or an object", () => {
   test("is an error naming the allowed values", () => {
-    expect(() => select("yes", [GAVDI])).toThrow(
+    expect(() => select("yes", [COMMUNITY])).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp — "yes" is not a known value/,
     );
   });
@@ -180,11 +180,11 @@ describe("installedPlugins", () => {
 // Review of 4.4: edge cases pinned.
 describe("selectMcp: edge cases", () => {
   test("as: [] and duplicate channels fall back or collapse without a warning", () => {
-    expect(select({ as: [] }, [GAVDI])).toMatchObject({
+    expect(select({ as: [] }, [COMMUNITY])).toMatchObject({
       choice: { as: ["resources", "tools"] },
       warnings: [],
     });
-    expect(select({ as: ["tools", "tools"] }, [GAVDI]).choice?.as).toEqual(["tools"]);
+    expect(select({ as: ["tools", "tools"] }, [COMMUNITY]).choice?.as).toEqual(["tools"]);
   });
 
   test.each([null, "auto"])("plugin %j means auto", (plugin) => {
@@ -192,11 +192,11 @@ describe("selectMcp: edge cases", () => {
   });
 
   test("an upper-case scope is lowered: @Acme/Orders → acme-orders", () => {
-    expect(select(true, [GAVDI], "@Acme/Orders").choice?.namespace).toBe("acme-orders");
+    expect(select(true, [COMMUNITY], "@Acme/Orders").choice?.namespace).toBe("acme-orders");
   });
 
   test("an invalid derived namespace names the package.json name and suggests one", () => {
-    expect(() => select(true, [GAVDI], "@sap.demo/orders")).toThrow(
+    expect(() => select(true, [COMMUNITY], "@sap.demo/orders")).toThrow(
       /"sap\.demo-orders", derived from the package\.json name "@sap\.demo\/orders", isn't a valid namespace\.\n {2}Set cds\.okf\.serve\.mcp\.namespace, e\.g\. "sap-demo-orders"/,
     );
   });
@@ -204,56 +204,56 @@ describe("selectMcp: edge cases", () => {
   test.each([2024, { a: 1 }])(
     "a namespace that is set but isn't text (%j) is an error",
     (namespace) => {
-      expect(() => select({ namespace }, [GAVDI])).toThrow(
+      expect(() => select({ namespace }, [COMMUNITY])).toThrow(
         /^\[okf\] cds\.okf\.serve\.mcp\.namespace — .* isn't a valid namespace/,
       );
     },
   );
 
   test("namespace: null derives it, so a profile can reset it", () => {
-    expect(select({ namespace: null }, [GAVDI]).choice?.namespace).toBe("acme-orders");
+    expect(select({ namespace: null }, [COMMUNITY]).choice?.namespace).toBe("acme-orders");
   });
 
   test.each([[[]], [""], [["admin", 5]]])("requires %j is an error", (requires) => {
-    expect(() => select({ requires }, [GAVDI])).toThrow(
+    expect(() => select({ requires }, [COMMUNITY])).toThrow(
       /^\[okf\] cds\.okf\.serve\.mcp\.requires — /,
     );
   });
 
   test("changing one choice's requires doesn't change the default for the next", () => {
-    select(true, [GAVDI]).choice!.requires.push("changed");
-    expect(select(true, [GAVDI]).choice?.requires).toEqual(["authenticated-user"]);
+    select(true, [COMMUNITY]).choice!.requires.push("changed");
+    expect(select(true, [COMMUNITY]).choice?.requires).toEqual(["authenticated-user"]);
   });
 });
 
 describe("selectMcp: related, instructions, pointers and signals (ADR-0012, ADR-0013)", () => {
   test("related and instructions default true; false switches each off; null is the default", () => {
-    expect(select({ related: false, instructions: false }, [GAVDI]).choice).toMatchObject({
+    expect(select({ related: false, instructions: false }, [COMMUNITY]).choice).toMatchObject({
       related: false,
       instructions: false,
     });
-    expect(select({ related: null, instructions: null }, [GAVDI]).choice).toMatchObject({
+    expect(select({ related: null, instructions: null }, [COMMUNITY]).choice).toMatchObject({
       related: true,
       instructions: true,
     });
   });
 
   test('pointers: false by default (and for null); "short" and true as given', () => {
-    expect(select({}, [GAVDI]).choice?.pointers).toBe(false);
-    expect(select({ pointers: null }, [GAVDI]).choice?.pointers).toBe(false);
-    expect(select({ pointers: "short" }, [GAVDI]).choice?.pointers).toBe("short");
-    expect(select({ pointers: true }, [GAVDI]).choice?.pointers).toBe(true);
+    expect(select({}, [COMMUNITY]).choice?.pointers).toBe(false);
+    expect(select({ pointers: null }, [COMMUNITY]).choice?.pointers).toBe(false);
+    expect(select({ pointers: "short" }, [COMMUNITY]).choice?.pointers).toBe("short");
+    expect(select({ pointers: true }, [COMMUNITY]).choice?.pointers).toBe(true);
   });
 
   test('signals: "auto" by default (and for null); "always" as given', () => {
-    expect(select({}, [GAVDI]).choice?.signals).toBe("auto");
-    expect(select({ signals: null }, [GAVDI]).choice?.signals).toBe("auto");
-    expect(select({ signals: "always" }, [GAVDI]).choice?.signals).toBe("always");
+    expect(select({}, [COMMUNITY]).choice?.signals).toBe("auto");
+    expect(select({ signals: null }, [COMMUNITY]).choice?.signals).toBe("auto");
+    expect(select({ signals: "always" }, [COMMUNITY]).choice?.signals).toBe("always");
   });
 
   test("instructions may be the app's own text, trimmed", () => {
     expect(
-      select({ instructions: "  Read the index first.  " }, [GAVDI]).choice?.instructions,
+      select({ instructions: "  Read the index first.  " }, [COMMUNITY]).choice?.instructions,
     ).toBe("Read the index first.");
   });
 
@@ -266,7 +266,7 @@ describe("selectMcp: related, instructions, pointers and signals (ADR-0012, ADR-
     ["instructions", ""],
     ["instructions", 3],
   ])("%s: %j is an [okf] setup error", (key, value) => {
-    expect(() => select({ [key]: value }, [GAVDI])).toThrow(
+    expect(() => select({ [key]: value }, [COMMUNITY])).toThrow(
       new RegExp(`^\\[okf\\] cds\\.okf\\.serve\\.mcp\\.${key} — `),
     );
   });

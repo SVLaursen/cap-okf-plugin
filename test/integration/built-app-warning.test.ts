@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import cds from "@sap/cds";
-import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/community";
 
 // Task 4.5 (ADR-0005 (e)): an app that lists its own build tasks without okf gets no
 // OkfService in its build. When that built app is served with the tools channel on, cap-okf

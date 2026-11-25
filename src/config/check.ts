@@ -8,7 +8,7 @@
 // Values that are read are already checked where they are read: include by the build, serve.* by
 // startup. Settings are never read from or written to cds.mcp (ADR-0004).
 import { SetupError } from "../build/errors";
-import { GAVDI_CAP_MCP, selectMcp, type McpPlugin, CAP_JS_MCP } from "../serve/mcp/select";
+import { COMMUNITY_CAP_MCP, selectMcp, type McpPlugin, CAP_JS_MCP } from "../serve/mcp/select";
 import { staticRouteOf } from "../serve/static-config";
 
 /** The keys each block may have, in the order the fix line names them. */
@@ -105,7 +105,7 @@ function serveWarnings(
 function assumedInstalled(serve: Record<string, unknown>): McpPlugin[] {
   const mcp = serve["mcp"];
   const plugin = isObject(mcp) ? mcp["plugin"] : undefined;
-  return plugin === CAP_JS_MCP ? [CAP_JS_MCP] : [GAVDI_CAP_MCP];
+  return plugin === CAP_JS_MCP ? [CAP_JS_MCP] : [COMMUNITY_CAP_MCP];
 }
 
 // Runs a check; a setup error becomes a warning, anything else is a bug and is thrown.

@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { describeWithCommunity, COMMUNITY_PLUGIN } from "../helpers/community";
 import { connectMcp, type Login, type McpClient } from "../helpers/mcp-client";
 
 // ADR-0012 (amends ADR-0003): a curated note with `requires:` doesn't exist for a reader without
@@ -19,7 +19,7 @@ const CONTROLLER: Login = { username: "controller", password: "controller" };
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
   ...config,
-  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } },
+  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: COMMUNITY_PLUGIN } },
 });
 
 /** The fixture app's surfaces, as each test reads them. */
@@ -62,8 +62,10 @@ function surfacesOf(app: ReturnType<typeof cds.test>): Surfaces {
   return { app, clientFor, tool, resource };
 }
 
-describeWithGavdi("a role-restricted curated note (requires: okf-finance)", () => {
-  const surfaces = surfacesOf(cds.test(path.join(__dirname, "..", "fixtures", "app-gavdi-mcp")));
+describeWithCommunity("a role-restricted curated note (requires: okf-finance)", () => {
+  const surfaces = surfacesOf(
+    cds.test(path.join(__dirname, "..", "fixtures", "app-community-mcp")),
+  );
   toolChecks(surfaces);
   textChecks(surfaces);
   multiPathChecks(surfaces);
@@ -214,8 +216,8 @@ function resourceAndRouteChecks({ app, clientFor, resource }: Surfaces): void {
   });
 }
 
-describeWithGavdi("search on the fixture: any word, body, aliases, never empty", () => {
-  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-gavdi-mcp"));
+describeWithCommunity("search on the fixture: any word, body, aliases, never empty", () => {
+  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-community-mcp"));
   let client: Promise<McpClient> | undefined;
   afterAll(async () => client && (await client).close());
   const search = async (text: string) => {

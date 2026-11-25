@@ -2,12 +2,12 @@ import { MemoryBundleSource } from "../../src/bundle/source";
 import { AUTH_END, AUTH_START } from "../../src/core/filter";
 import { oneBundleForEveryKey } from "../../src/serve/bundles";
 import {
-  gavdiResources,
+  communityResources,
   okfUri,
   type FixedResource,
   type ResourceContext,
   type TemplateResource,
-} from "../../src/serve/mcp/gavdi-cap-mcp";
+} from "../../src/serve/mcp/community-cap-mcp";
 import type { McpChoice } from "../../src/serve/mcp/select";
 import { mcpChannels } from "../../src/serve/serving";
 
@@ -76,10 +76,10 @@ function fakeRegistry({ templates = true } = {}) {
 function served(options: { choice?: McpChoice; templates?: boolean; emit?: boolean } = {}) {
   const cds = fakeCds();
   const warnings: string[] = [];
-  const channel = gavdiResources(cds, (message) => warnings.push(message));
+  const channel = communityResources(cds, (message) => warnings.push(message));
   const bundles = oneBundleForEveryKey(async () => new MemoryBundleSource(BUNDLE));
-  const viaGavdi = mcpChannels(options.choice ?? CHOICE).viaGavdi;
-  channel.use(viaGavdi && { choice: viaGavdi, bundles });
+  const viaCommunity = mcpChannels(options.choice ?? CHOICE).viaCommunity;
+  channel.use(viaCommunity && { choice: viaCommunity, bundles });
   const fake = fakeRegistry({ templates: options.templates ?? true });
   if (options.emit ?? true) cds.emit("mcp:resources", fake.registry);
   cds.emit("listening");
@@ -254,7 +254,7 @@ describe("okf:// resources: one process, several servers", () => {
   test("a server without resources doesn't reuse the previous server's setup", () => {
     const cds = fakeCds();
     const warnings: string[] = [];
-    const channel = gavdiResources(cds, (message) => warnings.push(message));
+    const channel = communityResources(cds, (message) => warnings.push(message));
     const bundles = oneBundleForEveryKey(async () => new MemoryBundleSource(BUNDLE));
     channel.use({ choice: CHOICE, bundles });
     cds.emit("mcp:resources", fakeRegistry().registry);
@@ -269,7 +269,7 @@ describe("okf:// resources: one process, several servers", () => {
   test("the missing-event warning is checked again for each server", () => {
     const cds = fakeCds();
     const warnings: string[] = [];
-    const channel = gavdiResources(cds, (message) => warnings.push(message));
+    const channel = communityResources(cds, (message) => warnings.push(message));
     const bundles = oneBundleForEveryKey(async () => new MemoryBundleSource(BUNDLE));
     channel.use({ choice: CHOICE, bundles });
     cds.emit("mcp:resources", fakeRegistry().registry);
@@ -289,12 +289,12 @@ describe("mcpChannels", () => {
 
   test.each([
     ["nothing over MCP", undefined, []],
-    ["@gavdi/cap-mcp, resources", choice("@gavdi/cap-mcp", ["resources"]), ["viaGavdi"]],
+    ["@gavdi/cap-mcp, resources", choice("@gavdi/cap-mcp", ["resources"]), ["viaCommunity"]],
     ["@gavdi/cap-mcp, tools", choice("@gavdi/cap-mcp", ["tools"]), ["tools"]],
     [
       "@gavdi/cap-mcp, both",
       choice("@gavdi/cap-mcp", ["resources", "tools"]),
-      ["tools", "viaGavdi"],
+      ["tools", "viaCommunity"],
     ],
     ["@cap-js/mcp, resources (no resource hook, 4.7)", choice("@cap-js/mcp", ["resources"]), []],
     ["@cap-js/mcp, tools", choice("@cap-js/mcp", ["tools"]), ["tools"]],

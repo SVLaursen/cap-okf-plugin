@@ -81,10 +81,10 @@ const MAX_PINNED_ENTRY = 300;
 const PINNED_HEADING = "Pinned notes, which always apply:";
 
 /**
- * Subscribes to mcp:hints and listening at plugin load, as gavdiResources does. `use` hands it
+ * Subscribes to mcp:hints and listening at plugin load, as communityResources does. `use` hands it
  * what to serve at bootstrap, or undefined when this server serves nothing over MCP.
  */
-export function gavdiHints(
+export function communityHints(
   cds: Events,
   debug: (message: string) => void,
 ): { use(setup: HintsSetup | undefined): void } {

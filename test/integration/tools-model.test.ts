@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/community";
 import { directiveFor } from "../../src/serve/mcp/tool-texts";
 
 // Task 4.5 (ADR-0005 (e)): OkfService's model is added only when the MCP tools channel is on.

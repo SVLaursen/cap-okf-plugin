@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/community";
 
 // Review of step 2b: with requires "internal-user", CAP's service-level check lets in-process
 // calls through (only its HTTP adapter checks that role, and @protocol: 'none' removes it), so

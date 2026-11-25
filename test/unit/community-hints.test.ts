@@ -2,13 +2,13 @@ import { MemoryBundleSource } from "../../src/bundle/source";
 import { oneBundleForEveryKey } from "../../src/serve/bundles";
 import { warnAboutPinned } from "../../src/serve/serving";
 import {
-  gavdiHints,
+  communityHints,
   instructionsText,
   noteText,
   type HintContext,
   type HintRegistry,
   type ToolTarget,
-} from "../../src/serve/mcp/gavdi-hints";
+} from "../../src/serve/mcp/community-hints";
 import { selectMcp, type McpChoice } from "../../src/serve/mcp/select";
 import { directiveFor } from "../../src/serve/mcp/tool-texts";
 import type { ViewConcept } from "../../src/serve/reader-view";
@@ -72,7 +72,7 @@ function fakeCds() {
 function served(choice: McpChoice = CHOICE, emit = true, files: Record<string, string> = BUNDLE) {
   const cds = fakeCds();
   const debug: string[] = [];
-  const hints = gavdiHints(cds, (message) => debug.push(message));
+  const hints = communityHints(cds, (message) => debug.push(message));
   hints.use({ choice, bundles: oneBundleForEveryKey(async () => new MemoryBundleSource(files)) });
   const instructions: Parameters<HintRegistry["addInstructions"]>[0][] = [];
   const notes: Parameters<HintRegistry["addToolNotes"]>[0][] = [];
@@ -86,7 +86,7 @@ function served(choice: McpChoice = CHOICE, emit = true, files: Record<string, s
   return { instructions, notes, debug };
 }
 
-describe("gavdiHints: instructions", () => {
+describe("communityHints: instructions", () => {
   test("conditional: read the index when the request needs it, not for a plain read", async () => {
     const { instructions } = served();
     expect(instructions.map((each) => each.id)).toEqual(["cap-okf"]);
@@ -122,7 +122,7 @@ describe("gavdiHints: instructions", () => {
   });
 });
 
-describe("gavdiHints: pinned notes", () => {
+describe("communityHints: pinned notes", () => {
   test("listed at the end of the instructions, with title, path and description", async () => {
     const text = (await served().instructions[0]!.text(SIGNED_IN))!;
     expect(text).toMatch(
@@ -168,7 +168,7 @@ describe("gavdiHints: pinned notes", () => {
   });
 });
 
-describe("gavdiHints: pinned notes, limits", () => {
+describe("communityHints: pinned notes, limits", () => {
   test("a pinned note that doesn't fit within 1,500 is left out, never cut off", async () => {
     const files: Record<string, string> = {};
     for (const name of ["a", "b", "c"]) {
@@ -222,7 +222,7 @@ describe("warnAboutPinned (startup)", () => {
   });
 });
 
-describe("gavdiHints: no curated notes, no signals", () => {
+describe("communityHints: no curated notes, no signals", () => {
   const generatedOnly = {
     "model/S/Orders.md": generated("S.Orders"),
     "model/S/cancel.md": generated("S.cancel"),
@@ -254,7 +254,7 @@ describe("gavdiHints: no curated notes, no signals", () => {
   });
 });
 
-describe("gavdiHints: OkfService's own tools", () => {
+describe("communityHints: OkfService's own tools", () => {
   const own = (name: string) => ({
     ...target(`OkfService.${name}`, "function"),
     service: "OkfService",
@@ -282,7 +282,7 @@ describe("gavdiHints: OkfService's own tools", () => {
   });
 });
 
-describe("gavdiHints: tool notes", () => {
+describe("communityHints: tool notes", () => {
   test("off by default: with serve.mcp on, instructions are registered, app tools get no note", async () => {
     const choice = selectMcp({
       okf: { serve: { mcp: true } },
@@ -296,7 +296,7 @@ describe("gavdiHints: tool notes", () => {
   });
 });
 
-describe("gavdiHints: tool notes, the forms", () => {
+describe("communityHints: tool notes, the forms", () => {
   test('"short": titles and paths only', async () => {
     const { notes } = served({ ...CHOICE, pointers: "short" });
     expect(await notes[0]!.note(target("S.Orders"), SIGNED_IN)).toBe(
@@ -341,14 +341,14 @@ describe("gavdiHints: tool notes, the forms", () => {
   });
 });
 
-describe("gavdiHints: namespaced services", () => {
+describe("communityHints: namespaced services", () => {
   test("an unbound action of a namespaced service doesn't take the service's notes (review)", async () => {
     const files = {
       "model/my/ns/S.md": generated("my.ns.S"),
       "guides/s.md": "---\ntype: Guide\ntitle: About S\n---\n[service](/model/my/ns/S.md)\n",
     };
     const cds = fakeCds();
-    const hints = gavdiHints(cds, () => undefined);
+    const hints = communityHints(cds, () => undefined);
     hints.use({
       choice: CHOICE,
       bundles: oneBundleForEveryKey(async () => new MemoryBundleSource(files)),
@@ -369,7 +369,7 @@ describe("gavdiHints: namespaced services", () => {
   });
 });
 
-describe("gavdiHints: switches and the event", () => {
+describe("communityHints: switches and the event", () => {
   test("instructions: false and pointers: false register nothing beyond OkfService's notes", () => {
     const off = { ...CHOICE, instructions: false, pointers: false } as const;
     expect(served(off).instructions).toEqual([]);

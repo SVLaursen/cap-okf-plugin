@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { describeWithCommunity, COMMUNITY_PLUGIN } from "../helpers/community";
 import { connectMcp, type Login, type McpClient } from "../helpers/mcp-client";
 
 // ADR-0013 end to end with cds.okf.serve.mcp.pointers: true: a tool whose definition a curated
@@ -15,7 +15,7 @@ const OUTSIDER: Login = { username: "outsider", password: "outsider" };
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
   ...config,
-  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } },
+  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: COMMUNITY_PLUGIN } },
   okf: {
     serve: {
       static: true,
@@ -30,8 +30,8 @@ process.env["CDS_CONFIG"] = JSON.stringify({
   },
 });
 
-describeWithGavdi("mcp:hints with tool notes on, through a real MCP client", () => {
-  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-gavdi-mcp"));
+describeWithCommunity("mcp:hints with tool notes on, through a real MCP client", () => {
+  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-community-mcp"));
   const clients: Promise<McpClient>[] = [];
   const connect = (login: Login) => {
     const client = connectMcp((app as unknown as { url: string }).url, login);

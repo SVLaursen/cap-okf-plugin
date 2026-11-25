@@ -1,12 +1,12 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { describeWithCommunity, COMMUNITY_PLUGIN } from "../helpers/community";
 import { connectMcp, type McpClient } from "../helpers/mcp-client";
 import { loginOf, resourcesChannel, toolsChannel } from "./mcp-client-channels";
 import type { Reader } from "./server.contract";
 import { hiddenContract, serverContract } from "./server.contract";
 
-// Task 4.8: the fixture app test/fixtures/app-gavdi-mcp serves its bundle through @gavdi/cap-mcp
+// Task 4.8: the fixture app test/fixtures/app-community-mcp serves its bundle through @gavdi/cap-mcp
 // on both channels (resources and tools), and a real MCP client (the official SDK, with its
 // initialize handshake) runs the server contract on each. requires names a role: reader has it,
 // outsider is signed in without it (the hidden check). Anonymous callers reach nothing, so the
@@ -29,11 +29,11 @@ const EXPECTED = {
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
   ...config,
-  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } },
+  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: COMMUNITY_PLUGIN } },
 });
 
-describeWithGavdi("the @gavdi/cap-mcp fixture app, through a real MCP client", () => {
-  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-gavdi-mcp"));
+describeWithCommunity("the @gavdi/cap-mcp fixture app, through a real MCP client", () => {
+  const app = cds.test(path.join(__dirname, "..", "fixtures", "app-community-mcp"));
   // cds.test sets url once the server listens; @cap-js/cds-test's types don't declare it.
   const clientFor = readerClients(() => (app as unknown as { url: string }).url);
 

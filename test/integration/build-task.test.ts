@@ -6,7 +6,7 @@ import cds from "@sap/cds";
 import { serializeConcept } from "../../src/core/concept";
 import type { Csn } from "../../src/export/csn";
 import { exportModel } from "../../src/export/exporter";
-import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/community";
 import { defaultLanguageTexts } from "../../src/export/i18n";
 
 // `cds build` with the okf build task (task 2.9, ADR-0005 (b), ADR-0007), run as a user runs it:
@@ -318,7 +318,7 @@ describe("cds build with definitions whose paths clash", () => {
 // deployed app's model, for no task list and for one with okf; a list without okf misses it.
 // "@gavdi/cap-mcp" is an empty stub here: detection only needs its name in the plugin list.
 describe("cds build with the MCP tools channel on", () => {
-  const withGavdi = {
+  const withCommunity = {
     CDS_PLUGINS: JSON.stringify({ "@gavdi/cap-mcp": { impl: MCP_PLUGIN_STUB } }),
   };
 
@@ -334,7 +334,7 @@ describe("cds build with the MCP tools channel on", () => {
     const okf = { serve: { mcp: { as: ["tools"] } } };
     const app = bookshopApp(tasks === undefined ? { okf } : { okf, build: { tasks } });
     try {
-      const result = cdsBuild(app, withGavdi);
+      const result = cdsBuild(app, withCommunity);
       expect({ status: result.status, stderr: result.stderr.includes("[okf]") }).toEqual({
         status: 0,
         stderr: false,
@@ -350,7 +350,7 @@ describe("cds build with the MCP tools channel on", () => {
   test("with MCP off, OkfService is absent", () => {
     const app = bookshopApp();
     try {
-      expect(cdsBuild(app, withGavdi).status).toBe(0);
+      expect(cdsBuild(app, withCommunity).status).toBe(0);
       expect(deployedModel(app).includes('"OkfService"')).toBe(false);
     } finally {
       fs.rmSync(app, { recursive: true, force: true });

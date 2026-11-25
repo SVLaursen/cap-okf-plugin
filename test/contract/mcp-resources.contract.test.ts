@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { describeWithGavdi, GAVDI_PLUGIN } from "../helpers/gavdi";
+import { describeWithCommunity, COMMUNITY_PLUGIN } from "../helpers/community";
 import { rpc } from "../helpers/mcp-rpc";
 import { mcpResourcesChannel } from "./mcp-resources-channel";
 import { BOB } from "./mcp-tools-channel";
@@ -18,11 +18,11 @@ const TEMPLATE = `okf://${NAMESPACE}/{+path}`;
 const config = JSON.parse(process.env["CDS_CONFIG"] ?? "{}") as { plugins?: object };
 process.env["CDS_CONFIG"] = JSON.stringify({
   ...config,
-  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: GAVDI_PLUGIN } },
+  plugins: { ...config.plugins, "@gavdi/cap-mcp": { impl: COMMUNITY_PLUGIN } },
   okf: { serve: { mcp: true } },
 });
 
-describeWithGavdi("the MCP resources channel through @gavdi/cap-mcp", () => {
+describeWithCommunity("the MCP resources channel through @gavdi/cap-mcp", () => {
   const { POST } = cds.test(path.join(__dirname, "..", "..", "demo"));
   const channel = () => mcpResourcesChannel(POST as never, NAMESPACE);
 

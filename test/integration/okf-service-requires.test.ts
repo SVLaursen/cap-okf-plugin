@@ -1,6 +1,6 @@
 import path from "node:path";
 import cds from "@sap/cds";
-import { MCP_PLUGIN_STUB } from "../helpers/gavdi";
+import { MCP_PLUGIN_STUB } from "../helpers/community";
 
 // Task 4.5 step 2b (ADR-0010): cds.okf.serve.mcp.requires becomes OkfService's @requires, so CAP
 // enforces it on every call, as the MCP plugin makes them (cds.services.OkfService.tx).

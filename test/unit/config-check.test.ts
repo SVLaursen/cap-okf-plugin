@@ -90,9 +90,9 @@ describe("configWarnings: serve settings during cds build and cds compile", () =
   });
 
   test("an unknown plugin name is a warning", () => {
-    const [warning] = configWarnings({ serve: { mcp: { plugin: "gavdi" } } }, BUILD);
+    const [warning] = configWarnings({ serve: { mcp: { plugin: "community" } } }, BUILD);
     expect(warning).toMatch(
-      /^\[okf\] cds\.okf\.serve\.mcp\.plugin — "gavdi" is not a known MCP plugin/,
+      /^\[okf\] cds\.okf\.serve\.mcp\.plugin — "community" is not a known MCP plugin/,
     );
   });
 

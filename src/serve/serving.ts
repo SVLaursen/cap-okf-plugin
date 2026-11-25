@@ -10,10 +10,10 @@
 import type { Application } from "express";
 import type { Cds } from "../index";
 import { oneBundleForEveryKey } from "./bundles";
-import { gavdiResources } from "./mcp/gavdi-cap-mcp";
-import { MAX_PINNED, allPinnedNotes, gavdiHints } from "./mcp/gavdi-hints";
+import { communityResources } from "./mcp/community-cap-mcp";
+import { MAX_PINNED, allPinnedNotes, communityHints } from "./mcp/community-hints";
 import { attachOkfService } from "./mcp/okf-service";
-import { GAVDI_CAP_MCP, installedPlugins, selectMcp, type McpChoice } from "./mcp/select";
+import { COMMUNITY_CAP_MCP, installedPlugins, selectMcp, type McpChoice } from "./mcp/select";
 import { packageNameOf } from "./mcp/tools-model";
 import { startupBundleSource } from "./source";
 import { staticRouteOf } from "./static-config";
@@ -26,19 +26,19 @@ export function registerServing(cds: Cds): void {
   const log = cds.log("okf");
   const warn = (message: string) => log.warn(message);
   // At plugin load: @gavdi/cap-mcp emits mcp:resources from its own served listener (ADR-0010).
-  const resources = gavdiResources(cds, warn);
+  const resources = communityResources(cds, warn);
   // The same for mcp:hints (ADR-0013, Contract C): instructions and tool notes.
-  const hints = gavdiHints(cds, (message) => log.debug(message));
+  const hints = communityHints(cds, (message) => log.debug(message));
 
   cds.on("bootstrap", (app: Application) => {
     const okf = (cds.env as unknown as { okf?: unknown }).okf;
     const route = staticRouteOf(okf);
     const mcp = mcpChoice(cds, okf, warn);
-    const { tools, viaGavdi } = mcpChannels(mcp);
+    const { tools, viaCommunity } = mcpChannels(mcp);
     // Every server says what it serves, so a previous server's resources are never reused.
     resources.use(undefined);
     hints.use(undefined);
-    if (route === undefined && tools === undefined && viaGavdi === undefined) return;
+    if (route === undefined && tools === undefined && viaCommunity === undefined) return;
 
     // One set of bundles per server: a process may boot more than one app.
     const bundles = oneBundleForEveryKey(() => startupBundleSource(cds, log, process.env));
@@ -49,9 +49,9 @@ export function registerServing(cds: Cds): void {
     cds.on("served", () => bundles.forKey({}).then(() => undefined));
     if (route !== undefined) mountStaticRoute(app, cds, route, bundles);
     if (tools !== undefined) cds.on("served", () => attachOkfService(cds, bundles, tools));
-    if (viaGavdi !== undefined) resources.use({ choice: viaGavdi, bundles });
+    if (viaCommunity !== undefined) resources.use({ choice: viaCommunity, bundles });
     // Hints only through @gavdi/cap-mcp, and only when serve.mcp is on (ADR-0013).
-    if (mcp?.plugin === GAVDI_CAP_MCP) {
+    if (mcp?.plugin === COMMUNITY_CAP_MCP) {
       hints.use({ choice: mcp, bundles });
       if (mcp.instructions !== false) {
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -79,13 +79,13 @@ export async function warnAboutPinned(
 /** The choice per MCP channel: tools (OkfService), and resources through @gavdi/cap-mcp. */
 export function mcpChannels(mcp: McpChoice | undefined): {
   tools?: McpChoice;
-  viaGavdi?: McpChoice;
+  viaCommunity?: McpChoice;
 } {
   if (mcp === undefined) return {};
-  const viaGavdi = mcp.plugin === GAVDI_CAP_MCP && mcp.as.includes("resources");
+  const viaCommunity = mcp.plugin === COMMUNITY_CAP_MCP && mcp.as.includes("resources");
   return {
     ...(mcp.as.includes("tools") && { tools: mcp }),
-    ...(viaGavdi && { viaGavdi: mcp }),
+    ...(viaCommunity && { viaCommunity: mcp }),
   };
 }
 

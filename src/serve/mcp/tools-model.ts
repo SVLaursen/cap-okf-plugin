@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Cds } from "../../index";
 import { SetupError } from "../../build/errors";
-import { GAVDI_CAP_MCP, installedPlugins, selectMcp } from "./select";
+import { COMMUNITY_CAP_MCP, installedPlugins, selectMcp } from "./select";
 import { directiveDefinitions, directiveFor, directivesInModel, withDirective } from "./tool-texts";
 
 /** The cds.requires key the model is added under. */
@@ -110,7 +110,7 @@ export function annotateToolsModel(cds: Cds): void {
       return;
     }
     service["@requires"] = choice.requires;
-    if (choice.plugin === GAVDI_CAP_MCP) service["@protocol"] = "none";
+    if (choice.plugin === COMMUNITY_CAP_MCP) service["@protocol"] = "none";
     if (directivesInModel(choice)) addDirectives(definitions!);
     else removeDirectives(definitions!);
   });
