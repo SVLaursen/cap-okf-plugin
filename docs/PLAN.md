@@ -185,6 +185,48 @@ honest gaps. Same ADRs, revised; "Round 2" in `docs/changes/benchmark-m2.md`.
 - [x] **m2.14 Gaps:** the instructions and the index tool say to name what isn't defined.
 - [x] **m2.15 Pinned notes:** `pinned: true`, first in the index, listed in the instructions (at most 3), lint K4.
 
+### Dual release with `@gavdi/cap-mcp` 2.0 (maintainer brief 2026-11-25)
+
+`@gavdi/cap-mcp` 2.0 serves Agent Skills (`cds.mcp.skills`, its ADR 0016) and tells `mcp:hints`
+providers which skills are served (`ctx.skills`: `{ uri, name, description }`, its ADR 0017;
+contract version stays 1). Checked 2026-11-25 against its `main` at `48dff52`: every contract
+suite here passes, and an app with both plugins serves `okf://` and `skill://` side by side and
+builds both folders. What is missing is below. Maintainer decisions (2026-11-25): cap-okf's
+instructions list the app's skills, and a curated note can be written for a skill. Findings:
+project doc `claude/cap-okf-readiness-for-cap-mcp-2.0.md`.
+
+Rules for this block: skills are the app's and `@gavdi/cap-mcp`'s. cap-okf never reads
+`cds.mcp` or the skills folder, and never changes a skill; it knows skills only through
+`ctx.skills` at request time. Tests need a `../cap-mcp-v2` checkout at `48dff52` or later with
+a fresh `lib/` (`lib/adapter/skills.js` exists); if it is older, stop and ask the maintainer.
+
+- [ ] **dr.0 ADR-0014 (Proposed): skills in the instructions, and notes for skills.** Write the ADR; no code. It records the two decisions above and settles, each with a recommendation:
+  - how a note names its skills (recommended: frontmatter `skills:`, a list of skill names as in `ctx.skills[].name`; a single name allowed);
+  - the instructions' layout and budget: where the skills block goes relative to the pinned notes, one line per skill (name, URI, description, then the titles and paths of its notes), how many skills at most, and what is cut first inside the contract's 1,500 characters (recommended: pinned notes before skills; a skill's description before its notes);
+  - who gets the block (recommended: exactly the callers who get instructions today, so `requires` and `signals` keep their meaning; a note with its own `requires` is named only to callers who see it);
+  - the switch (recommended: `cds.okf.serve.mcp.skills`, `true` by default, `false` for none; never a key under `cds.mcp`);
+  - an app's own `instructions` text: followed by the skills block, as it is by the pinned notes;
+  - a note naming a skill that isn't served: known only at request time (recommended: one warning per name per server, the note is otherwise served as usual);
+  - where else a note for a skill shows (recommended: `searchConcepts` finds it by the skill's name; nothing new in the index for 0.2);
+  - hosts that list skills themselves see them twice: accepted, lines stay short;
+  - skills are visible to every caller, notes per role: a skill that points at an `okf://` note is a dead end for a caller without the role. Documented for authors (dr.6); no lint, since cap-okf may not read skills;
+  - an older `@gavdi/cap-mcp` that sends no `skills`: treated as none.
+    ADR-0013 is still Proposed: add its amendment there. Stop for the maintainer after this task.
+- [ ] **Maintainer: accept ADR-0012, ADR-0013 and ADR-0014.** Code that depends on them stays on branches until then (GOVERNANCE).
+- [ ] **dr.1 Contract types and guards.** `HintContext` (declared here, ADR-0004) gains optional `skills`; a missing or malformed list counts as none. Both event listeners check `registry.contractVersion`: anything but 1 gives one `[okf]` warning naming the version and registers nothing from that event.
+  - Test first (unit): no `skills`, `skills: []`, entries without a text `name` or `uri` are left out; a registry with `contractVersion: 2` registers nothing and warns once, for `mcp:resources` and for `mcp:hints`.
+- [ ] **dr.2 Fixture.** A new fixture app `test/fixtures/app-gavdi-mcp-skills` (the existing one stays byte for byte, its contract runs are the "no skills" baseline): the same model and users, `cds.mcp.skills` naming a folder with two skills (`ship-order` with a file under `references/`, and one no note names), a curated note with `skills: [ship-order]`, one with `skills` and `requires: okf-finance`, and one naming a skill that isn't served. No real data.
+- [ ] **dr.3 Instructions list the skills.** As ADR-0014 decides, through the plugin itself.
+  - Test first: pure tests for the text (order, one line per skill, cuts inside 1,500 code points, an app's own text, the switch off); contract tests with the real MCP client on the dr.2 fixture: `reader` gets both skills in the instructions, `outsider` gets nothing from cap-okf, and on the existing fixture (no skills) the instructions are byte for byte what they are today. `mcp-hints-off` still passes.
+- [ ] **dr.4 Notes for skills.** The `skills` frontmatter key: kept by the parser as every key is; a value that isn't a name or a list of names is a validation finding (pick the rule id in the ADR); a skill's line in the instructions names the notes the caller sees (`reader`: the shipping note; `controller`: also the finance note; never to `outsider`); `searchConcepts` with the skill's name finds its notes. No golden change is expected; if one changes, stop.
+- [ ] **dr.5 A note naming an unknown skill.** One `[okf]` warning per name per server, at the first request that shows it, naming the note's path and the skills that are served; nothing about it reaches the client.
+- [ ] **dr.6 README.** "Skills and OKF notes": what belongs where (a skill is a procedure an agent follows, served by `@gavdi/cap-mcp`; a note is knowledge it reads, served by cap-okf), the `skills` frontmatter key and the switch, that skills reach every caller while notes follow `requires` (so a skill should not depend on a role-restricted note), and which `@gavdi/cap-mcp` versions cap-okf works with.
+- [ ] **dr.7 Declared compatibility.** `peerDependencies` gets `@gavdi/cap-mcp` (optional, as `peerDependenciesMeta` already says) with the range the maintainer names once `2.0.0-rc.0` is published (recommended: `^2.0.0-rc.0`). Stop and ask for the range; a package.json change of this kind is the maintainer's (GOVERNANCE). `npm pack --dry-run` still lists only what 4.13 lists.
+- [ ] **dr.8 Tests against the published package.** Once `2.0.0-rc.0` is on npm: `test/helpers/gavdi.ts` and `test/gavdi-cap-mcp-plugin.js` can also load `@gavdi/cap-mcp` from an installed package (a dev dependency, noted in the PR), so packaging mistakes there show up here; the checkout stays the default for local work. Blocked until the release exists.
+- [ ] **Maintainer:** set `CAP_MCP_V2_REF` in CI to the release candidate's commit; run `npm run build` in `../cap-mcp-v2` before local test runs (its `lib/` was from 2026-11-18, before skills).
+- [ ] **dr.9 Gate G5 recheck.** `/gate-check G5` against the release candidate, as the G5 report asks ("recheck on release"): an addendum to `docs/gates/G5.md` with the contract suite on both fixtures, both protocol eras (the 2025 handshake through the SDK client, and raw 2026-07-28 requests for `server/discover`, the lists, a resource read and an `OkfService` tool call), and `cds build` with both plugins' tasks. Stop for sign-off.
+- [ ] **Maintainer:** version, release notes and the release itself, after `@gavdi/cap-mcp` `2.0.0-rc.0`.
+
 **Gate G5:** contract suite green for the static route, the tools channel under both MCP plugins, and `@gavdi/cap-mcp` resources (or 4.6 recorded as blocked upstream), on both runtimes (Node.js only for the first release: Java is out of it, maintainer decision 2026-11-17); nothing served unless configured; auth sections never reach unauthenticated requesters.
 
 ## Phase 5 — Fiori authoring → Gate G6 → release 0.3
