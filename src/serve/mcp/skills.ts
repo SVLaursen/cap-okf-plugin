@@ -16,7 +16,7 @@ export interface HintSkill {
 export function servedSkills(ctx: HintContext): HintSkill[] {
   if (!Array.isArray(ctx.skills)) return [];
   const skills: HintSkill[] = [];
-  for (const entry of ctx.skills as unknown[]) {
+  for (const entry of ctx.skills) {
     const skill = skillOf(entry);
     if (skill !== undefined) skills.push(skill);
   }

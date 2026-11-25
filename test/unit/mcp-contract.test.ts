@@ -39,6 +39,7 @@ describe("servedSkills: the skills in a hint context", () => {
       { uri: "skill://d/SKILL.md", name: 4, description: "Not text." },
       { name: "e", description: "No uri." },
       { uri: "", name: "f", description: "Empty uri." },
+      { uri: "skill://h/SKILL.md", name: "  ", description: "Only spaces." },
       null,
       "skill://g/SKILL.md",
     ];
@@ -82,7 +83,11 @@ const bundles = () =>
 /** A registry that records every call, whatever its methods are. */
 function recordingRegistry(contractVersion: unknown) {
   const calls: string[] = [];
-  const record = (name: string) => () => void calls.push(name);
+  function record(name: string) {
+    return () => {
+      calls.push(name);
+    };
+  }
   const registry = {
     contractVersion,
     register: record("register"),
@@ -92,6 +97,13 @@ function recordingRegistry(contractVersion: unknown) {
   };
   return { registry, calls };
 }
+
+const VERSION_TEXT = new Map<unknown, string>([
+  [2, "contract version 2"],
+  [0, "contract version 0"],
+  ["1", 'contract version "1"'],
+  [undefined, "no contract version"],
+]);
 
 describe("contract version: anything but 1 registers nothing", () => {
   test.each([2, 0, "1", undefined])("mcp:resources with contractVersion %p", (version) => {
@@ -107,7 +119,7 @@ describe("contract version: anything but 1 registers nothing", () => {
     expect(calls).toEqual([]);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/^\[okf\] mcp:resources — /);
-    expect(warnings[0]).toContain(`contract version ${String(version)}`);
+    expect(warnings[0]).toContain(`offers ${VERSION_TEXT.get(version)}, but`);
   });
 
   test.each([2, 0, "1", undefined])("mcp:hints with contractVersion %p", (version) => {
@@ -125,7 +137,7 @@ describe("contract version: anything but 1 registers nothing", () => {
     expect(calls).toEqual([]);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/^\[okf\] mcp:hints — /);
-    expect(warnings[0]).toContain(`contract version ${String(version)}`);
+    expect(warnings[0]).toContain(`offers ${VERSION_TEXT.get(version)}, but`);
     // It arrived, so the "never emitted" line isn't logged too.
     expect(debug).toEqual([]);
   });

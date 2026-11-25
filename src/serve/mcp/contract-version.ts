@@ -6,8 +6,8 @@
 export const CONTRACT_VERSION = 1;
 
 /**
- * True when the registry is the version cap-okf knows; otherwise warns once (each event is
- * emitted once per server) and returns false, so the caller registers nothing.
+ * True when the registry is the version cap-okf knows; otherwise warns and returns false, so the
+ * caller registers nothing. Each event is emitted once per server, so that is one warning each.
  */
 export function isKnownContract(
   event: string,
@@ -17,8 +17,14 @@ export function isKnownContract(
   const version = registry.contractVersion;
   if (version === CONTRACT_VERSION) return true;
   warn(
-    `[okf] ${event} — @gavdi/cap-mcp offers contract version ${String(version)}, but cap-okf knows version ${CONTRACT_VERSION} only, so nothing is registered from it.\n` +
-      `  Use a @gavdi/cap-mcp release with ${event} contract version ${CONTRACT_VERSION}, or a cap-okf release that supports version ${String(version)}.`,
+    `[okf] ${event} — @gavdi/cap-mcp offers ${describeVersion(version)}, but cap-okf knows contract version ${CONTRACT_VERSION} only, so nothing is registered from it.\n` +
+      `  Use a @gavdi/cap-mcp release with ${event} contract version ${CONTRACT_VERSION}.`,
   );
   return false;
+}
+
+// JSON, so the text "1" shows as "1" and can't be read as the number 1.
+function describeVersion(version: unknown): string {
+  if (version === undefined) return "no contract version";
+  return `contract version ${JSON.stringify(version)}`;
 }
