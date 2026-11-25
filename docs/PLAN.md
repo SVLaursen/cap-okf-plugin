@@ -213,7 +213,7 @@ a fresh `lib/` (`lib/adapter/skills.js` exists); if it is older, stop and ask th
   - an older `@gavdi/cap-mcp` that sends no `skills`: treated as none.
     ADR-0013 is still Proposed: add its amendment there. Stop for the maintainer after this task.
 - [ ] **Maintainer: accept ADR-0012, ADR-0013 and ADR-0014.** Code that depends on them stays on branches until then (GOVERNANCE).
-- [ ] **dr.1 Contract types and guards.** `HintContext` (declared here, ADR-0004) gains optional `skills`; a missing or malformed list counts as none. Both event listeners check `registry.contractVersion`: anything but 1 gives one `[okf]` warning naming the version and registers nothing from that event.
+- [x] **dr.1 Contract types and guards.** `HintContext` (declared here, ADR-0004) gains optional `skills`; a missing or malformed list counts as none. Both event listeners check `registry.contractVersion`: anything but 1 gives one `[okf]` warning naming the version and registers nothing from that event.
   - Test first (unit): no `skills`, `skills: []`, entries without a text `name` or `uri` are left out; a registry with `contractVersion: 2` registers nothing and warns once, for `mcp:resources` and for `mcp:hints`.
 - [ ] **dr.2 Fixture.** A new fixture app `test/fixtures/app-gavdi-mcp-skills` (the existing one stays byte for byte, its contract runs are the "no skills" baseline): the same model and users, `cds.mcp.skills` naming a folder with two skills (`ship-order` with a file under `references/`, and one no note names), a curated note with `skills: [ship-order]`, one with `skills` and `requires: okf-finance`, and one naming a skill that isn't served. No real data.
 - [ ] **dr.3 Instructions list the skills.** As ADR-0014 decides, through the plugin itself.

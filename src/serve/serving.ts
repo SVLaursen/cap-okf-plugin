@@ -28,7 +28,7 @@ export function registerServing(cds: Cds): void {
   // At plugin load: @gavdi/cap-mcp emits mcp:resources from its own served listener (ADR-0010).
   const resources = communityResources(cds, warn);
   // The same for mcp:hints (ADR-0013, Contract C): instructions and tool notes.
-  const hints = communityHints(cds, (message) => log.debug(message));
+  const hints = communityHints(cds, (message) => log.debug(message), warn);
 
   cds.on("bootstrap", (app: Application) => {
     const okf = (cds.env as unknown as { okf?: unknown }).okf;

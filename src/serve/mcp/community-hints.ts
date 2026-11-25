@@ -28,15 +28,20 @@ import type { Bundles } from "../bundles";
 import type { ReaderView, ViewConcept } from "../reader-view";
 import { linkedConcepts } from "../related";
 import { readerOf, viewOf } from "../views";
+import { isKnownContract } from "./contract-version";
 import { meetsRequires } from "./requires";
 import type { McpChoice } from "./select";
 import { OKF_SERVICE, directiveFor, directivesInModel } from "./tool-texts";
 
-/** Who is asking: from the request's cds.context. */
+/**
+ * Who is asking, from the request's cds.context, and the skills the request serves (@gavdi/cap-mcp
+ * 2.0, their ADR 0017). `skills` is checked before use (skills.ts): an older release sends none.
+ */
 export interface HintContext {
   user: unknown;
   tenant?: string;
   locale?: string;
+  skills?: unknown;
 }
 
 /** The tool a note is asked for. */
@@ -87,12 +92,15 @@ const PINNED_HEADING = "Pinned notes, which always apply:";
 export function communityHints(
   cds: Events,
   debug: (message: string) => void,
+  warn: (message: string) => void,
 ): { use(setup: HintsSetup | undefined): void } {
   let setup: HintsSetup | undefined;
   let arrived = false;
   cds.on(EVENT, (registry: HintRegistry) => {
     arrived = true;
-    if (setup !== undefined) registerHints(registry, setup);
+    if (setup !== undefined && isKnownContract(EVENT, registry, warn)) {
+      registerHints(registry, setup);
+    }
   });
   cds.on("listening", () => {
     if (setup !== undefined && !arrived) {

@@ -13,6 +13,7 @@
 import { isBundlePath, sortPaths } from "../../bundle/paths";
 import { setupError } from "../../build/errors";
 import type { Bundles } from "../bundles";
+import { isKnownContract } from "./contract-version";
 import type { ReaderView } from "../reader-view";
 import { withReadTogether } from "../related";
 import { readerOf, servableIn, viewOf } from "../views";
@@ -108,6 +109,7 @@ function registerResources(
   setup: ResourcesSetup,
   warn: (message: string) => void,
 ): void {
+  if (!isKnownContract(EVENT, registry, warn)) return;
   if (typeof registry.registerTemplate !== "function") {
     warn(noTemplatesWarning());
     return;
