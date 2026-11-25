@@ -72,7 +72,11 @@ function fakeCds() {
 function served(choice: McpChoice = CHOICE, emit = true, files: Record<string, string> = BUNDLE) {
   const cds = fakeCds();
   const debug: string[] = [];
-  const hints = communityHints(cds, (message) => debug.push(message));
+  const hints = communityHints(
+    cds,
+    (message) => debug.push(message),
+    (message) => debug.push(message),
+  );
   hints.use({ choice, bundles: oneBundleForEveryKey(async () => new MemoryBundleSource(files)) });
   const instructions: Parameters<HintRegistry["addInstructions"]>[0][] = [];
   const notes: Parameters<HintRegistry["addToolNotes"]>[0][] = [];
@@ -348,7 +352,11 @@ describe("communityHints: namespaced services", () => {
       "guides/s.md": "---\ntype: Guide\ntitle: About S\n---\n[service](/model/my/ns/S.md)\n",
     };
     const cds = fakeCds();
-    const hints = communityHints(cds, () => undefined);
+    const hints = communityHints(
+      cds,
+      () => undefined,
+      () => undefined,
+    );
     hints.use({
       choice: CHOICE,
       bundles: oneBundleForEveryKey(async () => new MemoryBundleSource(files)),
