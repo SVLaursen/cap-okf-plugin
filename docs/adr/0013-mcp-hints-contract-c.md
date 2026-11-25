@@ -127,8 +127,9 @@ interface HintSkill { uri: string; name: string; description: string } // sorted
 - **Skills after the pinned notes.** The instructions (the default or the app's own text) end with
   the pinned notes, then a block listing the skills the request serves, one line each with the
   skill's name, URI and description and the curated notes the caller sees that name it
-  (frontmatter `skills:`). At most ten skills; pinned notes are cut before skills, a skill's
-  description before its notes; the whole text stays within 1,500 characters. No skills, no
+  (frontmatter `skills:`). At most ten skills; pinned notes keep priority (skills get only the
+  room left), and inside a skill's line the description goes before its notes; the whole text
+  stays within 1,500 characters. No skills, no
   block: the text is as before. Switch: `cds.okf.serve.mcp.skills` (default `true`). Details in
   ADR-0014.
 - **Same callers.** The block goes only to callers who get the instructions under the rules above
